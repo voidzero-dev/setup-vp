@@ -66,7 +66,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
 
 async function getInstalledVersion(): Promise<string> {
   try {
-    const result = await getExecOutput("vp", ["--version"], {
+    const result = await getExecOutput("vite", ["--version"], {
       silent: true,
     });
     return result.stdout.trim();

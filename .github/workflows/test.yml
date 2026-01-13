@@ -30,9 +30,7 @@ jobs:
           cache: false
 
       - name: Verify installation
-        run: |
-          vp --version
-          vite --version
+        run: vite --version
 
   test-cache-pnpm:
     runs-on: ubuntu-latest
@@ -62,7 +60,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          vp --version
+          vite --version
           echo "Installed version: ${{ steps.setup.outputs.version }}"
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
@@ -94,7 +92,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          vp --version
+          vite --version
           echo "Installed version: ${{ steps.setup.outputs.version }}"
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
@@ -126,7 +124,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          vp --version
+          vite --version
           echo "Installed version: ${{ steps.setup.outputs.version }}"
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
