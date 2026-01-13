@@ -93,7 +93,7 @@ steps:
 | `version` | Version of @voidzero-dev/global to install | No | `latest` |
 | `registry` | Registry to install from: `npm` or `github` | No | `npm` |
 | `github-token` | GitHub PAT for GitHub Package Registry | No | - |
-| `run-install` | Run `vite install` after setup. Accepts boolean or YAML object with `cwd`/`args` | No | `false` |
+| `run-install` | Run `vite install` after setup. Accepts boolean or YAML object with `cwd`/`args` | No | `true` |
 | `cache` | Enable caching of project dependencies | No | `false` |
 | `cache-dependency-path` | Path to lock file for cache key generation | No | Auto-detected |
 
