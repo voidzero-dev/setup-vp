@@ -1,8 +1,5 @@
 import { info, debug, warning, saveState, setOutput, addPath } from '@actions/core'
 import { exec, getExecOutput } from '@actions/exec'
-import { writeFileSync, existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { homedir } from 'node:os'
 import type { Inputs } from './types.js'
 import {
   PACKAGE_NAME,
@@ -10,12 +7,6 @@ import {
   State,
   Outputs,
 } from './types.js'
-
-// .npmrc configuration for GitHub Package Registry
-// The actual token is passed via VP_TOKEN environment variable
-const GITHUB_REGISTRY_NPMRC = `//npm.pkg.github.com/:_authToken=\${VP_TOKEN}
-@voidzero-dev:registry=${GITHUB_REGISTRY}
-`
 
 export async function installVitePlus(inputs: Inputs): Promise<void> {
   const { version, registry, githubToken } = inputs
@@ -45,23 +36,15 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
   }
 
   // Configure scoped registry for GitHub Package Registry
-  // Write config to .npmrc, pass token via VP_TOKEN environment variable
   if (registry === 'github' && githubToken) {
     debug('Configuring @voidzero-dev scoped registry for GitHub Package Registry')
 
-    // Write .npmrc with ${VP_TOKEN} placeholder
-    const npmrcPath = join(homedir(), '.npmrc')
-    let existingContent = ''
-    if (existsSync(npmrcPath)) {
-      existingContent = readFileSync(npmrcPath, 'utf-8')
-    }
+    // Set scoped registry using npm config
+    await exec('npm', ['config', 'set', '@voidzero-dev:registry', GITHUB_REGISTRY])
 
-    // Only add if not already configured
-    if (!existingContent.includes('@voidzero-dev:registry')) {
-      const newContent = existingContent + (existingContent.endsWith('\n') ? '' : '\n') + GITHUB_REGISTRY_NPMRC
-      writeFileSync(npmrcPath, newContent, 'utf-8')
-      debug(`Updated ${npmrcPath} with GitHub Package Registry configuration`)
-    }
+    // Set auth token placeholder using npm config
+    // The actual token is passed via VP_TOKEN environment variable
+    await exec('npm', ['config', 'set', '//npm.pkg.github.com/:_authToken', '${VP_TOKEN}'])
 
     // Pass the actual token via VP_TOKEN environment variable
     env.VP_TOKEN = githubToken
