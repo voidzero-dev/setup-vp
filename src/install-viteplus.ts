@@ -98,11 +98,18 @@ async function getInstalledVersion(): Promise<string> {
 
 async function ensureGlobalBinInPath(): Promise<void> {
   try {
-    const result = await getExecOutput('npm', ['bin', '-g'], {
+    // Use 'npm config get prefix' instead of deprecated 'npm bin -g'
+    const result = await getExecOutput('npm', ['config', 'get', 'prefix'], {
       silent: true,
     })
-    const globalBin = result.stdout.trim()
-    if (globalBin && !process.env.PATH?.includes(globalBin)) {
+    const prefix = result.stdout.trim()
+    if (!prefix) {
+      return
+    }
+    // On Unix-like systems, global binaries are in {prefix}/bin
+    // On Windows, they're directly in {prefix}
+    const globalBin = process.platform === 'win32' ? prefix : `${prefix}/bin`
+    if (!process.env.PATH?.includes(globalBin)) {
       addPath(globalBin)
       debug(`Added ${globalBin} to PATH`)
     }
