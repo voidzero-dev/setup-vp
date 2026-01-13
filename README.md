@@ -8,7 +8,7 @@ GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`@vo
 - Support both npm Registry and GitHub Package Registry
 - Cache project dependencies with auto-detection of lock files
 - Optionally run `vite install` after setup
-- Support for all major package managers (npm, pnpm, yarn, bun)
+- Support for all major package managers (npm, pnpm, yarn)
 
 ## Requirements
 
@@ -113,7 +113,6 @@ When `cache: true` is set, the action automatically detects your lock file and c
 | `pnpm-lock.yaml` | pnpm | pnpm store |
 | `package-lock.json` | npm | npm cache |
 | `yarn.lock` | yarn | yarn cache |
-| `bun.lockb` | bun | bun cache |
 
 The cache key format is: `vite-plus-{OS}-{arch}-{pm}-{lockfile-hash}`
 

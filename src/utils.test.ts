@@ -63,18 +63,6 @@ describe("detectLockFile", () => {
       });
     });
 
-    it("should return lock file info for bun.lockb", () => {
-      vi.mocked(existsSync).mockReturnValue(true);
-
-      const result = detectLockFile("bun.lockb");
-
-      expect(result).toEqual({
-        type: LockFileType.Bun,
-        path: join(mockWorkspace, "bun.lockb"),
-        filename: "bun.lockb",
-      });
-    });
-
     it("should return undefined if explicit file does not exist", () => {
       vi.mocked(existsSync).mockReturnValue(false);
 
@@ -144,7 +132,7 @@ describe("detectLockFile", () => {
     });
 
     it("should detect yarn.lock when higher priority files are absent", () => {
-      vi.mocked(readdirSync).mockReturnValue(["yarn.lock", "bun.lockb"] as unknown as ReturnType<
+      vi.mocked(readdirSync).mockReturnValue(["yarn.lock"] as unknown as ReturnType<
         typeof readdirSync
       >);
 
@@ -154,20 +142,6 @@ describe("detectLockFile", () => {
         type: LockFileType.Yarn,
         path: join(mockWorkspace, "yarn.lock"),
         filename: "yarn.lock",
-      });
-    });
-
-    it("should detect bun.lockb when no other lock files present", () => {
-      vi.mocked(readdirSync).mockReturnValue(["bun.lockb"] as unknown as ReturnType<
-        typeof readdirSync
-      >);
-
-      const result = detectLockFile();
-
-      expect(result).toEqual({
-        type: LockFileType.Bun,
-        path: join(mockWorkspace, "bun.lockb"),
-        filename: "bun.lockb",
       });
     });
 
