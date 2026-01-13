@@ -1,0 +1,42 @@
+name: 'Setup Vite+'
+description: 'Install Vite+ (@voidzero-dev/global) and optionally cache project dependencies'
+author: 'voidzero-dev'
+branding:
+  icon: zap
+  color: purple
+
+inputs:
+  version:
+    description: 'Version of @voidzero-dev/global to install'
+    required: false
+    default: 'latest'
+  registry:
+    description: 'Registry to install from: "npm" (default) or "github"'
+    required: false
+    default: 'npm'
+  github-token:
+    description: 'GitHub PAT for GitHub Package Registry. Required when registry is "github".'
+    required: false
+  run-install:
+    description: 'Run `vite install` after setup. Accepts boolean or YAML object with cwd/args.'
+    required: false
+    default: 'false'
+  cache:
+    description: 'Enable caching of project dependencies'
+    required: false
+    default: 'false'
+  cache-dependency-path:
+    description: 'Path to lock file for cache key generation. Auto-detected if not specified.'
+    required: false
+
+outputs:
+  version:
+    description: 'The installed version of @voidzero-dev/global'
+  cache-hit:
+    description: 'Boolean indicating if cache was restored'
+
+runs:
+  using: node20
+  main: dist/index.mjs
+  post: dist/index.mjs
+  post-if: success()
