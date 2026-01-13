@@ -1,4 +1,4 @@
-import { info } from "@actions/core";
+import { info, warning, debug } from "@actions/core";
 import { getExecOutput } from "@actions/exec";
 import { existsSync, readdirSync } from "node:fs";
 import { isAbsolute, join, basename } from "node:path";
@@ -93,6 +93,7 @@ export async function getCacheDirectories(lockType: LockFileType): Promise<strin
 }
 
 async function getCommandOutput(command: string, args: string[]): Promise<string | undefined> {
+  const cmdStr = `${command} ${args.join(" ")}`;
   try {
     const result = await getExecOutput(command, args, {
       silent: true,
@@ -101,8 +102,10 @@ async function getCommandOutput(command: string, args: string[]): Promise<string
     if (result.exitCode === 0) {
       return result.stdout.trim();
     }
+    debug(`Command "${cmdStr}" exited with code ${result.exitCode}`);
     return undefined;
-  } catch {
+  } catch (error) {
+    warning(`Failed to run "${cmdStr}": ${error}`);
     return undefined;
   }
 }
