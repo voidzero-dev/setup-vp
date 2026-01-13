@@ -2,7 +2,6 @@ import { info, warning, debug } from "@actions/core";
 import { getExecOutput } from "@actions/exec";
 import { existsSync, readdirSync } from "node:fs";
 import { isAbsolute, join, basename } from "node:path";
-import { homedir } from "node:os";
 import { LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
 
@@ -12,7 +11,6 @@ const LOCK_FILES: Array<{ filename: string; type: LockFileType }> = [
   { filename: "package-lock.json", type: LockFileType.Npm },
   { filename: "npm-shrinkwrap.json", type: LockFileType.Npm },
   { filename: "yarn.lock", type: LockFileType.Yarn },
-  { filename: "bun.lockb", type: LockFileType.Bun },
 ];
 
 /**
@@ -67,9 +65,6 @@ function inferLockFileType(fullPath: string, filename: string): LockFileInfo {
   if (filename.includes("yarn")) {
     return { type: LockFileType.Yarn, path: fullPath, filename };
   }
-  if (filename.includes("bun")) {
-    return { type: LockFileType.Bun, path: fullPath, filename };
-  }
   // Default to npm
   return { type: LockFileType.Npm, path: fullPath, filename };
 }
@@ -83,8 +78,6 @@ export async function getCacheDirectories(lockType: LockFileType): Promise<strin
     case LockFileType.Pnpm:
     case LockFileType.Yarn:
       return getViteCacheDir();
-    case LockFileType.Bun:
-      return getBunCacheDir();
     default:
       return [];
   }
@@ -111,14 +104,4 @@ async function getCommandOutput(command: string, args: string[]): Promise<string
 async function getViteCacheDir(): Promise<string[]> {
   const cacheDir = await getCommandOutput("vite", ["pm", "cache", "dir"]);
   return cacheDir ? [cacheDir] : [];
-}
-
-async function getBunCacheDir(): Promise<string[]> {
-  const cacheDir = await getCommandOutput("bun", ["pm", "cache"]);
-  if (cacheDir) return [cacheDir];
-
-  // Fallback to default location
-  const home = homedir();
-  const defaultCache = join(home, ".bun", "install", "cache");
-  return existsSync(defaultCache) ? [defaultCache] : [];
 }

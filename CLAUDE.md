@@ -59,7 +59,7 @@ This is a GitHub Action with main and post execution phases (defined in `action.
 
 ### Lock File Detection
 
-Auto-detects package manager from lock files: `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lockb`
+Auto-detects package manager from lock files: `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`
 
 ## Testing
 
