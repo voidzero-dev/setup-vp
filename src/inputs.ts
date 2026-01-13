@@ -1,4 +1,4 @@
-import * as core from '@actions/core'
+import { getInput, getBooleanInput } from '@actions/core'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
 import type { Inputs, Registry, RunInstall } from './types.js'
@@ -6,12 +6,12 @@ import { RunInstallInputSchema } from './types.js'
 
 export function getInputs(): Inputs {
   return {
-    version: core.getInput('version') || 'latest',
-    registry: parseRegistry(core.getInput('registry')),
-    githubToken: core.getInput('github-token') || undefined,
-    runInstall: parseRunInstall(core.getInput('run-install')),
-    cache: core.getBooleanInput('cache'),
-    cacheDependencyPath: core.getInput('cache-dependency-path') || undefined,
+    version: getInput('version') || 'latest',
+    registry: parseRegistry(getInput('registry')),
+    githubToken: getInput('github-token') || undefined,
+    runInstall: parseRunInstall(getInput('run-install')),
+    cache: getBooleanInput('cache'),
+    cacheDependencyPath: getInput('cache-dependency-path') || undefined,
   }
 }
 

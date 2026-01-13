@@ -1,8 +1,8 @@
-import * as core from '@actions/core'
-import * as exec from '@actions/exec'
-import * as fs from 'node:fs'
-import * as path from 'node:path'
-import * as os from 'node:os'
+import { info } from '@actions/core'
+import { getExecOutput } from '@actions/exec'
+import { existsSync, readdirSync } from 'node:fs'
+import { isAbsolute, join, basename } from 'node:path'
+import { homedir } from 'node:os'
 import { LockFileType } from './types.js'
 import type { LockFileInfo } from './types.js'
 
@@ -23,12 +23,12 @@ export function detectLockFile(explicitPath?: string): LockFileInfo | undefined 
 
   // If explicit path provided, use it
   if (explicitPath) {
-    const fullPath = path.isAbsolute(explicitPath)
+    const fullPath = isAbsolute(explicitPath)
       ? explicitPath
-      : path.join(workspace, explicitPath)
+      : join(workspace, explicitPath)
 
-    if (fs.existsSync(fullPath)) {
-      const filename = path.basename(fullPath)
+    if (existsSync(fullPath)) {
+      const filename = basename(fullPath)
       const lockInfo = LOCK_FILES.find(l => l.filename === filename)
       if (lockInfo) {
         return {
@@ -44,12 +44,12 @@ export function detectLockFile(explicitPath?: string): LockFileInfo | undefined 
   }
 
   // Auto-detect: search for lock files in workspace root
-  const workspaceContents = fs.readdirSync(workspace)
+  const workspaceContents = readdirSync(workspace)
 
   for (const lockInfo of LOCK_FILES) {
     if (workspaceContents.includes(lockInfo.filename)) {
-      const fullPath = path.join(workspace, lockInfo.filename)
-      core.info(`Auto-detected lock file: ${lockInfo.filename}`)
+      const fullPath = join(workspace, lockInfo.filename)
+      info(`Auto-detected lock file: ${lockInfo.filename}`)
       return {
         type: lockInfo.type,
         path: fullPath,
@@ -101,7 +101,7 @@ async function getCommandOutput(
   args: string[]
 ): Promise<string | undefined> {
   try {
-    const result = await exec.getExecOutput(command, args, {
+    const result = await getExecOutput(command, args, {
       silent: true,
       ignoreReturnCode: true,
     })
@@ -142,7 +142,7 @@ async function getBunCacheDir(): Promise<string[]> {
   if (cacheDir) return [cacheDir]
 
   // Fallback to default location
-  const home = os.homedir()
-  const defaultCache = path.join(home, '.bun', 'install', 'cache')
-  return fs.existsSync(defaultCache) ? [defaultCache] : []
+  const home = homedir()
+  const defaultCache = join(home, '.bun', 'install', 'cache')
+  return existsSync(defaultCache) ? [defaultCache] : []
 }

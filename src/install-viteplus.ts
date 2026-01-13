@@ -1,9 +1,8 @@
-import * as core from '@actions/core'
-import * as exec from '@actions/exec'
+import { info, debug, warning, saveState, setOutput, addPath } from '@actions/core'
+import { exec, getExecOutput } from '@actions/exec'
 import type { Inputs } from './types.js'
 import {
   PACKAGE_NAME,
-  NPM_REGISTRY,
   GITHUB_REGISTRY,
   State,
   Outputs,
@@ -12,7 +11,7 @@ import {
 export async function installVitePlus(inputs: Inputs): Promise<void> {
   const { version, registry, githubToken } = inputs
 
-  core.info(`Installing ${PACKAGE_NAME}@${version} from ${registry} registry...`)
+  info(`Installing ${PACKAGE_NAME}@${version} from ${registry} registry...`)
 
   // Validate GitHub token if using GitHub registry
   if (registry === 'github' && !githubToken) {
@@ -26,14 +25,10 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
   const packageSpec =
     version === 'latest' ? PACKAGE_NAME : `${PACKAGE_NAME}@${version}`
 
-  const registryUrl = registry === 'github' ? GITHUB_REGISTRY : NPM_REGISTRY
-
-  // Run npm install -g
-  const args = ['install', '-g', packageSpec, `--registry=${registryUrl}`]
-
-  core.debug(`Running: npm ${args.join(' ')}`)
+  const args = ['install', '-g', packageSpec]
 
   // Set up environment for installation
+  // Use environment variables instead of writing to .npmrc to prevent token theft
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined) {
@@ -41,15 +36,22 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     }
   }
 
-  // Configure registry auth for GitHub
+  // Configure scoped registry for GitHub Package Registry via environment variables
+  // This allows @voidzero-dev packages from GitHub while other packages use npm
   if (registry === 'github' && githubToken) {
-    env.NODE_AUTH_TOKEN = githubToken
+    debug('Configuring @voidzero-dev scoped registry for GitHub Package Registry')
+
+    // npm reads environment variables in the format: npm_config_<key>
+    // For scoped registry: @voidzero-dev:registry -> npm_config_@voidzero-dev:registry
+    env['npm_config_@voidzero-dev:registry'] = GITHUB_REGISTRY
+
+    // For auth token: //npm.pkg.github.com/:_authToken -> npm_config_//npm.pkg.github.com/:_authToken
+    env['npm_config_//npm.pkg.github.com/:_authToken'] = githubToken
   }
 
-  const exitCode = await exec.exec('npm', args, {
-    env,
-    silent: false,
-  })
+  debug(`Running: npm ${args.join(' ')}`)
+
+  const exitCode = await exec('npm', args, { env })
 
   if (exitCode !== 0) {
     throw new Error(
@@ -59,11 +61,11 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
 
   // Verify installation and get version
   const installedVersion = await getInstalledVersion()
-  core.info(`Successfully installed ${PACKAGE_NAME}@${installedVersion}`)
+  info(`Successfully installed ${PACKAGE_NAME}@${installedVersion}`)
 
   // Save state for outputs
-  core.saveState(State.InstalledVersion, installedVersion)
-  core.setOutput(Outputs.Version, installedVersion)
+  saveState(State.InstalledVersion, installedVersion)
+  setOutput(Outputs.Version, installedVersion)
 
   // Ensure global bin is in PATH
   await ensureGlobalBinInPath()
@@ -71,14 +73,14 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
 
 async function getInstalledVersion(): Promise<string> {
   try {
-    const result = await exec.getExecOutput('vp', ['--version'], {
+    const result = await getExecOutput('vp', ['--version'], {
       silent: true,
     })
     return result.stdout.trim()
   } catch {
     // Fallback: check npm list
     try {
-      const result = await exec.getExecOutput(
+      const result = await getExecOutput(
         'npm',
         ['list', '-g', PACKAGE_NAME, '--depth=0', '--json'],
         { silent: true }
@@ -95,15 +97,15 @@ async function getInstalledVersion(): Promise<string> {
 
 async function ensureGlobalBinInPath(): Promise<void> {
   try {
-    const result = await exec.getExecOutput('npm', ['bin', '-g'], {
+    const result = await getExecOutput('npm', ['bin', '-g'], {
       silent: true,
     })
     const globalBin = result.stdout.trim()
     if (globalBin && !process.env.PATH?.includes(globalBin)) {
-      core.addPath(globalBin)
-      core.debug(`Added ${globalBin} to PATH`)
+      addPath(globalBin)
+      debug(`Added ${globalBin} to PATH`)
     }
   } catch (error) {
-    core.warning(`Could not determine global npm bin path: ${error}`)
+    warning(`Could not determine global npm bin path: ${error}`)
   }
 }

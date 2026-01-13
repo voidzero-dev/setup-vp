@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { existsSync, readdirSync, type Dirent } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { detectLockFile } from './utils.js'
 import { LockFileType } from './types.js'
@@ -103,7 +103,7 @@ describe('detectLockFile', () => {
         'package-lock.json',
         'pnpm-lock.yaml',
         'yarn.lock',
-      ] as unknown as Dirent[])
+      ] as unknown as ReturnType<typeof readdirSync>)
 
       const result = detectLockFile()
 
@@ -118,7 +118,7 @@ describe('detectLockFile', () => {
       vi.mocked(readdirSync).mockReturnValue([
         'package-lock.json',
         'yarn.lock',
-      ] as unknown as Dirent[])
+      ] as unknown as ReturnType<typeof readdirSync>)
 
       const result = detectLockFile()
 
@@ -132,7 +132,7 @@ describe('detectLockFile', () => {
     it('should detect npm-shrinkwrap.json', () => {
       vi.mocked(readdirSync).mockReturnValue([
         'npm-shrinkwrap.json',
-      ] as unknown as Dirent[])
+      ] as unknown as ReturnType<typeof readdirSync>)
 
       const result = detectLockFile()
 
@@ -147,7 +147,7 @@ describe('detectLockFile', () => {
       vi.mocked(readdirSync).mockReturnValue([
         'yarn.lock',
         'bun.lockb',
-      ] as unknown as Dirent[])
+      ] as unknown as ReturnType<typeof readdirSync>)
 
       const result = detectLockFile()
 
@@ -161,7 +161,7 @@ describe('detectLockFile', () => {
     it('should detect bun.lockb when no other lock files present', () => {
       vi.mocked(readdirSync).mockReturnValue([
         'bun.lockb',
-      ] as unknown as Dirent[])
+      ] as unknown as ReturnType<typeof readdirSync>)
 
       const result = detectLockFile()
 
@@ -177,7 +177,7 @@ describe('detectLockFile', () => {
         'package.json',
         'src',
         'README.md',
-      ] as unknown as Dirent[])
+      ] as unknown as ReturnType<typeof readdirSync>)
 
       const result = detectLockFile()
 

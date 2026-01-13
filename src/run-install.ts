@@ -1,5 +1,5 @@
-import * as core from '@actions/core'
-import * as exec from '@actions/exec'
+import { startGroup, endGroup, setFailed, info } from '@actions/core'
+import { exec } from '@actions/exec'
 import type { Inputs } from './types.js'
 
 export async function runViteInstall(inputs: Inputs): Promise<void> {
@@ -12,25 +12,25 @@ export async function runViteInstall(inputs: Inputs): Promise<void> {
     const cwd = options.cwd || process.env.GITHUB_WORKSPACE || process.cwd()
     const cmdStr = `vite ${args.join(' ')}`
 
-    core.startGroup(`Running ${cmdStr} in ${cwd}...`)
+    startGroup(`Running ${cmdStr} in ${cwd}...`)
 
     try {
-      const exitCode = await exec.exec('vite', args, {
+      const exitCode = await exec('vite', args, {
         cwd,
         ignoreReturnCode: true,
       })
 
       if (exitCode !== 0) {
-        core.setFailed(
+        setFailed(
           `Command "${cmdStr}" (cwd: ${cwd}) exited with code ${exitCode}`
         )
       } else {
-        core.info(`Successfully ran ${cmdStr}`)
+        info(`Successfully ran ${cmdStr}`)
       }
     } catch (error) {
-      core.setFailed(`Failed to run ${cmdStr}: ${error}`)
+      setFailed(`Failed to run ${cmdStr}: ${error}`)
     } finally {
-      core.endGroup()
+      endGroup()
     }
   }
 }

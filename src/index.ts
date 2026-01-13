@@ -1,4 +1,4 @@
-import * as core from '@actions/core'
+import { saveState, getState, setFailed } from '@actions/core'
 import { getInputs } from './inputs.js'
 import { installVitePlus } from './install-viteplus.js'
 import { runViteInstall } from './run-install.js'
@@ -9,7 +9,7 @@ import type { Inputs } from './types.js'
 
 async function runMain(inputs: Inputs): Promise<void> {
   // Mark that post action should run
-  core.saveState(State.IsPost, 'true')
+  saveState(State.IsPost, 'true')
 
   // Step 1: Install @voidzero-dev/global
   await installVitePlus(inputs)
@@ -35,7 +35,7 @@ async function runPost(inputs: Inputs): Promise<void> {
 async function main(): Promise<void> {
   const inputs = getInputs()
 
-  if (core.getState(State.IsPost) === 'true') {
+  if (getState(State.IsPost) === 'true') {
     await runPost(inputs)
   } else {
     await runMain(inputs)
@@ -44,5 +44,5 @@ async function main(): Promise<void> {
 
 main().catch(error => {
   console.error(error)
-  core.setFailed(error instanceof Error ? error.message : String(error))
+  setFailed(error instanceof Error ? error.message : String(error))
 })

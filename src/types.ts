@@ -60,5 +60,4 @@ export enum Outputs {
 
 // Package constants
 export const PACKAGE_NAME = '@voidzero-dev/global'
-export const NPM_REGISTRY = 'https://registry.npmjs.org'
 export const GITHUB_REGISTRY = 'https://npm.pkg.github.com'
