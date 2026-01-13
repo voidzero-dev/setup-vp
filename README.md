@@ -20,8 +20,8 @@ GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`@vo
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-node@v4
+  - uses: actions/checkout@v6
+  - uses: actions/setup-node@v6
     with:
       node-version: '22'
   - uses: voidzero-dev/setup-vite-plus-action@v1
@@ -31,8 +31,8 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-node@v4
+  - uses: actions/checkout@v6
+  - uses: actions/setup-node@v6
     with:
       node-version: '22'
   - uses: voidzero-dev/setup-vite-plus-action@v1
@@ -45,8 +45,8 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-node@v4
+  - uses: actions/checkout@v6
+  - uses: actions/setup-node@v6
     with:
       node-version: '22'
   - uses: voidzero-dev/setup-vite-plus-action@v1
@@ -59,8 +59,8 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-node@v4
+  - uses: actions/checkout@v6
+  - uses: actions/setup-node@v6
     with:
       node-version: '22'
   - uses: voidzero-dev/setup-vite-plus-action@v1
@@ -73,8 +73,8 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-node@v4
+  - uses: actions/checkout@v6
+  - uses: actions/setup-node@v6
     with:
       node-version: '22'
   - uses: voidzero-dev/setup-vite-plus-action@v1
@@ -131,9 +131,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
 
