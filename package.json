@@ -5,8 +5,8 @@
   "type": "module",
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "lint": "vite lint",
-    "lint:fix": "vite lint --fix",
+    "lint": "vite lint --type-aware --type-check",
+    "lint:fix": "vite run lint --fix",
     "build": "vite lib",
     "typecheck": "tsc --noEmit",
     "test": "vite test run",
