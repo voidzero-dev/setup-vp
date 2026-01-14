@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`@voidzero-dev/global`) with dependency caching support. This action installs Vite+ globally and optionally caches project dependencies based on lock file detection.
+GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`vite-plus-global`) with dependency caching support. This action installs Vite+ globally and optionally caches project dependencies based on lock file detection.
 
 ## Commands
 
@@ -41,7 +41,7 @@ vite run fmt:check
 This is a GitHub Action with main and post execution phases (defined in `action.yml`):
 
 - **Main phase** (`src/index.ts` → `runMain`):
-  1. Install `@voidzero-dev/global` globally via npm
+  1. Install `vite-plus-global` globally via npm
   2. Restore dependency cache if enabled
   3. Run `vite install` if requested
 

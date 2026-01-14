@@ -58,5 +58,5 @@ export enum Outputs {
 }
 
 // Package constants
-export const PACKAGE_NAME = "@voidzero-dev/global";
+export const PACKAGE_NAME = "vite-plus-global";
 export const GITHUB_REGISTRY = "https://npm.pkg.github.com";
