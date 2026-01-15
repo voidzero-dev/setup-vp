@@ -1,24 +1,8 @@
-import { startGroup, endGroup, setFailed, info, debug } from "@actions/core";
+import { startGroup, endGroup, setFailed, info } from "@actions/core";
 import { exec } from "@actions/exec";
 import type { Inputs } from "./types.js";
 
 export async function runViteInstall(inputs: Inputs): Promise<void> {
-  const { registry, githubToken } = inputs;
-
-  // Set up environment for vite install
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) {
-      env[key] = value;
-    }
-  }
-
-  // Pass GitHub token via VP_TOKEN for GitHub Package Registry
-  if (registry === "github" && githubToken) {
-    debug("Setting VP_TOKEN environment variable for vite install");
-    env.VP_TOKEN = githubToken;
-  }
-
   for (const options of inputs.runInstall) {
     const args = ["install"];
     if (options.args) {
@@ -33,7 +17,6 @@ export async function runViteInstall(inputs: Inputs): Promise<void> {
     try {
       const exitCode = await exec("vite", args, {
         cwd,
-        env,
         ignoreReturnCode: true,
       });
 

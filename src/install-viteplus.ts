@@ -1,52 +1,20 @@
 import { info, debug, warning, addPath } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
 import type { Inputs } from "./types.js";
-import { PACKAGE_NAME, GITHUB_REGISTRY } from "./types.js";
+import { PACKAGE_NAME } from "./types.js";
 
 export async function installVitePlus(inputs: Inputs): Promise<void> {
-  const { version, registry, githubToken } = inputs;
+  const { version } = inputs;
 
-  info(`Installing ${PACKAGE_NAME}@${version} from ${registry} registry...`);
-
-  // Validate GitHub token if using GitHub registry
-  if (registry === "github" && !githubToken) {
-    throw new Error(
-      "GitHub token is required when using GitHub Package Registry. " +
-        "Please set the github-token input.",
-    );
-  }
+  info(`Installing ${PACKAGE_NAME}@${version}...`);
 
   // Build npm install command arguments
   const packageSpec = version === "latest" ? PACKAGE_NAME : `${PACKAGE_NAME}@${version}`;
-
   const args = ["install", "-g", packageSpec];
-
-  // Set up environment for installation
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) {
-      env[key] = value;
-    }
-  }
-
-  // Configure scoped registry for GitHub Package Registry
-  if (registry === "github" && githubToken) {
-    debug("Configuring @voidzero-dev scoped registry for GitHub Package Registry");
-
-    // Set scoped registry using npm config
-    await exec("npm", ["config", "set", "@voidzero-dev:registry", GITHUB_REGISTRY]);
-
-    // Set auth token placeholder using npm config
-    // The actual token is passed via VP_TOKEN environment variable
-    await exec("npm", ["config", "set", "//npm.pkg.github.com/:_authToken", "${VP_TOKEN}"]);
-
-    // Pass the actual token via VP_TOKEN environment variable
-    env.VP_TOKEN = githubToken;
-  }
 
   debug(`Running: npm ${args.join(" ")}`);
 
-  const exitCode = await exec("npm", args, { env });
+  const exitCode = await exec("npm", args);
 
   if (exitCode !== 0) {
     throw new Error(`Failed to install ${PACKAGE_NAME}. Exit code: ${exitCode}`);

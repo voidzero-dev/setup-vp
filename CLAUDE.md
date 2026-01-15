@@ -51,7 +51,7 @@ This is a GitHub Action with main and post execution phases (defined in `action.
 ### Key Modules
 
 - `src/inputs.ts` - Parse and validate action inputs using Zod schemas
-- `src/install-viteplus.ts` - Install vite-plus globally, handles GitHub Package Registry auth
+- `src/install-viteplus.ts` - Install vite-plus globally via npm
 - `src/cache-restore.ts` / `src/cache-save.ts` - Dependency caching via `@actions/cache`
 - `src/run-install.ts` - Execute `vite install` with optional cwd/args
 - `src/types.ts` - Shared types, enums, and Zod schemas

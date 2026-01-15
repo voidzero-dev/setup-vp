@@ -1,8 +1,5 @@
 import { z } from "zod";
 
-// Registry type
-export type Registry = "npm" | "github";
-
 // Run install configuration schema
 export const RunInstallSchema = z.object({
   cwd: z.string().optional(),
@@ -22,8 +19,6 @@ export type RunInstall = z.infer<typeof RunInstallSchema>;
 // Main inputs interface
 export interface Inputs {
   readonly version: string;
-  readonly registry: Registry;
-  readonly githubToken?: string;
   readonly runInstall: RunInstall[];
   readonly cache: boolean;
   readonly cacheDependencyPath?: string;
@@ -59,4 +54,3 @@ export enum Outputs {
 
 // Package constants
 export const PACKAGE_NAME = "vite-plus-cli";
-export const GITHUB_REGISTRY = "https://npm.pkg.github.com";

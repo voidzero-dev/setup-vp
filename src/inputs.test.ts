@@ -25,8 +25,6 @@ describe("getInputs", () => {
 
     expect(inputs).toEqual({
       version: "latest",
-      registry: "npm",
-      githubToken: undefined,
       runInstall: [],
       cache: false,
       cacheDependencyPath: undefined,
@@ -43,52 +41,6 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs.version).toBe("1.2.3");
-  });
-
-  it("should parse registry input as npm", () => {
-    vi.mocked(getInput).mockImplementation((name) => {
-      if (name === "registry") return "npm";
-      return "";
-    });
-    vi.mocked(getBooleanInput).mockReturnValue(false);
-
-    const inputs = getInputs();
-
-    expect(inputs.registry).toBe("npm");
-  });
-
-  it("should parse registry input as github", () => {
-    vi.mocked(getInput).mockImplementation((name) => {
-      if (name === "registry") return "github";
-      return "";
-    });
-    vi.mocked(getBooleanInput).mockReturnValue(false);
-
-    const inputs = getInputs();
-
-    expect(inputs.registry).toBe("github");
-  });
-
-  it("should throw error for invalid registry", () => {
-    vi.mocked(getInput).mockImplementation((name) => {
-      if (name === "registry") return "invalid";
-      return "";
-    });
-    vi.mocked(getBooleanInput).mockReturnValue(false);
-
-    expect(() => getInputs()).toThrow('Invalid registry "invalid"');
-  });
-
-  it("should parse github-token input", () => {
-    vi.mocked(getInput).mockImplementation((name) => {
-      if (name === "github-token") return "ghp_xxxx";
-      return "";
-    });
-    vi.mocked(getBooleanInput).mockReturnValue(false);
-
-    const inputs = getInputs();
-
-    expect(inputs.githubToken).toBe("ghp_xxxx");
   });
 
   it("should parse run-install as true", () => {

@@ -24,8 +24,6 @@ jobs:
         uses: ./
         with:
           version: latest
-          registry: github
-          github-token: ${{ secrets.VP_TOKEN }}
           run-install: false
           cache: false
 
@@ -52,8 +50,6 @@ jobs:
         uses: ./
         id: setup
         with:
-          registry: github
-          github-token: ${{ secrets.VP_TOKEN }}
           run-install: false
           cache: true
           cache-dependency-path: test-project/pnpm-lock.yaml
@@ -84,8 +80,6 @@ jobs:
         uses: ./
         id: setup
         with:
-          registry: github
-          github-token: ${{ secrets.VP_TOKEN }}
           run-install: false
           cache: true
           cache-dependency-path: test-project/package-lock.json
@@ -116,8 +110,6 @@ jobs:
         uses: ./
         id: setup
         with:
-          registry: github
-          github-token: ${{ secrets.VP_TOKEN }}
           run-install: false
           cache: true
           cache-dependency-path: test-project/yarn.lock
@@ -141,8 +133,6 @@ jobs:
         uses: ./
         id: setup
         with:
-          registry: github
-          github-token: ${{ secrets.VP_TOKEN }}
           cache: true
 
       - name: Type check

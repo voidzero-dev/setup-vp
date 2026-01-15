@@ -10,13 +10,6 @@ inputs:
     description: 'Version of vite-plus-cli to install'
     required: false
     default: 'latest'
-  registry:
-    description: 'Registry to install from: "npm" (default) or "github"'
-    required: false
-    default: 'npm'
-  github-token:
-    description: 'GitHub PAT for GitHub Package Registry. Required when registry is "github".'
-    required: false
   run-install:
     description: 'Run `vite install` after setup. Accepts boolean or YAML object with cwd/args.'
     required: false
