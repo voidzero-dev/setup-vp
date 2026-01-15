@@ -1,5 +1,5 @@
 name: 'Setup Vite+'
-description: 'Install Vite+ (vite-plus-global) and optionally cache project dependencies'
+description: 'Install Vite+ (vite-plus-cli) and optionally cache project dependencies'
 author: 'voidzero-dev'
 branding:
   icon: zap
@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: 'Version of vite-plus-global to install'
+    description: 'Version of vite-plus-cli to install'
     required: false
     default: 'latest'
   registry:
@@ -31,7 +31,7 @@ inputs:
 
 outputs:
   version:
-    description: 'The installed version of vite-plus-global'
+    description: 'The installed version of vite-plus-cli'
   cache-hit:
     description: 'Boolean indicating if cache was restored'
 

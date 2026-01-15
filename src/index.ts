@@ -12,7 +12,7 @@ async function runMain(inputs: Inputs): Promise<void> {
   // Mark that post action should run
   saveState(State.IsPost, "true");
 
-  // Step 1: Install vite-plus-global
+  // Step 1: Install vite-plus-cli
   await installVitePlus(inputs);
 
   // Step 2: Restore cache if enabled

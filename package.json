@@ -25,6 +25,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@voidzero-dev/vite-plus": "latest",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vite-plus": "^0.0.1"
   }
 }

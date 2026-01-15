@@ -1,6 +1,6 @@
 # setup-vite-plus-action
 
-GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`vite-plus-global`) with dependency caching support.
+GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`vite-plus-cli`) with dependency caching support.
 
 ## Features
 
@@ -90,7 +90,7 @@ steps:
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `version` | Version of vite-plus-global to install | No | `latest` |
+| `version` | Version of vite-plus-cli to install | No | `latest` |
 | `registry` | Registry to install from: `npm` or `github` | No | `npm` |
 | `github-token` | GitHub PAT for GitHub Package Registry | No | - |
 | `run-install` | Run `vite install` after setup. Accepts boolean or YAML object with `cwd`/`args` | No | `true` |
@@ -101,7 +101,7 @@ steps:
 
 | Output | Description |
 |--------|-------------|
-| `version` | The installed version of vite-plus-global |
+| `version` | The installed version of vite-plus-cli |
 | `cache-hit` | Boolean indicating if cache was restored |
 
 ## Caching
