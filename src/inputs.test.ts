@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "@voidzero-dev/vite-plus/test";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { getInput, getBooleanInput } from "@actions/core";
 import { getInputs } from "./inputs.js";
 

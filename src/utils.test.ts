@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "@voidzero-dev/vite-plus/test";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { detectLockFile } from "./utils.js";

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@voidzero-dev/vite-plus/test";
+import { describe, it, expect } from "vite-plus/test";
 import { RunInstallSchema, RunInstallInputSchema } from "./types.js";
 
 describe("RunInstallSchema", () => {
