@@ -6,7 +6,7 @@
   "scripts": {
     "lint": "vp lint --type-aware --type-check",
     "lint:fix": "vp run lint --fix",
-    "build": "vp lib",
+    "build": "vp pack",
     "typecheck": "tsc --noEmit",
     "test": "vp test run",
     "test:watch": "vp test -w",

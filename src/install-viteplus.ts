@@ -15,7 +15,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
   let exitCode: number;
 
   if (process.platform === "win32") {
-    exitCode = await exec("powershell", ["-Command", `irm ${INSTALL_URL_PS1} | iex`], { env });
+    exitCode = await exec("powershell", ["-Command", `& ([scriptblock]::Create((irm ${INSTALL_URL_PS1})))`], { env });
   } else {
     exitCode = await exec("bash", ["-c", `curl -fsSL ${INSTALL_URL_SH} | bash`], { env });
   }

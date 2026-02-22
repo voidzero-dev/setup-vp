@@ -1,11 +1,12 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  lib: {
+  pack: {
     entry: ["./src/index.ts"],
     format: ["esm"],
     outDir: "dist",
     noExternal: [/.*/],
+    inlineOnly: false,
     clean: true,
     minify: true,
   },
