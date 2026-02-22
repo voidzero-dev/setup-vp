@@ -16,10 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
-        with:
-          node-version: '22'
-
       - name: Setup Vite+
         uses: ./
         with:
@@ -28,16 +24,12 @@ jobs:
           cache: false
 
       - name: Verify installation
-        run: vite --version
+        run: vp --version
 
   test-cache-pnpm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
-        with:
-          node-version: '22'
 
       - name: Create test project with pnpm-lock.yaml
         run: |
@@ -56,7 +48,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          vite --version
+          vp --version
           echo "Installed version: ${{ steps.setup.outputs.version }}"
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
@@ -64,10 +56,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
-        with:
-          node-version: '22'
 
       - name: Create test project with package-lock.json
         run: |
@@ -86,7 +74,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          vite --version
+          vp --version
           echo "Installed version: ${{ steps.setup.outputs.version }}"
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
@@ -94,10 +82,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
-        with:
-          node-version: '22'
 
       - name: Create test project with yarn.lock
         run: |
@@ -116,7 +100,7 @@ jobs:
 
       - name: Verify installation
         run: |
-          vite --version
+          vp --version
           echo "Installed version: ${{ steps.setup.outputs.version }}"
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
@@ -125,10 +109,6 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
-      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
-        with:
-          node-version: '22'
-
       - name: Setup Vite+ with cache
         uses: ./
         id: setup
@@ -136,20 +116,20 @@ jobs:
           cache: true
 
       - name: Type check
-        run: vite run typecheck
+        run: vp run typecheck
 
       - name: Format check
-        run: vite run fmt:check
+        run: vp run fmt:check
 
       - name: Lint check
-        run: vite run lint
+        run: vp run lint
 
       - name: Unit tests
-        run: vite run test
+        run: vp run test
 
       - name: Build
-        run: vite run build
+        run: vp run build
 
       - name: Verify dist is up to date
         run: |
-          git diff --exit-code dist/ || (echo "dist/ is out of date. Run 'vite run build' and commit." && exit 1)
+          git diff --exit-code dist/ || (echo "dist/ is out of date. Run 'vp run build' and commit." && exit 1)

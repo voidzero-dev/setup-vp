@@ -1,17 +1,14 @@
 # setup-vite-plus-action
 
-GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`vite-plus-cli`) with dependency caching support.
+GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`vp`) with dependency caching support.
 
 ## Features
 
-- Install Vite+ globally with version specification
+- Install Vite+ globally via official install scripts
+- Optionally set up a specific Node.js version via `vp env use`
 - Cache project dependencies with auto-detection of lock files
-- Optionally run `vite install` after setup
+- Optionally run `vp install` after setup
 - Support for all major package managers (npm, pnpm, yarn)
-
-## Requirements
-
-- Node.js >= 22.12.0 (use [actions/setup-node](https://github.com/actions/setup-node) first)
 
 ## Usage
 
@@ -20,10 +17,17 @@ GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`vit
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: actions/setup-node@v6
+  - uses: voidzero-dev/setup-vite-plus-action@v1
+```
+
+### With Node.js Version
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  - uses: voidzero-dev/setup-vite-plus-action@v1
     with:
       node-version: '22'
-  - uses: voidzero-dev/setup-vite-plus-action@v1
 ```
 
 ### With Caching and Install
@@ -31,11 +35,9 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: actions/setup-node@v6
-    with:
-      node-version: '22'
   - uses: voidzero-dev/setup-vite-plus-action@v1
     with:
+      node-version: '22'
       cache: true
       run-install: true
 ```
@@ -45,12 +47,10 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: actions/setup-node@v6
-    with:
-      node-version: '22'
   - uses: voidzero-dev/setup-vite-plus-action@v1
     with:
       version: '1.2.3'
+      node-version: '22'
       cache: true
 ```
 
@@ -59,11 +59,9 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: actions/setup-node@v6
-    with:
-      node-version: '22'
   - uses: voidzero-dev/setup-vite-plus-action@v1
     with:
+      node-version: '22'
       cache: true
       run-install: |
         - cwd: ./packages/app
@@ -71,12 +69,31 @@ steps:
         - cwd: ./packages/lib
 ```
 
+### Matrix Testing with Multiple Node.js Versions
+
+```yaml
+jobs:
+  test:
+    strategy:
+      matrix:
+        node-version: ['20', '22', '24']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: voidzero-dev/setup-vite-plus-action@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: true
+      - run: vp run test
+```
+
 ## Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `version` | Version of vite-plus-cli to install | No | `latest` |
-| `run-install` | Run `vite install` after setup. Accepts boolean or YAML object with `cwd`/`args` | No | `true` |
+| `version` | Version of Vite+ to install | No | `latest` |
+| `node-version` | Node.js version to install via `vp env use` | No | Vite+ default |
+| `run-install` | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args` | No | `true` |
 | `cache` | Enable caching of project dependencies | No | `false` |
 | `cache-dependency-path` | Path to lock file for cache key generation | No | Auto-detected |
 
@@ -84,7 +101,7 @@ steps:
 
 | Output | Description |
 |--------|-------------|
-| `version` | The installed version of vite-plus-cli |
+| `version` | The installed version of Vite+ |
 | `cache-hit` | Boolean indicating if cache was restored |
 
 ## Caching
@@ -116,17 +133,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-
       - uses: voidzero-dev/setup-vite-plus-action@v1
         with:
+          node-version: '22'
           cache: true
 
-      - run: vite run build
+      - run: vp run build
 
-      - run: vite run test
+      - run: vp run test
 ```
 
 ## Feedback

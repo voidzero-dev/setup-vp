@@ -1,5 +1,5 @@
 name: 'Setup Vite+'
-description: 'Install Vite+ (vite-plus-cli) and optionally cache project dependencies'
+description: 'Install Vite+ (vp) and optionally cache project dependencies'
 author: 'voidzero-dev'
 branding:
   icon: zap
@@ -7,13 +7,16 @@ branding:
 
 inputs:
   version:
-    description: 'Version of vite-plus-cli to install'
+    description: 'Version of Vite+ to install'
     required: false
     default: 'latest'
   run-install:
-    description: 'Run `vite install` after setup. Accepts boolean or YAML object with cwd/args.'
+    description: 'Run `vp install` after setup. Accepts boolean or YAML object with cwd/args.'
     required: false
     default: 'true'
+  node-version:
+    description: 'Node.js version to install via `vp env use`. If not specified, uses the default version bundled with Vite+.'
+    required: false
   cache:
     description: 'Enable caching of project dependencies'
     required: false
@@ -24,7 +27,7 @@ inputs:
 
 outputs:
   version:
-    description: 'The installed version of vite-plus-cli'
+    description: 'The installed version of Vite+'
   cache-hit:
     description: 'Boolean indicating if cache was restored'
 

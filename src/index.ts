@@ -1,5 +1,5 @@
 import { saveState, getState, setFailed, info, setOutput, warning } from "@actions/core";
-import { getExecOutput } from "@actions/exec";
+import { exec, getExecOutput } from "@actions/exec";
 import { getInputs } from "./inputs.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { runViteInstall } from "./run-install.js";
@@ -12,15 +12,21 @@ async function runMain(inputs: Inputs): Promise<void> {
   // Mark that post action should run
   saveState(State.IsPost, "true");
 
-  // Step 1: Install vite-plus-cli
+  // Step 1: Install Vite+
   await installVitePlus(inputs);
 
-  // Step 2: Restore cache if enabled
+  // Step 2: Set up Node.js version if specified
+  if (inputs.nodeVersion) {
+    info(`Setting up Node.js ${inputs.nodeVersion} via vp env use...`);
+    await exec("vp", ["env", "use", inputs.nodeVersion]);
+  }
+
+  // Step 3: Restore cache if enabled
   if (inputs.cache) {
     await restoreCache(inputs);
   }
 
-  // Step 3: Run vite install if requested
+  // Step 4: Run vp install if requested
   if (inputs.runInstall.length > 0) {
     await runViteInstall(inputs);
   }
@@ -31,7 +37,7 @@ async function runMain(inputs: Inputs): Promise<void> {
 
 async function printViteVersion(): Promise<void> {
   try {
-    const result = await getExecOutput("vite", ["--version"], { silent: true });
+    const result = await getExecOutput("vp", ["--version"], { silent: true });
     const versionOutput = result.stdout.trim();
     info(versionOutput);
 
@@ -41,7 +47,7 @@ async function printViteVersion(): Promise<void> {
     saveState(State.InstalledVersion, version);
     setOutput(Outputs.Version, version);
   } catch (error) {
-    warning(`Could not get vite version: ${error}`);
+    warning(`Could not get vp version: ${error}`);
     setOutput(Outputs.Version, "unknown");
   }
 }

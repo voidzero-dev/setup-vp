@@ -102,6 +102,6 @@ async function getCommandOutput(command: string, args: string[]): Promise<string
 }
 
 async function getViteCacheDir(): Promise<string[]> {
-  const cacheDir = await getCommandOutput("vite", ["pm", "cache", "dir"]);
+  const cacheDir = await getCommandOutput("vp", ["pm", "cache", "dir"]);
   return cacheDir ? [cacheDir] : [];
 }

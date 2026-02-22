@@ -19,6 +19,7 @@ export type RunInstall = z.infer<typeof RunInstallSchema>;
 // Main inputs interface
 export interface Inputs {
   readonly version: string;
+  readonly nodeVersion?: string;
   readonly runInstall: RunInstall[];
   readonly cache: boolean;
   readonly cacheDependencyPath?: string;
@@ -53,4 +54,4 @@ export enum Outputs {
 }
 
 // Package constants
-export const PACKAGE_NAME = "vite-plus-cli";
+export const DISPLAY_NAME = "Vite+";

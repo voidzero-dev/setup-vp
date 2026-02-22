@@ -10,12 +10,12 @@ export async function runViteInstall(inputs: Inputs): Promise<void> {
     }
 
     const cwd = options.cwd || process.env.GITHUB_WORKSPACE || process.cwd();
-    const cmdStr = `vite ${args.join(" ")}`;
+    const cmdStr = `vp ${args.join(" ")}`;
 
     startGroup(`Running ${cmdStr} in ${cwd}...`);
 
     try {
-      const exitCode = await exec("vite", args, {
+      const exitCode = await exec("vp", args, {
         cwd,
         ignoreReturnCode: true,
       });

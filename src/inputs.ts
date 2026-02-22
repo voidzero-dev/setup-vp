@@ -7,6 +7,7 @@ import { RunInstallInputSchema } from "./types.js";
 export function getInputs(): Inputs {
   return {
     version: getInput("version") || "latest",
+    nodeVersion: getInput("node-version") || undefined,
     runInstall: parseRunInstall(getInput("run-install")),
     cache: getBooleanInput("cache"),
     cacheDependencyPath: getInput("cache-dependency-path") || undefined,
