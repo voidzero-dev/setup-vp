@@ -34,7 +34,7 @@ vp run fmt
 vp run fmt:check
 ```
 
-**Important:** Always run `vp run build` after code changes - the `dist/index.mjs` must be committed.
+**Important:** Always run `vp fmt` and `vp run build` before committing - the `dist/index.mjs` must be committed.
 
 ## Architecture
 
