@@ -27,7 +27,7 @@ steps:
   - uses: actions/checkout@v6
   - uses: voidzero-dev/setup-vite-plus-action@v1
     with:
-      node-version: '22'
+      node-version: "22"
 ```
 
 ### With Caching and Install
@@ -37,7 +37,7 @@ steps:
   - uses: actions/checkout@v6
   - uses: voidzero-dev/setup-vite-plus-action@v1
     with:
-      node-version: '22'
+      node-version: "22"
       cache: true
       run-install: true
 ```
@@ -49,8 +49,8 @@ steps:
   - uses: actions/checkout@v6
   - uses: voidzero-dev/setup-vite-plus-action@v1
     with:
-      version: '1.2.3'
-      node-version: '22'
+      version: "1.2.3"
+      node-version: "22"
       cache: true
 ```
 
@@ -61,7 +61,7 @@ steps:
   - uses: actions/checkout@v6
   - uses: voidzero-dev/setup-vite-plus-action@v1
     with:
-      node-version: '22'
+      node-version: "22"
       cache: true
       run-install: |
         - cwd: ./packages/app
@@ -76,7 +76,7 @@ jobs:
   test:
     strategy:
       matrix:
-        node-version: ['20', '22', '24']
+        node-version: ["20", "22", "24"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -89,30 +89,30 @@ jobs:
 
 ## Inputs
 
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `version` | Version of Vite+ to install | No | `latest` |
-| `node-version` | Node.js version to install via `vp env use` | No | Vite+ default |
-| `run-install` | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args` | No | `true` |
-| `cache` | Enable caching of project dependencies | No | `false` |
-| `cache-dependency-path` | Path to lock file for cache key generation | No | Auto-detected |
+| Input                   | Description                                                                    | Required | Default       |
+| ----------------------- | ------------------------------------------------------------------------------ | -------- | ------------- |
+| `version`               | Version of Vite+ to install                                                    | No       | `latest`      |
+| `node-version`          | Node.js version to install via `vp env use`                                    | No       | Vite+ default |
+| `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args` | No       | `true`        |
+| `cache`                 | Enable caching of project dependencies                                         | No       | `false`       |
+| `cache-dependency-path` | Path to lock file for cache key generation                                     | No       | Auto-detected |
 
 ## Outputs
 
-| Output | Description |
-|--------|-------------|
-| `version` | The installed version of Vite+ |
+| Output      | Description                              |
+| ----------- | ---------------------------------------- |
+| `version`   | The installed version of Vite+           |
 | `cache-hit` | Boolean indicating if cache was restored |
 
 ## Caching
 
 When `cache: true` is set, the action automatically detects your lock file and caches the appropriate package manager store:
 
-| Lock File | Package Manager | Cache Directory |
-|-----------|-----------------|-----------------|
-| `pnpm-lock.yaml` | pnpm | pnpm store |
-| `package-lock.json` | npm | npm cache |
-| `yarn.lock` | yarn | yarn cache |
+| Lock File           | Package Manager | Cache Directory |
+| ------------------- | --------------- | --------------- |
+| `pnpm-lock.yaml`    | pnpm            | pnpm store      |
+| `package-lock.json` | npm             | npm cache       |
+| `yarn.lock`         | yarn            | yarn cache      |
 
 The cache key format is: `vite-plus-{OS}-{arch}-{pm}-{lockfile-hash}`
 
@@ -135,7 +135,7 @@ jobs:
 
       - uses: voidzero-dev/setup-vite-plus-action@v1
         with:
-          node-version: '22'
+          node-version: "22"
           cache: true
 
       - run: vp run build

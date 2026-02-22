@@ -1,35 +1,35 @@
-name: 'Setup Vite+'
-description: 'Install Vite+ (vp) and optionally cache project dependencies'
-author: 'voidzero-dev'
+name: "Setup Vite+"
+description: "Install Vite+ (vp) and optionally cache project dependencies"
+author: "voidzero-dev"
 branding:
   icon: zap
   color: purple
 
 inputs:
   version:
-    description: 'Version of Vite+ to install'
+    description: "Version of Vite+ to install"
     required: false
-    default: 'latest'
+    default: "latest"
   run-install:
-    description: 'Run `vp install` after setup. Accepts boolean or YAML object with cwd/args.'
+    description: "Run `vp install` after setup. Accepts boolean or YAML object with cwd/args."
     required: false
-    default: 'true'
+    default: "true"
   node-version:
-    description: 'Node.js version to install via `vp env use`. If not specified, uses the default version bundled with Vite+.'
+    description: "Node.js version to install via `vp env use`. If not specified, uses the default version bundled with Vite+."
     required: false
   cache:
-    description: 'Enable caching of project dependencies'
+    description: "Enable caching of project dependencies"
     required: false
-    default: 'false'
+    default: "false"
   cache-dependency-path:
-    description: 'Path to lock file for cache key generation. Auto-detected if not specified.'
+    description: "Path to lock file for cache key generation. Auto-detected if not specified."
     required: false
 
 outputs:
   version:
-    description: 'The installed version of Vite+'
+    description: "The installed version of Vite+"
   cache-hit:
-    description: 'Boolean indicating if cache was restored'
+    description: "Boolean indicating if cache was restored"
 
 runs:
   using: node20
