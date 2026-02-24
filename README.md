@@ -92,7 +92,7 @@ jobs:
 | Input                   | Description                                                                    | Required | Default       |
 | ----------------------- | ------------------------------------------------------------------------------ | -------- | ------------- |
 | `version`               | Version of Vite+ to install                                                    | No       | `latest`      |
-| `node-version`          | Node.js version to install via `vp env use`                                    | No       | Vite+ default |
+| `node-version`          | Node.js version to install via `vp env use`                                    | No       | Latest LTS    |
 | `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args` | No       | `true`        |
 | `cache`                 | Enable caching of project dependencies                                         | No       | `false`       |
 | `cache-dependency-path` | Path to lock file for cache key generation                                     | No       | Auto-detected |

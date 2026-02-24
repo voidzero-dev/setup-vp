@@ -15,7 +15,7 @@ inputs:
     required: false
     default: "true"
   node-version:
-    description: "Node.js version to install via `vp env use`. If not specified, uses the default version bundled with Vite+."
+    description: "Node.js version to install via `vp env use`. Defaults to Node.js latest LTS version."
     required: false
   cache:
     description: "Enable caching of project dependencies"
