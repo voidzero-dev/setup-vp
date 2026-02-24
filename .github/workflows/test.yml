@@ -26,6 +26,32 @@ jobs:
       - name: Verify installation
         run: vp --version
 
+  test-node-version:
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22", "24"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Setup Vite+ with Node.js ${{ matrix.node-version }}
+        uses: ./
+        with:
+          node-version: ${{ matrix.node-version }}
+          run-install: false
+          cache: false
+
+      - name: Verify installation
+        run: vp --version
+
+      - name: Verify Node.js version
+        shell: bash
+        run: |
+          ACTUAL=$(node --version)
+          echo "Node.js version: $ACTUAL"
+          echo "$ACTUAL" | grep -q "^v${{ matrix.node-version }}\." || (echo "Expected Node.js v${{ matrix.node-version }}.x but got $ACTUAL" && exit 1)
+
   test-cache-pnpm:
     runs-on: ubuntu-latest
     steps:
