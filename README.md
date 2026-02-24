@@ -1,4 +1,4 @@
-# setup-vite-plus-action
+# setup-vp
 
 GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`vp`) with dependency caching support.
 
@@ -17,7 +17,7 @@ GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`vp`
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vite-plus-action@v1
+  - uses: voidzero-dev/setup-vp@v1
 ```
 
 ### With Node.js Version
@@ -25,7 +25,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vite-plus-action@v1
+  - uses: voidzero-dev/setup-vp@v1
     with:
       node-version: "22"
 ```
@@ -35,7 +35,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vite-plus-action@v1
+  - uses: voidzero-dev/setup-vp@v1
     with:
       node-version: "22"
       cache: true
@@ -47,7 +47,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vite-plus-action@v1
+  - uses: voidzero-dev/setup-vp@v1
     with:
       version: "1.2.3"
       node-version: "22"
@@ -59,7 +59,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vite-plus-action@v1
+  - uses: voidzero-dev/setup-vp@v1
     with:
       node-version: "22"
       cache: true
@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: voidzero-dev/setup-vite-plus-action@v1
+      - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: ${{ matrix.node-version }}
           cache: true
@@ -133,7 +133,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: voidzero-dev/setup-vite-plus-action@v1
+      - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: "22"
           cache: true
