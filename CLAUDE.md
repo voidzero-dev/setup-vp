@@ -30,7 +30,7 @@ vp run check
 vp run check:fix
 ```
 
-**Important:** Always run `vp check --fix` and `vp run build` before committing - the `dist/index.mjs` must be committed.
+**Important:** Always run `vp run check:fix` and `vp run build` before committing - the `dist/index.mjs` must be committed.
 
 ## Architecture
 
