@@ -143,6 +143,38 @@ jobs:
       - run: vp run test
 ```
 
+## Development
+
+### Install Vite+ CLI
+
+- **Linux / macOS:** `curl -fsSL https://staging.viteplus.dev/install.sh | bash`
+- **Windows:** `irm https://staging.viteplus.dev/install.ps1 | iex`
+
+### Setup
+
+```bash
+git clone https://github.com/voidzero-dev/setup-vp.git
+cd setup-vp
+vp install
+```
+
+### Available Commands
+
+| Command             | Description              |
+| ------------------- | ------------------------ |
+| `vp run build`      | Build (outputs to dist/) |
+| `vp run test`       | Run tests                |
+| `vp run test:watch` | Run tests in watch mode  |
+| `vp run typecheck`  | Type check               |
+| `vp run check`      | Lint + format check      |
+| `vp run check:fix`  | Auto-fix lint/format     |
+
+### Before Committing
+
+- Run `vp run check:fix` and `vp run build`
+- The `dist/index.mjs` must be committed (it's the compiled action entry point)
+- Pre-commit hooks (via husky + lint-staged) will automatically run `vp check --fix` on staged files via `vpx lint-staged`
+
 ## Feedback
 
 If you have any feedback or issues, please [submit an issue or start a discussion](https://github.com/voidzero-dev/vite-plus-discussions).
