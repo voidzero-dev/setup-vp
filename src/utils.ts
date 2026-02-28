@@ -96,7 +96,7 @@ async function getCommandOutput(command: string, args: string[]): Promise<string
     debug(`Command "${cmdStr}" exited with code ${result.exitCode}`);
     return undefined;
   } catch (error) {
-    warning(`Failed to run "${cmdStr}": ${error}`);
+    warning(`Failed to run "${cmdStr}": ${String(error)}`);
     return undefined;
   }
 }

@@ -47,7 +47,7 @@ async function printViteVersion(): Promise<void> {
     saveState(State.InstalledVersion, version);
     setOutput(Outputs.Version, version);
   } catch (error) {
-    warning(`Could not get vp version: ${error}`);
+    warning(`Could not get vp version: ${String(error)}`);
     setOutput(Outputs.Version, "unknown");
   }
 }
