@@ -28,7 +28,7 @@
     "vite-plus": "latest"
   },
   "lint-staged": {
-    "*.{ts,json,md,yaml,yml,css,scss,less,graphql,html,vue}": "vp check --fix"
+    "*": "vp check --fix"
   },
   "packageManager": "pnpm@10.28.0"
 }
