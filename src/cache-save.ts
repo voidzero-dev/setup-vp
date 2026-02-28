@@ -39,6 +39,6 @@ export async function saveCache(): Promise<void> {
     info(`Cache saved with key: ${primaryKey}`);
   } catch (error) {
     // Don't fail the action if cache save fails
-    warning(`Failed to save cache: ${error}`);
+    warning(`Failed to save cache: ${String(error)}`);
   }
 }

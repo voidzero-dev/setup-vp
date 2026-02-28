@@ -4,14 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "vp lint --type-aware --type-check",
-    "lint:fix": "vp run lint --fix",
+    "check": "vp check",
+    "check:fix": "vp check --fix",
     "build": "vp pack",
     "typecheck": "tsc --noEmit",
     "test": "vp test run",
     "test:watch": "vp test -w",
-    "fmt": "vp fmt",
-    "fmt:check": "vp fmt --check"
+    "prepare": "husky"
   },
   "dependencies": {
     "@actions/cache": "^4.1.0",
@@ -23,8 +22,13 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.11",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "typescript": "^5.9.3",
     "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*": "vp check --fix"
   },
   "packageManager": "pnpm@10.28.0"
 }

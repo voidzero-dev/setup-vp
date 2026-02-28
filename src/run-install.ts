@@ -26,7 +26,7 @@ export async function runViteInstall(inputs: Inputs): Promise<void> {
         info(`Successfully ran ${cmdStr}`);
       }
     } catch (error) {
-      setFailed(`Failed to run ${cmdStr}: ${error}`);
+      setFailed(`Failed to run ${cmdStr}: ${String(error)}`);
     } finally {
       endGroup();
     }
