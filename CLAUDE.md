@@ -25,16 +25,12 @@ vp run test
 # Run tests in watch mode
 vp run test:watch
 
-# Lint
-vp run lint
-vp run lint:fix
-
-# Format
-vp run fmt
-vp run fmt:check
+# Check (lint + format)
+vp run check
+vp run check:fix
 ```
 
-**Important:** Always run `vp fmt` and `vp run build` before committing - the `dist/index.mjs` must be committed.
+**Important:** Always run `vp check --fix` and `vp run build` before committing - the `dist/index.mjs` must be committed.
 
 ## Architecture
 

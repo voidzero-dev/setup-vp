@@ -144,11 +144,8 @@ jobs:
       - name: Type check
         run: vp run typecheck
 
-      - name: Format check
-        run: vp run fmt:check
-
-      - name: Lint check
-        run: vp run lint
+      - name: Check
+        run: vp run check
 
       - name: Unit tests
         run: vp run test
