@@ -147,8 +147,8 @@ jobs:
 
 ### Install Vite+ CLI
 
-- **Linux / macOS:** `curl -fsSL https://staging.viteplus.dev/install.sh | bash`
-- **Windows:** `irm https://staging.viteplus.dev/install.ps1 | iex`
+- **Linux / macOS:** `curl -fsSL https://viteplus.dev/install.sh | bash`
+- **Windows:** `irm https://viteplus.dev/install.ps1 | iex`
 
 ### Setup
 
@@ -177,7 +177,7 @@ vp install
 
 ## Feedback
 
-If you have any feedback or issues, please [submit an issue or start a discussion](https://github.com/voidzero-dev/vite-plus-discussions).
+If you have any feedback or issues, please [submit an issue](https://github.com/voidzero-dev/setup-vp/issues).
 
 ## License
 
