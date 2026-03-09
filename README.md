@@ -1,6 +1,6 @@
 # setup-vp
 
-GitHub Action to set up [Vite+](https://github.com/voidzero-dev/vite-plus) (`vp`) with dependency caching support.
+GitHub Action to set up [Vite+](https://viteplus.dev) (`vp`) with dependency caching support.
 
 ## Features
 
@@ -181,4 +181,4 @@ If you have any feedback or issues, please [submit an issue](https://github.com/
 
 ## License
 
-MIT
+[MIT](LICENSE)
