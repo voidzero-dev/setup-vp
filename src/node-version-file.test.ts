@@ -75,12 +75,6 @@ describe("resolveNodeVersionFile", () => {
       expect(resolveNodeVersionFile(".nvmrc")).toBe("lts/*");
     });
 
-    it("should normalize lts/<codename> to lts", () => {
-      vi.mocked(readFileSync).mockReturnValue("lts/hydrogen\n");
-
-      expect(resolveNodeVersionFile(".nvmrc")).toBe("lts");
-    });
-
     it("should normalize 'node' alias to latest", () => {
       vi.mocked(readFileSync).mockReturnValue("node\n");
 

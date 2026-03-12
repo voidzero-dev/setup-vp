@@ -46,10 +46,7 @@ export function resolveNodeVersionFile(filePath: string): string {
  * Parse a plain text version file (.nvmrc, .node-version, etc).
  * Returns the first non-empty, non-comment line, normalized for vp CLI.
  *
- * nvm aliases are translated:
- *   "node" / "stable"  → "latest"
- *   "lts/*"            → "lts"
- *   "lts/<codename>"   → "lts"
+ * nvm aliases are translated: "node" / "stable" → "latest"
  * Inline comments (after #) are stripped.
  */
 function parsePlainVersionFile(content: string): string | undefined {
@@ -67,8 +64,6 @@ function parsePlainVersionFile(content: string): string | undefined {
 function normalizeNvmAlias(version: string): string {
   const lower = version.toLowerCase();
   if (lower === "node" || lower === "stable") return "latest";
-  // "lts/*" is supported by vp; "lts/<codename>" is nvm-specific → normalize to "lts"
-  if (lower.startsWith("lts/") && lower !== "lts/*") return "lts";
   return version;
 }
 
