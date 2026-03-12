@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vp test run",
     "test:watch": "vp test -w",
-    "prepare": "husky"
+    "prepare": "vp config"
   },
   "dependencies": {
     "@actions/cache": "^4.1.0",
@@ -21,14 +21,9 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^22.19.11",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
+    "@types/node": "^22.19.15",
     "typescript": "^5.9.3",
     "vite-plus": "latest"
-  },
-  "lint-staged": {
-    "*": "vp check --fix"
   },
   "packageManager": "pnpm@10.28.0"
 }
