@@ -69,10 +69,34 @@ describe("resolveNodeVersionFile", () => {
       expect(resolveNodeVersionFile(".nvmrc")).toBe("18.19.0");
     });
 
-    it("should handle lts/* alias", () => {
+    it("should preserve lts/* alias", () => {
       vi.mocked(readFileSync).mockReturnValue("lts/*\n");
 
       expect(resolveNodeVersionFile(".nvmrc")).toBe("lts/*");
+    });
+
+    it("should normalize lts/<codename> to lts", () => {
+      vi.mocked(readFileSync).mockReturnValue("lts/hydrogen\n");
+
+      expect(resolveNodeVersionFile(".nvmrc")).toBe("lts");
+    });
+
+    it("should normalize 'node' alias to latest", () => {
+      vi.mocked(readFileSync).mockReturnValue("node\n");
+
+      expect(resolveNodeVersionFile(".nvmrc")).toBe("latest");
+    });
+
+    it("should normalize 'stable' alias to latest", () => {
+      vi.mocked(readFileSync).mockReturnValue("stable\n");
+
+      expect(resolveNodeVersionFile(".nvmrc")).toBe("latest");
+    });
+
+    it("should strip inline comments", () => {
+      vi.mocked(readFileSync).mockReturnValue("20.11.0 # LTS version\n");
+
+      expect(resolveNodeVersionFile(".nvmrc")).toBe("20.11.0");
     });
 
     it("should throw on empty file", () => {
@@ -99,6 +123,32 @@ describe("resolveNodeVersionFile", () => {
       vi.mocked(readFileSync).mockReturnValue("nodejs v20.11.0\n");
 
       expect(resolveNodeVersionFile(".tool-versions")).toBe("20.11.0");
+    });
+
+    it("should skip 'system' and use fallback version", () => {
+      vi.mocked(readFileSync).mockReturnValue("nodejs system 20.11.0\n");
+
+      expect(resolveNodeVersionFile(".tool-versions")).toBe("20.11.0");
+    });
+
+    it("should skip ref: and path: specs", () => {
+      vi.mocked(readFileSync).mockReturnValue("nodejs ref:v1.0.2 path:/opt/node 22.0.0\n");
+
+      expect(resolveNodeVersionFile(".tool-versions")).toBe("22.0.0");
+    });
+
+    it("should use first installable version from multiple fallbacks", () => {
+      vi.mocked(readFileSync).mockReturnValue("nodejs 20.11.0 18.19.0\n");
+
+      expect(resolveNodeVersionFile(".tool-versions")).toBe("20.11.0");
+    });
+
+    it("should throw when only non-installable specs present", () => {
+      vi.mocked(readFileSync).mockReturnValue("nodejs system\n");
+
+      expect(() => resolveNodeVersionFile(".tool-versions")).toThrow(
+        "No Node.js version found in .tool-versions",
+      );
     });
 
     it("should throw if no node entry found", () => {

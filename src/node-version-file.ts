@@ -44,33 +44,60 @@ export function resolveNodeVersionFile(filePath: string): string {
 
 /**
  * Parse a plain text version file (.nvmrc, .node-version, etc).
- * Returns the first non-empty, non-comment line.
+ * Returns the first non-empty, non-comment line, normalized for vp CLI.
+ *
+ * nvm aliases are translated:
+ *   "node" / "stable"  → "latest"
+ *   "lts/*"            → "lts"
+ *   "lts/<codename>"   → "lts"
+ * Inline comments (after #) are stripped.
  */
 function parsePlainVersionFile(content: string): string | undefined {
   for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith("#")) {
-      return trimmed;
-    }
+    // Strip inline comments
+    const stripped = line.includes("#") ? line.slice(0, line.indexOf("#")) : line;
+    const trimmed = stripped.trim();
+    if (!trimmed) continue;
+
+    return normalizeNvmAlias(trimmed);
   }
   return undefined;
+}
+
+function normalizeNvmAlias(version: string): string {
+  const lower = version.toLowerCase();
+  if (lower === "node" || lower === "stable") return "latest";
+  // "lts/*" is supported by vp; "lts/<codename>" is nvm-specific → normalize to "lts"
+  if (lower.startsWith("lts/") && lower !== "lts/*") return "lts";
+  return version;
 }
 
 /**
  * Parse .tool-versions (asdf format).
  * Looks for 'nodejs' or 'node' entries.
+ * Skips non-version specs (system, ref:*, path:*) and picks the first
+ * installable version when multiple fallback versions are listed.
  */
 function parseToolVersions(content: string): string | undefined {
   for (const line of content.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
 
-    const [tool, version] = trimmed.split(/\s+/);
-    if (version && (tool === "nodejs" || tool === "node")) {
-      return version;
+    const [tool, ...versions] = trimmed.split(/\s+/);
+    if (tool !== "nodejs" && tool !== "node") continue;
+
+    // asdf allows multiple fallback versions; pick the first installable one
+    for (const v of versions) {
+      if (isAsdfInstallableVersion(v)) return v;
     }
   }
   return undefined;
+}
+
+function isAsdfInstallableVersion(version: string): boolean {
+  return (
+    !!version && version !== "system" && !version.startsWith("ref:") && !version.startsWith("path:")
+  );
 }
 
 /**
