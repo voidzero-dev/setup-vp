@@ -53,11 +53,12 @@ describe("installVitePlus", () => {
     expect(warning).toHaveBeenCalledTimes(2);
   });
 
-  it("should throw after exhausting all retries", async () => {
+  it("should throw after exhausting all retries on every URL", async () => {
     vi.mocked(exec).mockResolvedValue(6);
 
-    await expect(installVitePlus(baseInputs)).rejects.toThrow(/after 5 attempts/);
-    expect(exec).toHaveBeenCalledTimes(5);
+    await expect(installVitePlus(baseInputs)).rejects.toThrow(/after 3 attempts on 2 URL\(s\)/);
+    // 3 attempts on the primary URL + 3 on the GitHub fallback.
+    expect(exec).toHaveBeenCalledTimes(6);
   });
 
   it("should retry when exec itself throws (e.g. process spawn error)", async () => {
@@ -69,7 +70,27 @@ describe("installVitePlus", () => {
     expect(warning).toHaveBeenCalledTimes(1);
   });
 
-  it("should run the bash install with pipefail and curl retry flags so transient failures are handled", async () => {
+  it("should fall back to the GitHub install URL after the primary URL exhausts retries", async () => {
+    vi.mocked(exec)
+      .mockResolvedValueOnce(35)
+      .mockResolvedValueOnce(35)
+      .mockResolvedValueOnce(35)
+      .mockResolvedValueOnce(0);
+
+    await installVitePlus(baseInputs);
+
+    expect(exec).toHaveBeenCalledTimes(4);
+
+    const primaryScript = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
+    expect(primaryScript).toContain("https://viteplus.dev/install.sh");
+
+    const fallbackScript = (vi.mocked(exec).mock.calls[3][1] as string[])[1];
+    expect(fallbackScript).toContain(
+      "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.sh",
+    );
+  });
+
+  it("should run the bash install with pipefail and timeout flags so transient failures fail fast", async () => {
     vi.mocked(exec).mockResolvedValueOnce(0);
 
     await installVitePlus(baseInputs);
@@ -78,8 +99,6 @@ describe("installVitePlus", () => {
     expect(cmd).toBe("bash");
     const script = (args as string[])[1];
     expect(script).toMatch(/^set -o pipefail;/);
-    expect(script).toContain("--retry 3");
-    expect(script).toContain("--retry-all-errors");
     expect(script).toContain("--connect-timeout");
     expect(script).toContain("--max-time");
     expect(script).toMatch(/\| bash$/);

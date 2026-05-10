@@ -6,17 +6,21 @@ import type { Inputs } from "./types.js";
 import { DISPLAY_NAME } from "./types.js";
 import { getVitePlusHome } from "./utils.js";
 
-const INSTALL_URL_SH = "https://viteplus.dev/install.sh";
-const INSTALL_URL_PS1 = "https://viteplus.dev/install.ps1";
-const INSTALL_MAX_ATTEMPTS = 5;
-// Exponential-ish back-off between outer attempts (ms). Length must be
-// INSTALL_MAX_ATTEMPTS - 1; the last attempt has no trailing wait.
-const INSTALL_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000];
-// Per-attempt curl options: retry transient network errors inside one attempt
-// so a brief blip doesn't burn an outer attempt. --retry-all-errors covers
-// connection resets during TLS handshake (curl error 35 / "Recv failure").
-const CURL_RETRY_FLAGS =
-  "--connect-timeout 10 --max-time 60 --retry 3 --retry-delay 5 --retry-all-errors";
+// Primary CDN first; if it stays down, fall back to the install scripts in the
+// vite-plus repo so a CDN/edge incident doesn't fully block CI.
+const INSTALL_URLS_SH = [
+  "https://viteplus.dev/install.sh",
+  "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.sh",
+];
+const INSTALL_URLS_PS1 = [
+  "https://viteplus.dev/install.ps1",
+  "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.ps1",
+];
+const INSTALL_MAX_ATTEMPTS = 3;
+const INSTALL_RETRY_DELAY_MS = 2000;
+// Cap each curl invocation so a hung connection fails fast and the outer
+// retry can move on (default observed in failing runs was ~30s per call).
+const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 30";
 
 export async function installVitePlus(inputs: Inputs): Promise<void> {
   const { version } = inputs;
@@ -31,48 +35,54 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     VITE_PLUS_VERSION: version,
   } as { [key: string]: string };
 
+  const urls = process.platform === "win32" ? INSTALL_URLS_PS1 : INSTALL_URLS_SH;
   let failureReason = "";
-  for (let attempt = 1; attempt <= INSTALL_MAX_ATTEMPTS; attempt++) {
-    try {
-      const exitCode = await runInstallCommand(env);
-      if (exitCode === 0) {
-        ensureVitePlusBinInPath();
-        return;
-      }
-      failureReason = `exit code ${exitCode}`;
-    } catch (error) {
-      failureReason = error instanceof Error ? error.message : String(error);
+  for (let urlIndex = 0; urlIndex < urls.length; urlIndex++) {
+    const url = urls[urlIndex];
+    if (urlIndex > 0) {
+      info(`Retrying with fallback URL: ${url}`);
     }
+    for (let attempt = 1; attempt <= INSTALL_MAX_ATTEMPTS; attempt++) {
+      try {
+        const exitCode = await runInstallCommand(url, env);
+        if (exitCode === 0) {
+          ensureVitePlusBinInPath();
+          return;
+        }
+        failureReason = `exit code ${exitCode}`;
+      } catch (error) {
+        failureReason = error instanceof Error ? error.message : String(error);
+      }
 
-    if (attempt < INSTALL_MAX_ATTEMPTS) {
-      const delay = INSTALL_RETRY_DELAYS_MS[attempt - 1];
-      warning(
-        `Failed to install ${DISPLAY_NAME} (${failureReason}). Retrying in ${delay}ms... (attempt ${attempt + 1}/${INSTALL_MAX_ATTEMPTS})`,
-      );
-      await sleep(delay);
+      const isLastAttemptOnLastUrl =
+        attempt === INSTALL_MAX_ATTEMPTS && urlIndex === urls.length - 1;
+      if (!isLastAttemptOnLastUrl) {
+        const delay = INSTALL_RETRY_DELAY_MS * attempt;
+        const nextAttempt =
+          attempt < INSTALL_MAX_ATTEMPTS
+            ? `attempt ${attempt + 1}/${INSTALL_MAX_ATTEMPTS}`
+            : "fallback URL";
+        warning(
+          `Failed to install ${DISPLAY_NAME} (${failureReason}). Retrying in ${delay}ms... (${nextAttempt})`,
+        );
+        await sleep(delay);
+      }
     }
   }
 
   throw new Error(
-    `Failed to install ${DISPLAY_NAME} after ${INSTALL_MAX_ATTEMPTS} attempts: ${failureReason}`,
+    `Failed to install ${DISPLAY_NAME} after ${INSTALL_MAX_ATTEMPTS} attempts on ${urls.length} URL(s): ${failureReason}`,
   );
 }
 
-async function runInstallCommand(env: { [key: string]: string }): Promise<number> {
+async function runInstallCommand(url: string, env: { [key: string]: string }): Promise<number> {
   const options = { env, ignoreReturnCode: true };
   if (process.platform === "win32") {
-    return exec(
-      "pwsh",
-      [
-        "-Command",
-        `& ([scriptblock]::Create((irm -MaximumRetryCount 3 -RetryIntervalSec 5 ${INSTALL_URL_PS1})))`,
-      ],
-      options,
-    );
+    return exec("pwsh", ["-Command", `& ([scriptblock]::Create((irm ${url})))`], options);
   }
   return exec(
     "bash",
-    ["-c", `set -o pipefail; curl -fsSL ${CURL_RETRY_FLAGS} ${INSTALL_URL_SH} | bash`],
+    ["-c", `set -o pipefail; curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | bash`],
     options,
   );
 }
