@@ -53,12 +53,12 @@ describe("installVitePlus", () => {
     expect(warning).toHaveBeenCalledTimes(2);
   });
 
-  it("should throw after exhausting all retries on every URL", async () => {
+  it("should throw after exhausting all rounds across both URLs", async () => {
     vi.mocked(exec).mockResolvedValue(6);
 
-    await expect(installVitePlus(baseInputs)).rejects.toThrow(/after 3 attempts on 2 URL\(s\)/);
-    // 3 attempts on the primary URL + 3 on the GitHub fallback.
-    expect(exec).toHaveBeenCalledTimes(6);
+    await expect(installVitePlus(baseInputs)).rejects.toThrow(/after 4 attempts across 2 URL\(s\)/);
+    // 2 rounds × 2 URLs = 4 attempts.
+    expect(exec).toHaveBeenCalledTimes(4);
   });
 
   it("should retry when exec itself throws (e.g. process spawn error)", async () => {
@@ -70,24 +70,33 @@ describe("installVitePlus", () => {
     expect(warning).toHaveBeenCalledTimes(1);
   });
 
-  it("should fall back to the GitHub install URL after the primary URL exhausts retries", async () => {
-    vi.mocked(exec)
-      .mockResolvedValueOnce(35)
-      .mockResolvedValueOnce(35)
-      .mockResolvedValueOnce(35)
-      .mockResolvedValueOnce(0);
+  it("should fall back to the GitHub install URL after a single primary failure", async () => {
+    vi.mocked(exec).mockResolvedValueOnce(35).mockResolvedValueOnce(0);
 
     await installVitePlus(baseInputs);
 
-    expect(exec).toHaveBeenCalledTimes(4);
+    expect(exec).toHaveBeenCalledTimes(2);
 
     const primaryScript = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
     expect(primaryScript).toContain("https://viteplus.dev/install.sh");
 
-    const fallbackScript = (vi.mocked(exec).mock.calls[3][1] as string[])[1];
+    const fallbackScript = (vi.mocked(exec).mock.calls[1][1] as string[])[1];
     expect(fallbackScript).toContain(
       "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.sh",
     );
+  });
+
+  it("should alternate primary and fallback URLs across rounds", async () => {
+    vi.mocked(exec).mockResolvedValue(35);
+
+    await expect(installVitePlus(baseInputs)).rejects.toThrow();
+
+    const scripts = vi.mocked(exec).mock.calls.map((call) => (call[1] as string[])[1]);
+    expect(scripts).toHaveLength(4);
+    expect(scripts[0]).toContain("viteplus.dev/install.sh");
+    expect(scripts[1]).toContain("raw.githubusercontent.com");
+    expect(scripts[2]).toContain("viteplus.dev/install.sh");
+    expect(scripts[3]).toContain("raw.githubusercontent.com");
   });
 
   it("should run the bash install with pipefail and timeout flags so transient failures fail fast", async () => {
