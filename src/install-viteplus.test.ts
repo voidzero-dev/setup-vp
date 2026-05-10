@@ -68,4 +68,16 @@ describe("installVitePlus", () => {
     expect(exec).toHaveBeenCalledTimes(2);
     expect(warning).toHaveBeenCalledTimes(1);
   });
+
+  it("should run the bash install with pipefail so curl failures propagate", async () => {
+    vi.mocked(exec).mockResolvedValueOnce(0);
+
+    await installVitePlus(baseInputs);
+
+    expect(exec).toHaveBeenCalledWith(
+      "bash",
+      ["-c", expect.stringMatching(/^set -o pipefail; curl -fsSL .+ \| bash$/)],
+      expect.any(Object),
+    );
+  });
 });

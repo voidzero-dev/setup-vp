@@ -60,7 +60,7 @@ async function runInstallCommand(env: { [key: string]: string }): Promise<number
       options,
     );
   }
-  return exec("bash", ["-c", `curl -fsSL ${INSTALL_URL_SH} | bash`], options);
+  return exec("bash", ["-c", `set -o pipefail; curl -fsSL ${INSTALL_URL_SH} | bash`], options);
 }
 
 function ensureVitePlusBinInPath(): void {
