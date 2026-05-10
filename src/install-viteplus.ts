@@ -8,8 +8,15 @@ import { getVitePlusHome } from "./utils.js";
 
 const INSTALL_URL_SH = "https://viteplus.dev/install.sh";
 const INSTALL_URL_PS1 = "https://viteplus.dev/install.ps1";
-const INSTALL_MAX_ATTEMPTS = 3;
-const INSTALL_RETRY_DELAY_MS = 2000;
+const INSTALL_MAX_ATTEMPTS = 5;
+// Exponential-ish back-off between outer attempts (ms). Length must be
+// INSTALL_MAX_ATTEMPTS - 1; the last attempt has no trailing wait.
+const INSTALL_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000];
+// Per-attempt curl options: retry transient network errors inside one attempt
+// so a brief blip doesn't burn an outer attempt. --retry-all-errors covers
+// connection resets during TLS handshake (curl error 35 / "Recv failure").
+const CURL_RETRY_FLAGS =
+  "--connect-timeout 10 --max-time 60 --retry 3 --retry-delay 5 --retry-all-errors";
 
 export async function installVitePlus(inputs: Inputs): Promise<void> {
   const { version } = inputs;
@@ -38,7 +45,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     }
 
     if (attempt < INSTALL_MAX_ATTEMPTS) {
-      const delay = INSTALL_RETRY_DELAY_MS * attempt;
+      const delay = INSTALL_RETRY_DELAYS_MS[attempt - 1];
       warning(
         `Failed to install ${DISPLAY_NAME} (${failureReason}). Retrying in ${delay}ms... (attempt ${attempt + 1}/${INSTALL_MAX_ATTEMPTS})`,
       );
@@ -56,11 +63,18 @@ async function runInstallCommand(env: { [key: string]: string }): Promise<number
   if (process.platform === "win32") {
     return exec(
       "pwsh",
-      ["-Command", `& ([scriptblock]::Create((irm ${INSTALL_URL_PS1})))`],
+      [
+        "-Command",
+        `& ([scriptblock]::Create((irm -MaximumRetryCount 3 -RetryIntervalSec 5 ${INSTALL_URL_PS1})))`,
+      ],
       options,
     );
   }
-  return exec("bash", ["-c", `set -o pipefail; curl -fsSL ${INSTALL_URL_SH} | bash`], options);
+  return exec(
+    "bash",
+    ["-c", `set -o pipefail; curl -fsSL ${CURL_RETRY_FLAGS} ${INSTALL_URL_SH} | bash`],
+    options,
+  );
 }
 
 function ensureVitePlusBinInPath(): void {

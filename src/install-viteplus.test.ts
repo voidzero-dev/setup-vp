@@ -56,8 +56,8 @@ describe("installVitePlus", () => {
   it("should throw after exhausting all retries", async () => {
     vi.mocked(exec).mockResolvedValue(6);
 
-    await expect(installVitePlus(baseInputs)).rejects.toThrow(/after 3 attempts/);
-    expect(exec).toHaveBeenCalledTimes(3);
+    await expect(installVitePlus(baseInputs)).rejects.toThrow(/after 5 attempts/);
+    expect(exec).toHaveBeenCalledTimes(5);
   });
 
   it("should retry when exec itself throws (e.g. process spawn error)", async () => {
@@ -69,15 +69,19 @@ describe("installVitePlus", () => {
     expect(warning).toHaveBeenCalledTimes(1);
   });
 
-  it("should run the bash install with pipefail so curl failures propagate", async () => {
+  it("should run the bash install with pipefail and curl retry flags so transient failures are handled", async () => {
     vi.mocked(exec).mockResolvedValueOnce(0);
 
     await installVitePlus(baseInputs);
 
-    expect(exec).toHaveBeenCalledWith(
-      "bash",
-      ["-c", expect.stringMatching(/^set -o pipefail; curl -fsSL .+ \| bash$/)],
-      expect.any(Object),
-    );
+    const [cmd, args] = vi.mocked(exec).mock.calls[0];
+    expect(cmd).toBe("bash");
+    const script = (args as string[])[1];
+    expect(script).toMatch(/^set -o pipefail;/);
+    expect(script).toContain("--retry 3");
+    expect(script).toContain("--retry-all-errors");
+    expect(script).toContain("--connect-timeout");
+    expect(script).toContain("--max-time");
+    expect(script).toMatch(/\| bash$/);
   });
 });
