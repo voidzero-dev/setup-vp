@@ -1,6 +1,6 @@
 # setup-vp
 
-GitHub Action to set up [Vite+](https://viteplus.dev) (`vp`) with dependency caching support.
+GitHub Action to set up [Vite+](https://viteplus.void.app) (`vp`) with dependency caching support.
 
 ## Features
 
@@ -243,8 +243,8 @@ jobs:
 
 ### Install Vite+ CLI
 
-- **Linux / macOS:** `curl -fsSL https://viteplus.dev/install.sh | bash`
-- **Windows:** `irm https://viteplus.dev/install.ps1 | iex`
+- **Linux / macOS:** `curl -fsSL https://viteplus.void.app/install.sh | bash`
+- **Windows:** `irm https://viteplus.void.app/install.ps1 | iex`
 
 ### Setup
 

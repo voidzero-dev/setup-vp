@@ -9,11 +9,11 @@ import { getVitePlusHome } from "./utils.js";
 // Try the CDN first, then fall back to the install scripts in the vite-plus
 // repo so a CDN/edge incident doesn't fully block CI.
 const INSTALL_URLS_SH = [
-  "https://viteplus.dev/install.sh",
+  "https://viteplus.void.app/install.sh",
   "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.sh",
 ];
 const INSTALL_URLS_PS1 = [
-  "https://viteplus.dev/install.ps1",
+  "https://viteplus.void.app/install.ps1",
   "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.ps1",
 ];
 // Alternate primary/fallback for up to N rounds (max attempts = rounds * URLs).

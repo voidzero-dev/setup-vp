@@ -78,7 +78,7 @@ describe("installVitePlus", () => {
     expect(exec).toHaveBeenCalledTimes(2);
 
     const primaryScript = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
-    expect(primaryScript).toContain("https://viteplus.dev/install.sh");
+    expect(primaryScript).toContain("https://viteplus.void.app/install.sh");
 
     const fallbackScript = (vi.mocked(exec).mock.calls[1][1] as string[])[1];
     expect(fallbackScript).toContain(
@@ -93,9 +93,9 @@ describe("installVitePlus", () => {
 
     const scripts = vi.mocked(exec).mock.calls.map((call) => (call[1] as string[])[1]);
     expect(scripts).toHaveLength(4);
-    expect(scripts[0]).toContain("viteplus.dev/install.sh");
+    expect(scripts[0]).toContain("viteplus.void.app/install.sh");
     expect(scripts[1]).toContain("raw.githubusercontent.com");
-    expect(scripts[2]).toContain("viteplus.dev/install.sh");
+    expect(scripts[2]).toContain("viteplus.void.app/install.sh");
     expect(scripts[3]).toContain("raw.githubusercontent.com");
   });
 
