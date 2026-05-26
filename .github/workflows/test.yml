@@ -387,25 +387,20 @@ jobs:
     # PM regenerates it on install.
     # Linux only — sfw is gated to Linux until the upstream work in
     # https://github.com/voidzero-dev/setup-vp/issues/73 lands.
-    # Note: bun is not officially listed as a supported package manager by sfw
-    # (https://github.com/SocketDev/sfw-free), so its job is allowed to fail
-    # without breaking CI; failures there should be reported upstream.
     strategy:
       fail-fast: false
       matrix:
         version: [latest, alpha]
         package-manager:
-          - { name: pnpm, lockfile: pnpm-lock.yaml, contents: "", experimental: false }
+          - { name: pnpm, lockfile: pnpm-lock.yaml, contents: "" }
           - {
               name: npm,
               lockfile: package-lock.json,
               contents: '{"name":"test-project","lockfileVersion":3}',
-              experimental: false,
             }
-          - { name: yarn, lockfile: yarn.lock, contents: "", experimental: false }
-          - { name: bun, lockfile: bun.lock, contents: "", experimental: true }
+          - { name: yarn, lockfile: yarn.lock, contents: "" }
+          - { name: bun, lockfile: bun.lock, contents: "" }
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.package-manager.experimental }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -419,6 +414,11 @@ jobs:
 
       - name: Setup Vite+ (${{ matrix.version }}) with sfw + ${{ matrix.package-manager.name }}
         uses: ./
+        env:
+          # Yarn Berry auto-enables immutable installs under CI, which makes
+          # the bootstrap from an empty yarn.lock fail with YN0028. Allow the
+          # regeneration. No-op for the other package managers.
+          YARN_ENABLE_IMMUTABLE_INSTALLS: "false"
         with:
           version: ${{ matrix.version }}
           sfw: true
