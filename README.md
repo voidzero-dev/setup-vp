@@ -152,7 +152,7 @@ steps:
 `sfw` is only applied when `run-install` is enabled; other `vp` commands (e.g. `vp env use`, `vp --version`) run unwrapped.
 
 > [!IMPORTANT]
-> **Linux-only for now.** `sfw` ships a self-signed CA whose certificate has an empty Extended Key Usage extension. Strict TLS stacks like rustls (used by `vp`) reject it as `UnknownIssuer`, so `vp install` fails the TLS handshake on macOS / Windows. To keep `sfw: true` safe to set unconditionally in cross-platform workflows, the action **falls back to plain `vp install` with a warning on non-Linux platforms** — it does not download the `sfw` binary there. Once [SocketDev/sfw-free#30](https://github.com/SocketDev/sfw-free/issues/30) / [#43](https://github.com/SocketDev/sfw-free/issues/43) ship a fix, the platform check will be relaxed.
+> **Linux-only for now.** `sfw` ships a self-signed CA whose certificate has an empty Extended Key Usage extension. Strict TLS stacks like rustls (used by `vp`) reject it as `UnknownIssuer`, so `vp install` fails the TLS handshake on macOS / Windows. To keep `sfw: true` safe to set unconditionally in cross-platform workflows, the action **falls back to plain `vp install` with a warning on non-Linux platforms** — it does not download the `sfw` binary there. The platform check will be relaxed once the upstream work tracked in [voidzero-dev/setup-vp#73](https://github.com/voidzero-dev/setup-vp/issues/73) lands.
 
 ### Alpine Container
 
