@@ -391,7 +391,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [latest, alpha]
+        # Latest only — sfw musl-asset selection is decoupled from vp release.
+        version: [latest]
     runs-on: ubuntu-latest
     container:
       image: alpine:3.23
@@ -434,7 +435,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [latest, alpha]
+        # Latest only — sfw block behavior is decoupled from vp release.
+        version: [latest]
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
