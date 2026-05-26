@@ -300,9 +300,7 @@ jobs:
     # (UnknownIssuer). The action emits a warning and falls back to plain
     # `vp install`; no sfw binary is downloaded. We assert that fallback by
     # checking `sfw` is NOT on PATH while the install still succeeds.
-    # Tracking upstream:
-    #   https://github.com/SocketDev/sfw-free/issues/30
-    #   https://github.com/SocketDev/sfw-free/issues/43
+    # Tracking: https://github.com/voidzero-dev/setup-vp/issues/73
     strategy:
       fail-fast: false
       matrix:
