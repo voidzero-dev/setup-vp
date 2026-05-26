@@ -293,32 +293,63 @@ jobs:
         run: vp exec node -e "console.log('vp exec works in Alpine')"
 
   test-sfw:
-    # On Linux: sfw wraps vp install end-to-end (sfw binary downloaded,
-    # `sfw vp install` runs).
-    # On macOS / Windows: sfw is temporarily unsupported because sfw v1.10.0
-    # issues a TLS cert with an empty EKU extension that vp's rustls rejects
-    # (UnknownIssuer). The action emits a warning and falls back to plain
-    # `vp install`; no sfw binary is downloaded. We assert that fallback by
-    # checking `sfw` is NOT on PATH while the install still succeeds.
+    # On Linux: sfw wraps vp install end-to-end. Verify across all package
+    # managers vp auto-detects via lockfile (pnpm/npm/yarn/bun).
+    # On macOS / Windows: sfw is temporarily unsupported; the action emits a
+    # warning and falls back to plain `vp install` with no sfw binary
+    # downloaded. We verify the fallback once per non-Linux OS using the
+    # default package manager (pnpm) — the PM diversity matrix is Linux-only
+    # because the sfw wrap is Linux-only.
     # Tracking: https://github.com/voidzero-dev/setup-vp/issues/73
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         version: [latest, alpha]
+        package-manager: [pnpm, npm, yarn, bun]
+        exclude:
+          # Non-Linux only needs one fallback check per OS — sfw isn't
+          # invoked there, so PM diversity adds no coverage.
+          - { os: macos-latest, package-manager: npm }
+          - { os: macos-latest, package-manager: yarn }
+          - { os: macos-latest, package-manager: bun }
+          - { os: windows-latest, package-manager: npm }
+          - { os: windows-latest, package-manager: yarn }
+          - { os: windows-latest, package-manager: bun }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - name: Create test project with a real dependency
+      - name: Create test project for ${{ matrix.package-manager }}
         shell: bash
         run: |
+          case "${{ matrix.package-manager }}" in
+            pnpm) LOCKFILE=pnpm-lock.yaml; CONTENTS='' ;;
+            npm)  LOCKFILE=package-lock.json; CONTENTS='{"name":"test-project","lockfileVersion":3}' ;;
+            yarn) LOCKFILE=yarn.lock; CONTENTS='' ;;
+            bun)  LOCKFILE=bun.lock; CONTENTS='' ;;
+          esac
           mkdir -p test-project
           cd test-project
           echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+          printf '%s' "$CONTENTS" > "$LOCKFILE"
 
-      - name: Setup Vite+ (${{ matrix.version }}) with sfw
+      - name: Configure Yarn for plain node-modules linker
+        if: matrix.package-manager == 'yarn'
+        # Yarn Berry defaults to Plug'n'Play, which makes plain `require()`
+        # from a non-yarn-wrapped node process fail to resolve modules. Force
+        # the classic node-modules linker so the verify step is uniform.
+        shell: bash
+        run: |
+          echo "nodeLinker: node-modules" > test-project/.yarnrc.yml
+
+      - name: Setup Vite+ (${{ matrix.version }}) with sfw + ${{ matrix.package-manager }}
         uses: ./
+        env:
+          # Yarn Berry auto-enables immutable installs under CI, which makes
+          # the bootstrap from an empty yarn.lock fail with YN0028. Allow the
+          # regeneration. No-op for the other package managers.
+          YARN_ENABLE_IMMUTABLE_INSTALLS: "false"
         with:
           version: ${{ matrix.version }}
           sfw: true
@@ -340,7 +371,7 @@ jobs:
           fi
           echo "OK: sfw is not on PATH; fallback to plain vp install confirmed"
 
-      - name: Verify dependency installed
+      - name: Verify dependency installed via ${{ matrix.package-manager }}
         working-directory: test-project
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
@@ -377,68 +408,6 @@ jobs:
         run: sfw --version
 
       - name: Verify dependency installed under sfw (musl)
-        working-directory: test-project
-        run: vp exec node -e "console.log(require('is-odd')(3))"
-
-  test-sfw-package-managers:
-    # Verify sfw wraps vp install across all package managers vp auto-detects
-    # via lockfile (pnpm, npm, yarn, bun). The lockfile presence tells vp
-    # which PM to delegate to; an empty/minimal lockfile is fine because each
-    # PM regenerates it on install.
-    # Linux only — sfw is gated to Linux until the upstream work in
-    # https://github.com/voidzero-dev/setup-vp/issues/73 lands.
-    strategy:
-      fail-fast: false
-      matrix:
-        version: [latest, alpha]
-        package-manager:
-          - { name: pnpm, lockfile: pnpm-lock.yaml, contents: "" }
-          - {
-              name: npm,
-              lockfile: package-lock.json,
-              contents: '{"name":"test-project","lockfileVersion":3}',
-            }
-          - { name: yarn, lockfile: yarn.lock, contents: "" }
-          - { name: bun, lockfile: bun.lock, contents: "" }
-    runs-on: ubuntu-latest
-    steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-
-      - name: Create test project with ${{ matrix.package-manager.lockfile }}
-        shell: bash
-        run: |
-          mkdir -p test-project
-          cd test-project
-          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
-          printf '%s' '${{ matrix.package-manager.contents }}' > ${{ matrix.package-manager.lockfile }}
-
-      - name: Configure Yarn for plain node-modules linker
-        if: matrix.package-manager.name == 'yarn'
-        # Yarn Berry defaults to Plug'n'Play, which makes plain `require()`
-        # from a non-yarn-wrapped node process fail to resolve modules. Force
-        # the classic node-modules linker so the verify step is uniform with
-        # the other package managers.
-        run: |
-          echo "nodeLinker: node-modules" > test-project/.yarnrc.yml
-
-      - name: Setup Vite+ (${{ matrix.version }}) with sfw + ${{ matrix.package-manager.name }}
-        uses: ./
-        env:
-          # Yarn Berry auto-enables immutable installs under CI, which makes
-          # the bootstrap from an empty yarn.lock fail with YN0028. Allow the
-          # regeneration. No-op for the other package managers.
-          YARN_ENABLE_IMMUTABLE_INSTALLS: "false"
-        with:
-          version: ${{ matrix.version }}
-          sfw: true
-          run-install: |
-            - cwd: test-project
-          cache: false
-
-      - name: Verify sfw is on PATH
-        run: sfw --version
-
-      - name: Verify dependency installed under sfw via ${{ matrix.package-manager.name }}
         working-directory: test-project
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
