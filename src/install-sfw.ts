@@ -25,9 +25,12 @@ const PWSH_TIMEOUT_SEC = 60;
 // checklist: https://github.com/voidzero-dev/setup-vp/issues/73
 export function isSfwSupported(): boolean {
   if (process.platform !== "linux") return false;
+  // Defensive: `!!asset` keeps this correct even if `getSfwAssetName` is later
+  // refactored to return `undefined`/`null` instead of throw. The try/catch
+  // still covers the current throwing contract.
   try {
-    getSfwAssetName(process.platform, process.arch, isMuslLinux());
-    return true;
+    const asset = getSfwAssetName(process.platform, process.arch, isMuslLinux());
+    return !!asset;
   } catch {
     return false;
   }

@@ -386,6 +386,9 @@ jobs:
   test-sfw-alpine:
     # vp version is left at the action default (`latest`) — sfw's musl asset
     # selection is decoupled from vp's release channel.
+    # NOTE: if this job is later re-matrixed (alpha+latest, multiple alpine
+    # versions, etc.), restore `strategy: { fail-fast: false }` so a flake in
+    # one shard doesn't cancel the others.
     runs-on: ubuntu-latest
     container:
       image: alpine:3.23
@@ -426,6 +429,9 @@ jobs:
     # package from https://socket.dev/blog/category/threat-research.
     # vp version is left at the action default (`latest`) — sfw block behavior
     # is decoupled from vp's release channel.
+    # NOTE: if this job is later re-matrixed, restore
+    # `strategy: { fail-fast: false }` so a flake in one shard doesn't cancel
+    # the others.
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -450,8 +456,14 @@ jobs:
         working-directory: test-project
         # Exit code alone isn't sufficient: a non-zero exit from npm 404,
         # network blip, or vp crash would also produce a false positive. We
-        # also require an sfw-specific block marker in the combined output
-        # so an unrelated failure doesn't get reported as "sfw blocked it".
+        # also require the literal sfw block-line for lodahs in the combined
+        # output so an unrelated failure doesn't get reported as "sfw blocked
+        # it". The block-line format observed in CI is:
+        #   " - blocked npm package: name: lodahs; version: ...; reason: ..."
+        # The banner "Protected by Socket Firewall" and the "=== Socket
+        # Firewall ===" header are emitted on EVERY sfw invocation, so neither
+        # of those is a usable marker — use the unique "blocked npm package:
+        # name: lodahs" line instead.
         run: |
           set +e
           OUTPUT=$(sfw vp install lodahs 2>&1)
@@ -462,11 +474,11 @@ jobs:
             echo "::error::sfw failed to block lodahs — install exited 0"
             exit 1
           fi
-          if ! printf '%s' "$OUTPUT" | grep -qiE "(socket firewall|blocked|malware|sfw)"; then
-            echo "::error::sfw vp install exited $CODE but no Socket Firewall marker found in output — likely failed for a non-sfw reason (canary delisted? network? vp crash?). Swap the canary if Socket has delisted lodahs."
+          if ! printf '%s' "$OUTPUT" | grep -qF -- "blocked npm package: name: lodahs"; then
+            echo "::error::sfw vp install exited $CODE but the lodahs block-line was not in the output — likely failed for a non-sfw reason (canary delisted, network blip, vp crash, or sfw output format changed). Swap the canary if Socket has delisted lodahs, or update the marker grep if sfw's block-line format changed."
             exit 1
           fi
-          echo "OK: sfw blocked lodahs (exit $CODE, Socket Firewall marker present)"
+          echo "OK: sfw blocked lodahs (exit $CODE, block-line found)"
 
   build:
     runs-on: ubuntu-latest
