@@ -293,20 +293,22 @@ jobs:
         run: vp exec node -e "console.log('vp exec works in Alpine')"
 
   test-sfw:
-    # Linux-only: sfw's MITM proxy issues a CA cert with a present-but-empty
-    # EKU extension. OpenSSL accepts it, but rustls / Go's crypto/x509 reject
-    # it as UnknownIssuer. vp is a Rust binary (rustls), so on macOS / Windows
-    # any HTTPS call vp makes through sfw fails the TLS handshake before sfw
-    # can inspect the install. Ubuntu happens to work because pnpm is
-    # preinstalled on the runner and vp skips its bootstrap fetch.
+    # On Linux: sfw wraps vp install end-to-end (sfw binary downloaded,
+    # `sfw vp install` runs).
+    # On macOS / Windows: sfw is temporarily unsupported because sfw v1.10.0
+    # issues a TLS cert with an empty EKU extension that vp's rustls rejects
+    # (UnknownIssuer). The action emits a warning and falls back to plain
+    # `vp install`; no sfw binary is downloaded. We assert that fallback by
+    # checking `sfw` is NOT on PATH while the install still succeeds.
     # Tracking upstream:
     #   https://github.com/SocketDev/sfw-free/issues/30
     #   https://github.com/SocketDev/sfw-free/issues/43
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         version: [latest, alpha]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -326,10 +328,21 @@ jobs:
             - cwd: test-project
           cache: false
 
-      - name: Verify sfw is on PATH
+      - name: Verify sfw is on PATH (Linux only)
+        if: runner.os == 'Linux'
         run: sfw --version
 
-      - name: Verify dependency installed under sfw
+      - name: Verify sfw fallback on non-Linux (sfw NOT installed)
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          if command -v sfw >/dev/null 2>&1; then
+            echo "ERROR: expected sfw to be absent on ${{ runner.os }} (fallback path), but it is on PATH"
+            exit 1
+          fi
+          echo "OK: sfw is not on PATH; fallback to plain vp install confirmed"
+
+      - name: Verify dependency installed
         working-directory: test-project
         run: vp exec node -e "console.log(require('is-odd')(3))"
 

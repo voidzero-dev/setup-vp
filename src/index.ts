@@ -2,7 +2,7 @@ import { saveState, getState, setFailed, info, setOutput, warning } from "@actio
 import { exec, getExecOutput } from "@actions/exec";
 import { getInputs } from "./inputs.js";
 import { installVitePlus } from "./install-viteplus.js";
-import { installSfw } from "./install-sfw.js";
+import { installSfw, isSfwSupported } from "./install-sfw.js";
 import { runViteInstall } from "./run-install.js";
 import { restoreCache } from "./cache-restore.js";
 import { saveCache } from "./cache-save.js";
@@ -44,14 +44,23 @@ async function runMain(inputs: Inputs): Promise<void> {
     await restoreCache(inputs);
   }
 
-  // Step 6: Install Socket Firewall Free if requested (must run before vp install)
-  if (inputs.sfw && inputs.runInstall.length > 0) {
+  // Step 6: Install Socket Firewall Free if requested (must run before vp install).
+  // On non-Linux platforms, sfw is temporarily unsupported (see isSfwSupported)
+  // and we fall back to plain `vp install` with a warning.
+  let effectiveSfw = inputs.sfw;
+  if (inputs.sfw && !isSfwSupported()) {
+    warning(
+      `sfw is temporarily only supported on Linux (process.platform=${process.platform}); falling back to plain \`vp install\`. Track upstream: https://github.com/SocketDev/sfw-free/issues/30`,
+    );
+    effectiveSfw = false;
+  }
+  if (effectiveSfw && inputs.runInstall.length > 0) {
     await installSfw();
   }
 
   // Step 7: Run vp install if requested
   if (inputs.runInstall.length > 0) {
-    await runViteInstall(inputs);
+    await runViteInstall({ ...inputs, sfw: effectiveSfw });
   }
 
   // Print version info at the end

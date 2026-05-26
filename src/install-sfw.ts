@@ -10,6 +10,15 @@ const INSTALL_RETRY_DELAY_MS = 2000;
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 60";
 const PWSH_TIMEOUT_SEC = 60;
 
+// sfw v1.10.0 issues a TLS cert with an empty Extended Key Usage extension.
+// vp uses rustls, which strictly rejects it (UnknownIssuer). So on macOS /
+// Windows, `sfw vp install` fails the TLS handshake before sfw can inspect
+// anything. Until SocketDev/sfw-free#30 and #43 are resolved, we only enable
+// the wrap on Linux and fall back to plain `vp install` everywhere else.
+export function isSfwSupported(): boolean {
+  return process.platform === "linux";
+}
+
 export function isMuslLinux(): boolean {
   if (process.platform !== "linux") return false;
   try {

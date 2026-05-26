@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vite-plus/test";
-import { getSfwAssetName } from "./install-sfw.js";
+import { getSfwAssetName, isSfwSupported } from "./install-sfw.js";
 
 describe("getSfwAssetName", () => {
   it("returns macOS arm64 asset", () => {
@@ -56,5 +56,11 @@ describe("getSfwAssetName", () => {
   it("includes libc in error message for unsupported Linux arch", () => {
     expect(() => getSfwAssetName("linux", "ia32", true)).toThrow(/musl/);
     expect(() => getSfwAssetName("linux", "ia32", false)).toThrow(/glibc/);
+  });
+});
+
+describe("isSfwSupported", () => {
+  it("returns true on Linux, false elsewhere (matches current platform)", () => {
+    expect(isSfwSupported()).toBe(process.platform === "linux");
   });
 });
