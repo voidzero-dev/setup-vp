@@ -4,6 +4,12 @@ import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
+// Track upstream's latest tagged release rather than pinning a specific
+// version: sfw is an actively-evolving security tool and a pinned version
+// would freeze users on a release the moment a malware-detection update
+// shipped upstream. The corresponding risk is reproducibility — a re-run
+// of the same commit may pick up a newer sfw — which is a tradeoff we
+// accept for now.
 const SFW_RELEASE_BASE = "https://github.com/SocketDev/sfw-free/releases/latest/download";
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
@@ -13,10 +19,18 @@ const PWSH_TIMEOUT_SEC = 60;
 // sfw is temporarily only enabled on Linux: sfw's CA cert has an empty
 // Extended Key Usage extension that rustls (used by vp) rejects, so
 // `sfw vp install` fails the TLS handshake on macOS / Windows before sfw can
-// inspect anything. Tracking + cleanup checklist:
-// https://github.com/voidzero-dev/setup-vp/issues/73
+// inspect anything. We also fall back when no sfw asset exists for the
+// runner's arch (e.g., riscv64, ppc64 self-hosted Linux runners), so the
+// action degrades gracefully instead of throwing. Tracking + cleanup
+// checklist: https://github.com/voidzero-dev/setup-vp/issues/73
 export function isSfwSupported(): boolean {
-  return process.platform === "linux";
+  if (process.platform !== "linux") return false;
+  try {
+    getSfwAssetName(process.platform, process.arch, isMuslLinux());
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function isMuslLinux(): boolean {

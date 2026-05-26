@@ -46,9 +46,11 @@ async function runMain(inputs: Inputs): Promise<void> {
 
   // Step 6: Install Socket Firewall Free if requested (must run before vp install).
   // On non-Linux platforms, sfw is temporarily unsupported (see isSfwSupported)
-  // and we fall back to plain `vp install` with a warning.
+  // and we fall back to plain `vp install` with a warning. Only emit the
+  // warning / override when run-install is enabled — otherwise sfw wouldn't be
+  // invoked anyway and the message is just noise.
   let effectiveSfw = inputs.sfw;
-  if (inputs.sfw && !isSfwSupported()) {
+  if (inputs.sfw && inputs.runInstall.length > 0 && !isSfwSupported()) {
     warning(
       `sfw is temporarily only supported on Linux (process.platform=${process.platform}); falling back to plain \`vp install\`. Track upstream: https://github.com/voidzero-dev/setup-vp/issues/73`,
     );

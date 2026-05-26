@@ -453,13 +453,25 @@ jobs:
       - name: Assert sfw blocks malicious package (lodahs typosquat of lodash)
         shell: bash
         working-directory: test-project
+        # Exit code alone isn't sufficient: a non-zero exit from npm 404,
+        # network blip, or vp crash would also produce a false positive. We
+        # also require an sfw-specific block marker in the combined output
+        # so an unrelated failure doesn't get reported as "sfw blocked it".
         run: |
-          if sfw vp install lodahs; then
-            echo "ERROR: sfw failed to block lodahs (lodash typosquat)"
+          set +e
+          OUTPUT=$(sfw vp install lodahs 2>&1)
+          CODE=$?
+          set -e
+          printf '%s\n' "$OUTPUT"
+          if [ "$CODE" -eq 0 ]; then
+            echo "::error::sfw failed to block lodahs — install exited 0"
             exit 1
-          else
-            echo "SUCCESS: sfw blocked lodahs as expected"
           fi
+          if ! printf '%s' "$OUTPUT" | grep -qiE "(socket firewall|blocked|malware|sfw)"; then
+            echo "::error::sfw vp install exited $CODE but no Socket Firewall marker found in output — likely failed for a non-sfw reason (canary delisted? network? vp crash?). Swap the canary if Socket has delisted lodahs."
+            exit 1
+          fi
+          echo "OK: sfw blocked lodahs (exit $CODE, Socket Firewall marker present)"
 
   build:
     runs-on: ubuntu-latest
