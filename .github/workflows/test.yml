@@ -412,6 +412,15 @@ jobs:
           echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
           printf '%s' '${{ matrix.package-manager.contents }}' > ${{ matrix.package-manager.lockfile }}
 
+      - name: Configure Yarn for plain node-modules linker
+        if: matrix.package-manager.name == 'yarn'
+        # Yarn Berry defaults to Plug'n'Play, which makes plain `require()`
+        # from a non-yarn-wrapped node process fail to resolve modules. Force
+        # the classic node-modules linker so the verify step is uniform with
+        # the other package managers.
+        run: |
+          echo "nodeLinker: node-modules" > test-project/.yarnrc.yml
+
       - name: Setup Vite+ (${{ matrix.version }}) with sfw + ${{ matrix.package-manager.name }}
         uses: ./
         env:
