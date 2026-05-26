@@ -151,6 +151,9 @@ steps:
 
 `sfw` is only applied when `run-install` is enabled; other `vp` commands (e.g. `vp env use`, `vp --version`) run unwrapped.
 
+> [!IMPORTANT]
+> **Linux-only on hosted GitHub runners.** `sfw` ships a self-signed CA whose certificate has an empty Extended Key Usage extension. Strict TLS stacks like rustls (used by `vp`) reject this as `UnknownIssuer`, so `vp install` fails the TLS handshake on macOS / Windows runners (which have to bootstrap pnpm through `sfw`'s proxy). Ubuntu runners work because pnpm is preinstalled, letting `vp install` skip the bootstrap fetch. The action will still install the `sfw` binary on macOS / Windows so users can call it directly (e.g. `sfw npm ci` in a follow-up step), but `setup-vp`'s own `run-install` step is only verified end-to-end on Linux. Track upstream at [SocketDev/sfw-free#30](https://github.com/SocketDev/sfw-free/issues/30) and [#43](https://github.com/SocketDev/sfw-free/issues/43).
+
 ### Alpine Container
 
 Alpine Linux uses musl libc instead of glibc. Install compatibility packages before using the action:

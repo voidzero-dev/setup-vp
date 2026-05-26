@@ -293,12 +293,20 @@ jobs:
         run: vp exec node -e "console.log('vp exec works in Alpine')"
 
   test-sfw:
+    # Linux-only: sfw's MITM proxy issues a CA cert with a present-but-empty
+    # EKU extension. OpenSSL accepts it, but rustls / Go's crypto/x509 reject
+    # it as UnknownIssuer. vp is a Rust binary (rustls), so on macOS / Windows
+    # any HTTPS call vp makes through sfw fails the TLS handshake before sfw
+    # can inspect the install. Ubuntu happens to work because pnpm is
+    # preinstalled on the runner and vp skips its bootstrap fetch.
+    # Tracking upstream:
+    #   https://github.com/SocketDev/sfw-free/issues/30
+    #   https://github.com/SocketDev/sfw-free/issues/43
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         version: [latest, alpha]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
