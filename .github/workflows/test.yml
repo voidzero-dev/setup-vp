@@ -304,8 +304,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Only the latest vp release here — the OS × package-manager matrix
+        # is already large (4 PMs × 3 OSes with excludes = 6 cells), and the
+        # sfw wrap is decoupled from vp's release channel. Other test jobs
+        # (test-cache-*, test-node-version, etc.) still cover the alpha
+        # channel for vp itself.
+        version: [latest]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        version: [latest, alpha]
         package-manager: [pnpm, npm, yarn, bun]
         exclude:
           # Non-Linux only needs one fallback check per OS — sfw isn't
