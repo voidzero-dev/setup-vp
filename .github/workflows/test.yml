@@ -361,6 +361,49 @@ jobs:
         working-directory: test-project
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
+  test-sfw-blocks-malicious:
+    # Verifies sfw actually intercepts a known-malicious package, not just
+    # that it wraps the install. Uses `lodahs` (lodash typosquat), the same
+    # canary SocketDev's own workflows use:
+    # https://github.com/SocketDev/bun-security-scanner/blob/main/.github/workflows/test.yml
+    # If this job ever stops blocking, either sfw is misconfigured or the
+    # canary itself has been delisted — swap it for another Socket-flagged
+    # package from https://socket.dev/blog/category/threat-research.
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [latest, alpha]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create test project with a benign dependency
+        shell: bash
+        run: |
+          mkdir -p test-project
+          cd test-project
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+
+      - name: Setup Vite+ (${{ matrix.version }}) with sfw and install benign dep
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+          sfw: true
+          run-install: |
+            - cwd: test-project
+          cache: false
+
+      - name: Assert sfw blocks malicious package (lodahs typosquat of lodash)
+        shell: bash
+        working-directory: test-project
+        run: |
+          if sfw vp install lodahs; then
+            echo "ERROR: sfw failed to block lodahs (lodash typosquat)"
+            exit 1
+          else
+            echo "SUCCESS: sfw blocked lodahs as expected"
+          fi
+
   build:
     runs-on: ubuntu-latest
     steps:
