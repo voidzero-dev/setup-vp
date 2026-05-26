@@ -50,7 +50,7 @@ async function runMain(inputs: Inputs): Promise<void> {
   let effectiveSfw = inputs.sfw;
   if (inputs.sfw && !isSfwSupported()) {
     warning(
-      `sfw is temporarily only supported on Linux (process.platform=${process.platform}); falling back to plain \`vp install\`. Track upstream: https://github.com/SocketDev/sfw-free/issues/30`,
+      `sfw is temporarily only supported on Linux (process.platform=${process.platform}); falling back to plain \`vp install\`. Track upstream: https://github.com/voidzero-dev/setup-vp/issues/73`,
     );
     effectiveSfw = false;
   }
