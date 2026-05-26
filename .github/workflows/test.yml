@@ -328,28 +328,31 @@ jobs:
             npm)  LOCKFILE=package-lock.json; CONTENTS='{"name":"test-project","lockfileVersion":3}' ;;
             yarn) LOCKFILE=yarn.lock; CONTENTS='' ;;
             bun)  LOCKFILE=bun.lock; CONTENTS='' ;;
+            *)    echo "Unsupported package-manager: ${{ matrix.package-manager }}" >&2; exit 1 ;;
           esac
           mkdir -p test-project
           cd test-project
           echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
           printf '%s' "$CONTENTS" > "$LOCKFILE"
 
-      - name: Configure Yarn for plain node-modules linker
-        if: matrix.package-manager == 'yarn'
-        # Yarn Berry defaults to Plug'n'Play, which makes plain `require()`
-        # from a non-yarn-wrapped node process fail to resolve modules. Force
-        # the classic node-modules linker so the verify step is uniform.
+      - name: Configure Yarn .yarnrc.yml (Linux + yarn only)
+        if: matrix.package-manager == 'yarn' && runner.os == 'Linux'
+        # nodeLinker=node-modules: Yarn Berry defaults to Plug'n'Play, which
+        #   makes plain `require()` from a non-yarn-wrapped node process fail.
+        # enableImmutableInstalls=false: Yarn Berry auto-enables immutable
+        #   installs under CI, which makes the bootstrap from an empty
+        #   yarn.lock fail with YN0028. Setting it here (instead of via the
+        #   YARN_ENABLE_IMMUTABLE_INSTALLS env var) survives any future
+        #   env-sanitization vp might apply to spawned subprocesses.
         shell: bash
         run: |
-          echo "nodeLinker: node-modules" > test-project/.yarnrc.yml
+          {
+            echo "nodeLinker: node-modules"
+            echo "enableImmutableInstalls: false"
+          } > test-project/.yarnrc.yml
 
       - name: Setup Vite+ (${{ matrix.version }}) with sfw + ${{ matrix.package-manager }}
         uses: ./
-        env:
-          # Yarn Berry auto-enables immutable installs under CI, which makes
-          # the bootstrap from an empty yarn.lock fail with YN0028. Allow the
-          # regeneration. No-op for the other package managers.
-          YARN_ENABLE_IMMUTABLE_INSTALLS: "false"
         with:
           version: ${{ matrix.version }}
           sfw: true
@@ -361,15 +364,19 @@ jobs:
         if: runner.os == 'Linux'
         run: sfw --version
 
-      - name: Verify sfw fallback on non-Linux (sfw NOT installed)
+      - name: Verify sfw fallback on non-Linux (action did not install sfw)
         if: runner.os != 'Linux'
         shell: bash
+        # Check the exact path getSfwBinDir() would have created rather than
+        # `command -v sfw`, so a runner image that happens to ship sfw
+        # globally (or a leftover from a prior self-hosted job) doesn't
+        # false-fail this assertion.
         run: |
-          if command -v sfw >/dev/null 2>&1; then
-            echo "ERROR: expected sfw to be absent on ${{ runner.os }} (fallback path), but it is on PATH"
+          if [ -e "$RUNNER_TEMP/sfw-bin/sfw" ] || [ -e "$RUNNER_TEMP/sfw-bin/sfw.exe" ]; then
+            echo "ERROR: expected the action to skip the sfw download on ${{ runner.os }}, but $RUNNER_TEMP/sfw-bin/sfw[.exe] exists"
             exit 1
           fi
-          echo "OK: sfw is not on PATH; fallback to plain vp install confirmed"
+          echo "OK: action did not install sfw; fallback to plain vp install confirmed"
 
       - name: Verify dependency installed via ${{ matrix.package-manager }}
         working-directory: test-project

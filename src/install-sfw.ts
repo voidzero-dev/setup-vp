@@ -10,9 +10,10 @@ const INSTALL_RETRY_DELAY_MS = 2000;
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 60";
 const PWSH_TIMEOUT_SEC = 60;
 
-// sfw is temporarily only enabled on Linux. On macOS / Windows, `sfw vp install`
-// fails the TLS handshake before sfw can inspect anything because of a stack of
-// upstream issues in sfw + vp. Tracking + cleanup checklist:
+// sfw is temporarily only enabled on Linux: sfw's CA cert has an empty
+// Extended Key Usage extension that rustls (used by vp) rejects, so
+// `sfw vp install` fails the TLS handshake on macOS / Windows before sfw can
+// inspect anything. Tracking + cleanup checklist:
 // https://github.com/voidzero-dev/setup-vp/issues/73
 export function isSfwSupported(): boolean {
   return process.platform === "linux";
