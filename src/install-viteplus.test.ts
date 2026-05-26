@@ -24,6 +24,7 @@ const baseInputs: Inputs = {
   nodeVersionFile: undefined,
   workingDirectory: undefined,
   runInstall: [],
+  sfw: false,
   cache: false,
   cacheDependencyPath: undefined,
   registryUrl: undefined,

@@ -14,6 +14,10 @@ inputs:
     description: "Run `vp install` after setup. Accepts boolean or YAML object with cwd/args."
     required: false
     default: "true"
+  sfw:
+    description: "Wrap `vp install` with Socket Firewall Free (sfw) to block malicious dependency fetches. Downloads the sfw binary from https://github.com/SocketDev/sfw-free/releases. See https://docs.socket.dev/docs/socket-firewall-free."
+    required: false
+    default: "false"
   node-version:
     description: "Node.js version to install via `vp env use`. Defaults to Node.js latest LTS version."
     required: false

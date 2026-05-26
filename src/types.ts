@@ -23,6 +23,7 @@ export interface Inputs {
   readonly nodeVersionFile?: string;
   readonly workingDirectory?: string;
   readonly runInstall: RunInstall[];
+  readonly sfw: boolean;
   readonly cache: boolean;
   readonly cacheDependencyPath?: string;
   readonly registryUrl?: string;

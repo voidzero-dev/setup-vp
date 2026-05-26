@@ -29,6 +29,7 @@ describe("getInputs", () => {
       nodeVersionFile: undefined,
       workingDirectory: undefined,
       runInstall: [],
+      sfw: false,
       cache: false,
       cacheDependencyPath: undefined,
     });
@@ -104,6 +105,18 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs.cache).toBe(true);
+  });
+
+  it("should parse sfw input", () => {
+    vi.mocked(getInput).mockReturnValue("");
+    vi.mocked(getBooleanInput).mockImplementation((name) => {
+      if (name === "sfw") return true;
+      return false;
+    });
+
+    const inputs = getInputs();
+
+    expect(inputs.sfw).toBe(true);
   });
 
   it("should parse node-version-file input", () => {

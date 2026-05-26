@@ -8,6 +8,7 @@ GitHub Action to set up [Vite+](https://viteplus.dev) (`vp`) with dependency cac
 - Optionally set up a specific Node.js version via `vp env use`
 - Cache project dependencies with auto-detection of lock files
 - Optionally run `vp install` after setup
+- Optionally wrap `vp install` with [Socket Firewall Free (`sfw`)](https://docs.socket.dev/docs/socket-firewall-free) to block malicious dependencies
 - Support for all major package managers (npm, pnpm, yarn, bun)
 
 ## Usage
@@ -135,6 +136,21 @@ steps:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
+### With Socket Firewall Free (sfw)
+
+Set `sfw: true` to wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free). The action downloads the matching `sfw` binary from the upstream [releases](https://github.com/SocketDev/sfw-free/releases) (auto-detected per OS/arch, with musl support on Alpine) and runs `sfw vp install …` so the underlying npm / pnpm / yarn fetches are inspected before packages are installed:
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  - uses: voidzero-dev/setup-vp@v1
+    with:
+      sfw: true
+      run-install: true
+```
+
+`sfw` is only applied when `run-install` is enabled; other `vp` commands (e.g. `vp env use`, `vp --version`) run unwrapped.
+
 ### Alpine Container
 
 Alpine Linux uses musl libc instead of glibc. Install compatibility packages before using the action:
@@ -178,6 +194,7 @@ jobs:
 | `node-version-file`     | Path to file containing Node.js version (`.nvmrc`, `.node-version`, `.tool-versions`, `package.json`)       | No       |                |
 | `working-directory`     | Project directory used for relative paths, lockfile auto-detection, environment checks, and default install | No       | Workspace root |
 | `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                              | No       | `true`         |
+| `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)    | No       | `false`        |
 | `cache`                 | Enable caching of project dependencies                                                                      | No       | `false`        |
 | `cache-dependency-path` | Path to lock file for cache key generation                                                                  | No       | Auto-detected  |
 | `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`   | No       |                |

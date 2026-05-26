@@ -11,6 +11,7 @@ export function getInputs(): Inputs {
     nodeVersionFile: getInput("node-version-file") || undefined,
     workingDirectory: getInput("working-directory") || undefined,
     runInstall: parseRunInstall(getInput("run-install")),
+    sfw: getBooleanInput("sfw"),
     cache: getBooleanInput("cache"),
     cacheDependencyPath: getInput("cache-dependency-path") || undefined,
     registryUrl: getInput("registry-url") || undefined,

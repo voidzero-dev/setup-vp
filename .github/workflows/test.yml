@@ -292,6 +292,75 @@ jobs:
       - name: Verify vp exec works
         run: vp exec node -e "console.log('vp exec works in Alpine')"
 
+  test-sfw:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        version: [latest, alpha]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create test project with a real dependency
+        shell: bash
+        run: |
+          mkdir -p test-project
+          cd test-project
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+
+      - name: Setup Vite+ (${{ matrix.version }}) with sfw
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+          sfw: true
+          run-install: |
+            - cwd: test-project
+          cache: false
+
+      - name: Verify sfw is on PATH
+        run: sfw --version
+
+      - name: Verify dependency installed under sfw
+        working-directory: test-project
+        run: vp exec node -e "console.log(require('is-odd')(3))"
+
+  test-sfw-alpine:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [latest, alpha]
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.23
+    steps:
+      - name: Install Alpine dependencies
+        run: apk add --no-cache bash curl gcompat libstdc++
+
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create test project with a real dependency
+        run: |
+          mkdir -p test-project
+          cd test-project
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+
+      - name: Setup Vite+ (${{ matrix.version }}) with sfw (musl)
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+          sfw: true
+          run-install: |
+            - cwd: test-project
+          cache: false
+
+      - name: Verify sfw is on PATH (musl)
+        run: sfw --version
+
+      - name: Verify dependency installed under sfw (musl)
+        working-directory: test-project
+        run: vp exec node -e "console.log(require('is-odd')(3))"
+
   build:
     runs-on: ubuntu-latest
     steps:

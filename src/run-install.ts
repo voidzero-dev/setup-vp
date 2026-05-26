@@ -15,18 +15,20 @@ export async function runViteInstall(inputs: Inputs): Promise<void> {
   const projectDir = getConfiguredProjectDir(inputs);
 
   for (const options of inputs.runInstall) {
-    const args = ["install"];
+    const installArgs = ["install"];
     if (options.args) {
-      args.push(...options.args);
+      installArgs.push(...options.args);
     }
 
+    const cmd = inputs.sfw ? "sfw" : "vp";
+    const args = inputs.sfw ? ["vp", ...installArgs] : installArgs;
     const cwd = getInstallCwd(projectDir, options.cwd);
-    const cmdStr = `vp ${args.join(" ")}`;
+    const cmdStr = `${cmd} ${args.join(" ")}`;
 
     startGroup(`Running ${cmdStr} in ${cwd}...`);
 
     try {
-      const { exitCode, stdout, stderr } = await getExecOutput("vp", args, {
+      const { exitCode, stdout, stderr } = await getExecOutput(cmd, args, {
         cwd,
         ignoreReturnCode: true,
       });
