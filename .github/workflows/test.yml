@@ -380,6 +380,59 @@ jobs:
         working-directory: test-project
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
+  test-sfw-package-managers:
+    # Verify sfw wraps vp install across all package managers vp auto-detects
+    # via lockfile (pnpm, npm, yarn, bun). The lockfile presence tells vp
+    # which PM to delegate to; an empty/minimal lockfile is fine because each
+    # PM regenerates it on install.
+    # Linux only — sfw is gated to Linux until the upstream work in
+    # https://github.com/voidzero-dev/setup-vp/issues/73 lands.
+    # Note: bun is not officially listed as a supported package manager by sfw
+    # (https://github.com/SocketDev/sfw-free), so its job is allowed to fail
+    # without breaking CI; failures there should be reported upstream.
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [latest, alpha]
+        package-manager:
+          - { name: pnpm, lockfile: pnpm-lock.yaml, contents: "", experimental: false }
+          - {
+              name: npm,
+              lockfile: package-lock.json,
+              contents: '{"name":"test-project","lockfileVersion":3}',
+              experimental: false,
+            }
+          - { name: yarn, lockfile: yarn.lock, contents: "", experimental: false }
+          - { name: bun, lockfile: bun.lock, contents: "", experimental: true }
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.package-manager.experimental }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create test project with ${{ matrix.package-manager.lockfile }}
+        shell: bash
+        run: |
+          mkdir -p test-project
+          cd test-project
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+          printf '%s' '${{ matrix.package-manager.contents }}' > ${{ matrix.package-manager.lockfile }}
+
+      - name: Setup Vite+ (${{ matrix.version }}) with sfw + ${{ matrix.package-manager.name }}
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+          sfw: true
+          run-install: |
+            - cwd: test-project
+          cache: false
+
+      - name: Verify sfw is on PATH
+        run: sfw --version
+
+      - name: Verify dependency installed under sfw via ${{ matrix.package-manager.name }}
+        working-directory: test-project
+        run: vp exec node -e "console.log(require('is-odd')(3))"
+
   test-sfw-blocks-malicious:
     # Verifies sfw actually intercepts a known-malicious package, not just
     # that it wraps the install. Uses `lodahs` (lodash typosquat), the same
