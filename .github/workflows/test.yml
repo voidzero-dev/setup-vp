@@ -301,15 +301,12 @@ jobs:
     # default package manager (pnpm) — the PM diversity matrix is Linux-only
     # because the sfw wrap is Linux-only.
     # Tracking: https://github.com/voidzero-dev/setup-vp/issues/73
+    # vp version is left at the action default (`latest`) — sfw is decoupled
+    # from vp's release channel. Other test jobs (test-cache-*,
+    # test-node-version, etc.) still cover the alpha channel for vp itself.
     strategy:
       fail-fast: false
       matrix:
-        # Only the latest vp release here — the OS × package-manager matrix
-        # is already large (4 PMs × 3 OSes with excludes = 6 cells), and the
-        # sfw wrap is decoupled from vp's release channel. Other test jobs
-        # (test-cache-*, test-node-version, etc.) still cover the alpha
-        # channel for vp itself.
-        version: [latest]
         os: [ubuntu-latest, macos-latest, windows-latest]
         package-manager: [pnpm, npm, yarn, bun]
         exclude:
@@ -356,10 +353,9 @@ jobs:
             echo "enableImmutableInstalls: false"
           } > test-project/.yarnrc.yml
 
-      - name: Setup Vite+ (${{ matrix.version }}) with sfw + ${{ matrix.package-manager }}
+      - name: Setup Vite+ with sfw + ${{ matrix.package-manager }}
         uses: ./
         with:
-          version: ${{ matrix.version }}
           sfw: true
           run-install: |
             - cwd: test-project
@@ -388,11 +384,8 @@ jobs:
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
   test-sfw-alpine:
-    strategy:
-      fail-fast: false
-      matrix:
-        # Latest only — sfw musl-asset selection is decoupled from vp release.
-        version: [latest]
+    # vp version is left at the action default (`latest`) — sfw's musl asset
+    # selection is decoupled from vp's release channel.
     runs-on: ubuntu-latest
     container:
       image: alpine:3.23
@@ -408,10 +401,9 @@ jobs:
           cd test-project
           echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
 
-      - name: Setup Vite+ (${{ matrix.version }}) with sfw (musl)
+      - name: Setup Vite+ with sfw (musl)
         uses: ./
         with:
-          version: ${{ matrix.version }}
           sfw: true
           run-install: |
             - cwd: test-project
@@ -432,11 +424,8 @@ jobs:
     # If this job ever stops blocking, either sfw is misconfigured or the
     # canary itself has been delisted — swap it for another Socket-flagged
     # package from https://socket.dev/blog/category/threat-research.
-    strategy:
-      fail-fast: false
-      matrix:
-        # Latest only — sfw block behavior is decoupled from vp release.
-        version: [latest]
+    # vp version is left at the action default (`latest`) — sfw block behavior
+    # is decoupled from vp's release channel.
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -448,10 +437,9 @@ jobs:
           cd test-project
           echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
 
-      - name: Setup Vite+ (${{ matrix.version }}) with sfw and install benign dep
+      - name: Setup Vite+ with sfw and install benign dep
         uses: ./
         with:
-          version: ${{ matrix.version }}
           sfw: true
           run-install: |
             - cwd: test-project
