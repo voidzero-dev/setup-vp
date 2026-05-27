@@ -137,9 +137,15 @@ export function findSfwOnPath(): string | null {
 }
 
 // Decide what to do with `sfw: true`. Returns whether `vp install` should be
-// wrapped with sfw. Centralizes the four cases (run-install disabled / sfw
-// already on PATH / supported platform / unsupported platform) and emits one
-// log message per branch so the chosen path is always visible.
+// wrapped with sfw. Centralizes all the cases and emits one log message per
+// branch so the chosen path is always visible.
+//
+// Order is important: the macOS/Windows platform gate fires BEFORE the
+// PATH-detection branch because the rustls TLS handshake failure (#73) is a
+// platform-wide property of vp's HTTP client — it doesn't matter how sfw got
+// installed; the handshake still fails. So even if a user composes
+// `socketdev/action@<sha>` on macOS/Windows (which would happily put sfw on
+// PATH), we still fall back to plain `vp install`.
 export async function setupSfw(inputs: Inputs): Promise<boolean> {
   if (!inputs.sfw) return false;
 
@@ -148,8 +154,17 @@ export async function setupSfw(inputs: Inputs): Promise<boolean> {
     return false;
   }
 
-  // Prefer an externally-provided sfw — typically installed by a prior
-  // `socketdev/action@<sha>` step. That path lets users SHA-pin sfw via
+  // Platform hard-gate. Linux-only until upstream #73 ships.
+  if (process.platform !== "linux") {
+    const env = `process.platform=${process.platform}, process.arch=${process.arch}`;
+    warning(
+      `sfw is temporarily not supported on macOS/Windows (${env}); falling back to plain \`vp install\` even if sfw is on PATH. Tracking: https://github.com/voidzero-dev/setup-vp/issues/73`,
+    );
+    return false;
+  }
+
+  // On Linux: prefer an externally-provided sfw — typically installed by a
+  // prior `socketdev/action@<sha>` step. That path lets users SHA-pin sfw via
   // Renovate against the upstream action repo, which is stricter than our
   // bundled releases/download URL.
   const existing = findSfwOnPath();
@@ -161,7 +176,7 @@ export async function setupSfw(inputs: Inputs): Promise<boolean> {
   if (!isSfwSupported()) {
     const env = `process.platform=${process.platform}, process.arch=${process.arch}, musl=${isMuslLinux()}`;
     warning(
-      `sfw is temporarily not supported on this runner (${env}) and no sfw was found on PATH; falling back to plain \`vp install\`. To enable sfw here, install it via \`socketdev/action@<sha>\` in an earlier step. Tracking: https://github.com/voidzero-dev/setup-vp/issues/73`,
+      `sfw has no published binary for this Linux runner's architecture (${env}) and none was found on PATH; falling back to plain \`vp install\`. To enable sfw on this arch, install a working sfw binary on PATH in an earlier step (e.g. via \`socketdev/action@<sha>\` or a custom install). Tracking: https://github.com/voidzero-dev/setup-vp/issues/73`,
     );
     return false;
   }

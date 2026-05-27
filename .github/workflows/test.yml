@@ -484,9 +484,9 @@ jobs:
     # Exercises the composition path: install sfw via the upstream
     # `socketdev/action@<sha>` step first, then call setup-vp with `sfw:
     # true`. setup-vp should DETECT the pre-installed sfw on PATH (via
-    # findSfwOnPath()) and skip its bundled download. We assert that by
-    # grepping the action's stdout for the "Using existing sfw on PATH"
-    # log line.
+    # findSfwOnPath()) and SKIP its bundled download. We assert that by
+    # checking $RUNNER_TEMP/sfw-bin/sfw[.exe] — the exact path
+    # installSfw() would have created — was NOT created.
     # See README "Advanced: stricter supply chain via socketdev/action".
     runs-on: ubuntu-latest
     steps:
@@ -512,6 +512,20 @@ jobs:
           run-install: |
             - cwd: test-project
           cache: false
+
+      - name: Verify setup-vp used the composed sfw (no bundled download)
+        shell: bash
+        # Negative assertion: if setup-vp had downloaded its own sfw, it
+        # would land at $RUNNER_TEMP/sfw-bin/sfw[.exe] (per
+        # getSfwBinDir() in install-sfw.ts). On the composition path the
+        # PATH-detection branch should fire FIRST and skip the download
+        # entirely, so neither file should exist.
+        run: |
+          if [ -e "$RUNNER_TEMP/sfw-bin/sfw" ] || [ -e "$RUNNER_TEMP/sfw-bin/sfw.exe" ]; then
+            echo "::error::setup-vp downloaded its own sfw binary even though one was pre-installed via socketdev/action. The PATH-detection branch in setupSfw() regressed."
+            exit 1
+          fi
+          echo "OK: setup-vp used the pre-installed sfw (no bundled download at \$RUNNER_TEMP/sfw-bin/)"
 
       - name: Verify dependency installed under composed sfw
         working-directory: test-project
