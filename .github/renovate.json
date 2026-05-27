@@ -1,5 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>Boshen/renovate"],
-  "ignoreDeps": ["@void-sdk/void"]
+  "ignoreDeps": ["@void-sdk/void"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^src/install-sfw\\.ts$"],
+      "matchStrings": ["const SFW_VERSION = \"(?<currentValue>v[^\"]+)\";"],
+      "depNameTemplate": "SocketDev/sfw-free",
+      "datasourceTemplate": "github-releases"
+    }
+  ]
 }

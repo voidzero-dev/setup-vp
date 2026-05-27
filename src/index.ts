@@ -2,7 +2,7 @@ import { saveState, getState, setFailed, info, setOutput, warning } from "@actio
 import { exec, getExecOutput } from "@actions/exec";
 import { getInputs } from "./inputs.js";
 import { installVitePlus } from "./install-viteplus.js";
-import { installSfw, isMuslLinux, isSfwSupported } from "./install-sfw.js";
+import { setupSfw } from "./install-sfw.js";
 import { runViteInstall } from "./run-install.js";
 import { restoreCache } from "./cache-restore.js";
 import { saveCache } from "./cache-save.js";
@@ -45,32 +45,10 @@ async function runMain(inputs: Inputs): Promise<void> {
   }
 
   // Step 6: Install Socket Firewall Free if requested (must run before vp install).
-  // sfw is currently only supported on Linux on architectures with a published
-  // sfw asset (see isSfwSupported); other combinations fall back to plain
-  // `vp install`. Whenever `sfw: true` is set but sfw won't actually be
-  // invoked, emit a clear log message so the no-op is visible.
-  let effectiveSfw = inputs.sfw;
-  if (inputs.sfw) {
-    const env = `process.platform=${process.platform}, process.arch=${process.arch}, musl=${isMuslLinux()}`;
-    const supported = isSfwSupported();
-    const needsInstall = inputs.runInstall.length > 0;
-    if (!supported && needsInstall) {
-      warning(
-        `sfw is temporarily not supported on this runner (${env}); falling back to plain \`vp install\`. Track upstream: https://github.com/voidzero-dev/setup-vp/issues/73`,
-      );
-      effectiveSfw = false;
-    } else if (!supported && !needsInstall) {
-      info(
-        `sfw was requested but is not supported on this runner (${env}); no sfw binary will be downloaded. Track upstream: https://github.com/voidzero-dev/setup-vp/issues/73`,
-      );
-      effectiveSfw = false;
-    } else if (supported && !needsInstall) {
-      info("sfw was requested but `run-install` is disabled; no sfw binary will be downloaded.");
-    }
-  }
-  if (effectiveSfw && inputs.runInstall.length > 0) {
-    await installSfw();
-  }
+  // setupSfw centralizes all the decision branches: run-install disabled, sfw
+  // already on PATH (e.g. via socketdev/action@<sha>), supported platform
+  // (downloads our pinned binary), unsupported platform (falls back).
+  const effectiveSfw = await setupSfw(inputs);
 
   // Step 7: Run vp install if requested
   if (inputs.runInstall.length > 0) {

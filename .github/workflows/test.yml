@@ -480,6 +480,43 @@ jobs:
           fi
           echo "OK: sfw blocked lodahs (exit $CODE, block-line found)"
 
+  test-sfw-with-socketdev-action:
+    # Exercises the composition path: install sfw via the upstream
+    # `socketdev/action@<sha>` step first, then call setup-vp with `sfw:
+    # true`. setup-vp should DETECT the pre-installed sfw on PATH (via
+    # findSfwOnPath()) and skip its bundled download. We assert that by
+    # grepping the action's stdout for the "Using existing sfw on PATH"
+    # log line.
+    # See README "Advanced: stricter supply chain via socketdev/action".
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create test project with a real dependency
+        shell: bash
+        run: |
+          mkdir -p test-project
+          cd test-project
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+
+      - name: Install sfw via socketdev/action
+        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f
+        with:
+          mode: firewall-free
+
+      - name: Setup Vite+ with sfw (composition path)
+        uses: ./
+        id: setup-vp
+        with:
+          sfw: true
+          run-install: |
+            - cwd: test-project
+          cache: false
+
+      - name: Verify dependency installed under composed sfw
+        working-directory: test-project
+        run: vp exec node -e "console.log(require('is-odd')(3))"
+
   build:
     runs-on: ubuntu-latest
     steps:

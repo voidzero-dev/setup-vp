@@ -1,16 +1,20 @@
 import { info, warning, addPath } from "@actions/core";
 import { exec } from "@actions/exec";
+import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import type { Inputs } from "./types.js";
 
-// Track upstream's latest tagged release rather than pinning a specific
-// version: sfw is an actively-evolving security tool and a pinned version
-// would freeze users on a release the moment a malware-detection update
-// shipped upstream. The corresponding risk is reproducibility — a re-run
-// of the same commit may pick up a newer sfw — which is a tradeoff we
-// accept for now.
-const SFW_RELEASE_BASE = "https://github.com/SocketDev/sfw-free/releases/latest/download";
+// Pin sfw so a re-run of the same commit gets the same binary. Renovate
+// watches SFW_VERSION (see .github/renovate.json customManagers entry) and
+// opens PRs whenever SocketDev publishes a new sfw-free release, keeping
+// us close to the latest malware-detection updates without giving up
+// reproducibility. For stricter supply-chain hygiene, users can compose
+// `socketdev/action@<sha>` ahead of this action — see README "Advanced:
+// stricter supply chain via socketdev/action".
+const SFW_VERSION = "v1.10.0";
+const SFW_RELEASE_BASE = `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}`;
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 60";
@@ -113,6 +117,57 @@ export async function installSfw(): Promise<void> {
   throw new Error(
     `Failed to install sfw from ${url} after ${maxAttempts} attempts: ${failureReason}`,
   );
+}
+
+// Returns the absolute path to a pre-existing sfw binary on PATH, or null.
+// Used to detect when the user composed `socketdev/action@<sha>` (or
+// installed sfw via some other means) before invoking this action.
+export function findSfwOnPath(): string | null {
+  const lookupCmd = process.platform === "win32" ? "where" : "which";
+  try {
+    const stdout = execFileSync(lookupCmd, ["sfw"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const firstLine = stdout.split(/\r?\n/).find((line) => line.trim().length > 0);
+    return firstLine ? firstLine.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+// Decide what to do with `sfw: true`. Returns whether `vp install` should be
+// wrapped with sfw. Centralizes the four cases (run-install disabled / sfw
+// already on PATH / supported platform / unsupported platform) and emits one
+// log message per branch so the chosen path is always visible.
+export async function setupSfw(inputs: Inputs): Promise<boolean> {
+  if (!inputs.sfw) return false;
+
+  if (inputs.runInstall.length === 0) {
+    info("sfw was requested but `run-install` is disabled; sfw will not be invoked.");
+    return false;
+  }
+
+  // Prefer an externally-provided sfw — typically installed by a prior
+  // `socketdev/action@<sha>` step. That path lets users SHA-pin sfw via
+  // Renovate against the upstream action repo, which is stricter than our
+  // bundled releases/download URL.
+  const existing = findSfwOnPath();
+  if (existing) {
+    info(`Using existing sfw on PATH: ${existing}`);
+    return true;
+  }
+
+  if (!isSfwSupported()) {
+    const env = `process.platform=${process.platform}, process.arch=${process.arch}, musl=${isMuslLinux()}`;
+    warning(
+      `sfw is temporarily not supported on this runner (${env}) and no sfw was found on PATH; falling back to plain \`vp install\`. To enable sfw here, install it via \`socketdev/action@<sha>\` in an earlier step. Tracking: https://github.com/voidzero-dev/setup-vp/issues/73`,
+    );
+    return false;
+  }
+
+  await installSfw();
+  return true;
 }
 
 async function runDownloadCommand(url: string, outPath: string): Promise<number> {

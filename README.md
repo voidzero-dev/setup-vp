@@ -151,6 +151,27 @@ steps:
 
 `sfw` is only applied when `run-install` is enabled; other `vp` commands (e.g. `vp env use`, `vp --version`) run unwrapped.
 
+The action pins the `sfw` version it downloads so a re-run of the same commit gets the same binary; [Renovate](https://docs.renovatebot.com/) opens a PR whenever SocketDev publishes a new `sfw-free` release (see [`.github/renovate.json`](.github/renovate.json)).
+
+#### Advanced: stricter supply chain via `socketdev/action`
+
+The bundled download uses a pinned URL but is not itself SHA-pinned. For workflows that want the `sfw` binary itself SHA-pinned (so a compromise of the upstream release artifact cannot land silently on the next run), compose with [`socketdev/action`](https://github.com/SocketDev/action) in an earlier step. setup-vp auto-detects an existing `sfw` on `PATH` and uses it instead of downloading:
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  # SHA-pinned; let Renovate bump it
+  - uses: socketdev/action@<sha>
+    with:
+      mode: firewall-free
+  - uses: voidzero-dev/setup-vp@v1
+    with:
+      sfw: true
+      run-install: true
+```
+
+In the action log you will see `Using existing sfw on PATH: …` when this composition is detected, vs. `Installing sfw from …` for the bundled-download path.
+
 > [!IMPORTANT]
 > **Linux-only for now.** `sfw` ships a self-signed CA whose certificate has an empty Extended Key Usage extension. Strict TLS stacks like rustls (used by `vp`) reject it as `UnknownIssuer`, so `vp install` fails the TLS handshake on macOS / Windows. To keep `sfw: true` safe to set unconditionally in cross-platform workflows, the action **falls back to plain `vp install` with a warning on non-Linux platforms** — it does not download the `sfw` binary there. The platform check will be relaxed once the upstream work tracked in [voidzero-dev/setup-vp#73](https://github.com/voidzero-dev/setup-vp/issues/73) lands.
 
