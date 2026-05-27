@@ -1,3 +1,4 @@
+import { restoreCache, saveCache } from "@actions/cache";
 import { info, warning, addPath } from "@actions/core";
 import { exec } from "@actions/exec";
 import { execFileSync } from "node:child_process";
@@ -86,6 +87,30 @@ export async function installSfw(): Promise<void> {
   mkdirSync(binDir, { recursive: true });
   const binPath = join(binDir, process.platform === "win32" ? "sfw.exe" : "sfw");
 
+  // Try the GHA cache first so we don't redownload ~130 MB on every run and
+  // we get a fallback when the GitHub releases CDN flakes. Key includes the
+  // pinned version + platform + arch + libc; no restoreKeys, so we never
+  // accept a different version's binary as a fallback. All cache calls are
+  // best-effort: any failure falls through to the download path.
+  const cacheKey = `sfw-${SFW_VERSION}-${process.platform}-${process.arch}-${isMuslLinux() ? "musl" : "glibc"}`;
+  let cacheHit = false;
+  try {
+    const matchedKey = await restoreCache([binDir], cacheKey);
+    if (matchedKey && existsSync(binPath)) {
+      if (process.platform !== "win32") {
+        chmodSync(binPath, 0o755);
+      }
+      addPath(binDir);
+      info(`sfw restored from cache: ${matchedKey}`);
+      cacheHit = true;
+      return;
+    }
+  } catch (error) {
+    warning(
+      `sfw cache restore failed (${error instanceof Error ? error.message : String(error)}); falling through to download.`,
+    );
+  }
+
   info(`Installing sfw from ${url}...`);
 
   const maxAttempts = INSTALL_MAX_ROUNDS;
@@ -99,6 +124,19 @@ export async function installSfw(): Promise<void> {
         }
         addPath(binDir);
         info(`sfw installed at ${binPath}`);
+        // Save to cache for future runs. Skipped on cache-hit branch (return
+        // above). On a re-key collision @actions/cache throws
+        // ReserveCacheError — swallow it like any other cache failure.
+        if (!cacheHit) {
+          try {
+            await saveCache([binDir], cacheKey);
+            info(`sfw cached under key: ${cacheKey}`);
+          } catch (error) {
+            warning(
+              `sfw cache save failed (${error instanceof Error ? error.message : String(error)}); continuing.`,
+            );
+          }
+        }
         return;
       }
       failureReason = `exit code ${exitCode}`;
