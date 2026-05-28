@@ -8,7 +8,10 @@ name: verify-vp-1686-sfw
 # Uses the pkg-pr-new build from
 # https://github.com/voidzero-dev/vite-plus/pull/1686#issuecomment-4545059033
 # (commit c8ae23e). Bypasses setup-vp's own bootstrap so the only thing
-# under test is the vp+sfw interaction.
+# under test is the vp+sfw interaction. sfw is installed manually from
+# the same upstream URL setup-vp uses — NOT via socketdev/action — so
+# there is no SFW_JSON_REPORT_PATH side-effect on stdout output, and we
+# can grep for the literal block-line.
 #
 # Triggers only on pushes that touch this file (paths filter) — so it runs
 # once when we add/update the workflow itself and stays quiet on every
@@ -46,14 +49,41 @@ jobs:
           npm i -g https://pkg.pr.new/voidzero-dev/vite-plus@1686
           vp --version
 
-      - name: Install sfw via socketdev/action
-        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f
-        with:
-          mode: firewall-free
-
-      - name: Confirm sfw is on PATH
+      - name: Install sfw (same URL setup-vp would use, no socketdev/action)
         shell: bash
-        run: sfw --version
+        # Replicates `installSfw()` from src/install-sfw.ts exactly — same
+        # pinned version, same per-OS asset, no SFW_JSON_REPORT_PATH side
+        # effect from socketdev/action. This isolates the vp+sfw TLS
+        # interaction with nothing else in the way.
+        run: |
+          SFW_VERSION=v1.10.0
+          BIN_DIR="$RUNNER_TEMP/sfw-bin"
+          mkdir -p "$BIN_DIR"
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-X64)    ASSET=sfw-free-linux-x86_64;  BIN=sfw ;;
+            Linux-ARM64)  ASSET=sfw-free-linux-arm64;   BIN=sfw ;;
+            macOS-ARM64)  ASSET=sfw-free-macos-arm64;   BIN=sfw ;;
+            macOS-X64)    ASSET=sfw-free-macos-x86_64;  BIN=sfw ;;
+            Windows-X64)  ASSET=sfw-free-windows-x86_64.exe; BIN=sfw.exe ;;
+            Windows-ARM64) ASSET=sfw-free-windows-arm64.exe; BIN=sfw.exe ;;
+            *) echo "Unsupported runner: ${{ runner.os }}-${{ runner.arch }}"; exit 1 ;;
+          esac
+          URL="https://github.com/SocketDev/sfw-free/releases/download/$SFW_VERSION/$ASSET"
+          echo "Downloading $URL"
+          curl -fsSL --connect-timeout 5 --max-time 60 -o "$BIN_DIR/$BIN" "$URL"
+          chmod +x "$BIN_DIR/$BIN" || true
+          echo "$BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Confirm sfw is on PATH (no socketdev/action involvement)
+        shell: bash
+        run: |
+          sfw --version
+          # Sanity-check: socketdev/action's env var must NOT be set
+          if [ -n "${SFW_JSON_REPORT_PATH:-}" ]; then
+            echo "::error::SFW_JSON_REPORT_PATH is set; socketdev/action contamination?"
+            exit 1
+          fi
+          echo "OK: clean environment, sfw will print block reports to stdout"
 
       - name: Run `sfw vp install` on the benign project
         shell: bash
