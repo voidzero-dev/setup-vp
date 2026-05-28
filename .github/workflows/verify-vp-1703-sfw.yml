@@ -56,7 +56,7 @@ jobs:
         # effect from socketdev/action. This isolates the vp+sfw TLS
         # interaction with nothing else in the way.
         run: |
-          SFW_VERSION=v1.10.0
+          SFW_VERSION=v1.11.0
           BIN_DIR="$RUNNER_TEMP/sfw-bin"
           mkdir -p "$BIN_DIR"
           case "${{ runner.os }}-${{ runner.arch }}" in
@@ -149,7 +149,7 @@ jobs:
       - name: Install sfw (musl asset)
         shell: bash
         run: |
-          SFW_VERSION=v1.10.0
+          SFW_VERSION=v1.11.0
           BIN_DIR="$RUNNER_TEMP/sfw-bin"
           mkdir -p "$BIN_DIR"
           ASSET=sfw-free-musl-linux-x86_64
