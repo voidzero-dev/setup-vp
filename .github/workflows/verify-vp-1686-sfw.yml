@@ -10,10 +10,15 @@ name: verify-vp-1686-sfw
 # (commit c8ae23e). Bypasses setup-vp's own bootstrap so the only thing
 # under test is the vp+sfw interaction.
 #
-# Trigger manually: `gh workflow run verify-vp-1686-sfw.yml`. Delete this
-# file once #1686 lands (or another build arrives that we want to test).
+# Triggers only on pushes that touch this file (paths filter) — so it runs
+# once when we add/update the workflow itself and stays quiet on every
+# other commit to the branch. Delete this file once #1686 lands (or
+# another build arrives that we want to test).
 
-on: workflow_dispatch
+on:
+  push:
+    paths:
+      - ".github/workflows/verify-vp-1686-sfw.yml"
 
 jobs:
   verify:
