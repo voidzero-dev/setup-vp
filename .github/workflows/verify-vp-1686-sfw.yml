@@ -1,0 +1,87 @@
+name: verify-vp-1686-sfw
+
+# One-off verification: does voidzero-dev/vite-plus#1686 (the centralized
+# HTTP client + proxy + custom-CA PR) actually fix the macOS/Windows
+# `sfw vp install` TLS handshake regression that gated us to Linux in
+# setup-vp#73?
+#
+# Uses the pkg-pr-new build from
+# https://github.com/voidzero-dev/vite-plus/pull/1686#issuecomment-4545059033
+# (commit c8ae23e). Bypasses setup-vp's own bootstrap so the only thing
+# under test is the vp+sfw interaction.
+#
+# Trigger manually: `gh workflow run verify-vp-1686-sfw.yml`. Delete this
+# file once #1686 lands (or another build arrives that we want to test).
+
+on: workflow_dispatch
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v6.0.0
+        with:
+          node-version: "22"
+
+      - name: Create test project with a real dependency
+        shell: bash
+        run: |
+          mkdir -p test-project
+          cd test-project
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+
+      - name: Install vp from pkg-pr-new (PR #1686 / c8ae23e)
+        shell: bash
+        run: |
+          npm i -g https://pkg.pr.new/voidzero-dev/vite-plus@1686
+          vp --version
+
+      - name: Install sfw via socketdev/action
+        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f
+        with:
+          mode: firewall-free
+
+      - name: Confirm sfw is on PATH
+        shell: bash
+        run: sfw --version
+
+      - name: Run `sfw vp install` on the benign project
+        shell: bash
+        working-directory: test-project
+        # The headline test. Pre-#1686, this fails on macOS/Windows with
+        # `tlsv1 alert unknown ca` because vp's reqwest doesn't honor
+        # HTTPS_PROXY and doesn't trust SSL_CERT_FILE. If #1686's client
+        # refactor is correct, this should pass on all three OSes now.
+        run: sfw vp install
+
+      - name: Verify the dependency landed (proves install actually ran)
+        shell: bash
+        working-directory: test-project
+        run: vp exec node -e "console.log(require('is-odd')(3))"
+
+      - name: Try the lodahs canary (should still BLOCK on all OSes)
+        shell: bash
+        working-directory: test-project
+        # If everything above worked, this is the proof that sfw isn't just
+        # passing traffic through unchanged — it's actually inspecting and
+        # blocking malware on macOS/Windows too.
+        run: |
+          set +e
+          OUTPUT=$(sfw vp install lodahs 2>&1)
+          CODE=$?
+          set -e
+          printf '%s\n' "$OUTPUT"
+          if [ "$CODE" -eq 0 ]; then
+            echo "::error::sfw failed to block lodahs on ${{ matrix.os }} — install exited 0"
+            exit 1
+          fi
+          if ! printf '%s' "$OUTPUT" | grep -qF -- "blocked npm package: name: lodahs"; then
+            echo "::error::sfw vp install exited $CODE but the lodahs block-line was not in the output on ${{ matrix.os }}"
+            exit 1
+          fi
+          echo "OK: sfw blocked lodahs on ${{ matrix.os }} (exit $CODE, block-line found)"
