@@ -120,3 +120,79 @@ jobs:
             exit 1
           fi
           echo "OK: sfw blocked lodahs on ${{ matrix.os }} (exit $CODE, block-line found)"
+
+  verify-alpine:
+    # Same flow as the matrix above, but inside an alpine:3.23 container so we
+    # exercise the musl asset (sfw-free-musl-linux-x86_64). vp's PR #1686 has
+    # to honor HTTPS_PROXY + SSL_CERT_FILE in the musl build the same way it
+    # does in the glibc build.
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.23
+    steps:
+      - name: Install Alpine dependencies (bash, curl, libstdc++ for sfw)
+        run: apk add --no-cache bash curl gcompat libstdc++ nodejs npm
+
+      - name: Create test project with a real dependency
+        shell: bash
+        run: |
+          mkdir -p test-project
+          cd test-project
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+
+      - name: Install vp from pkg-pr-new (PR #1686 / c8ae23e)
+        shell: bash
+        run: |
+          npm i -g https://pkg.pr.new/voidzero-dev/vite-plus@1686
+          vp --version
+
+      - name: Install sfw (musl asset)
+        shell: bash
+        run: |
+          SFW_VERSION=v1.10.0
+          BIN_DIR="$RUNNER_TEMP/sfw-bin"
+          mkdir -p "$BIN_DIR"
+          ASSET=sfw-free-musl-linux-x86_64
+          URL="https://github.com/SocketDev/sfw-free/releases/download/$SFW_VERSION/$ASSET"
+          echo "Downloading $URL"
+          curl -fsSL --connect-timeout 5 --max-time 60 -o "$BIN_DIR/sfw" "$URL"
+          chmod +x "$BIN_DIR/sfw"
+          echo "$BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Confirm sfw is on PATH (musl)
+        shell: bash
+        run: |
+          sfw --version
+          if [ -n "${SFW_JSON_REPORT_PATH:-}" ]; then
+            echo "::error::SFW_JSON_REPORT_PATH is set; clean-env invariant broken"
+            exit 1
+          fi
+
+      - name: Run `sfw vp install` on the benign project (musl)
+        shell: bash
+        working-directory: test-project
+        run: sfw vp install
+
+      - name: Verify the dependency landed (musl)
+        shell: bash
+        working-directory: test-project
+        run: vp exec node -e "console.log(require('is-odd')(3))"
+
+      - name: Try the lodahs canary (musl, should still BLOCK)
+        shell: bash
+        working-directory: test-project
+        run: |
+          set +e
+          OUTPUT=$(sfw vp install lodahs 2>&1)
+          CODE=$?
+          set -e
+          printf '%s\n' "$OUTPUT"
+          if [ "$CODE" -eq 0 ]; then
+            echo "::error::sfw failed to block lodahs on alpine — install exited 0"
+            exit 1
+          fi
+          if ! printf '%s' "$OUTPUT" | grep -qF -- "blocked npm package: name: lodahs"; then
+            echo "::error::sfw vp install exited $CODE but the lodahs block-line was not in the output on alpine"
+            exit 1
+          fi
+          echo "OK: sfw blocked lodahs on alpine (exit $CODE, block-line found)"
