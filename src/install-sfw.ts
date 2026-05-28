@@ -28,13 +28,17 @@ const PWSH_TIMEOUT_SEC = 60;
 // runner's arch (e.g., riscv64, ppc64 self-hosted Linux runners), so the
 // action degrades gracefully instead of throwing. Tracking + cleanup
 // checklist: https://github.com/voidzero-dev/setup-vp/issues/73
-export function isSfwSupported(): boolean {
-  if (process.platform !== "linux") return false;
+export function isSfwSupported(
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+  isMusl: boolean = isMuslLinux(),
+): boolean {
+  if (platform !== "linux") return false;
   // Defensive: `!!asset` keeps this correct even if `getSfwAssetName` is later
   // refactored to return `undefined`/`null` instead of throw. The try/catch
   // still covers the current throwing contract.
   try {
-    const asset = getSfwAssetName(process.platform, process.arch, isMuslLinux());
+    const asset = getSfwAssetName(platform, arch, isMusl);
     return !!asset;
   } catch {
     return false;
