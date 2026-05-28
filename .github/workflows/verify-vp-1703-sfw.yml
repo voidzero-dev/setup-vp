@@ -1,13 +1,13 @@
-name: verify-vp-1686-sfw
+name: verify-vp-1703-sfw
 
-# One-off verification: does voidzero-dev/vite-plus#1686 (the centralized
-# HTTP client + proxy + custom-CA PR) actually fix the macOS/Windows
-# `sfw vp install` TLS handshake regression that gated us to Linux in
-# setup-vp#73?
+# One-off verification: does voidzero-dev/vite-plus#1703 (the v0.1.23
+# release PR that incorporates #1686's centralized HTTP client + proxy +
+# custom-CA support) actually fix the macOS/Windows `sfw vp install` TLS
+# handshake regression that gated us to Linux in setup-vp#73?
 #
 # Uses the pkg-pr-new build from
-# https://github.com/voidzero-dev/vite-plus/pull/1686#issuecomment-4545059033
-# (commit c8ae23e). Bypasses setup-vp's own bootstrap so the only thing
+# https://github.com/voidzero-dev/vite-plus/pull/1703#issuecomment-4563899128
+# (commit d0b407c). Bypasses setup-vp's own bootstrap so the only thing
 # under test is the vp+sfw interaction. sfw is installed manually from
 # the same upstream URL setup-vp uses — NOT via socketdev/action — so
 # there is no SFW_JSON_REPORT_PATH side-effect on stdout output, and we
@@ -15,13 +15,13 @@ name: verify-vp-1686-sfw
 #
 # Triggers only on pushes that touch this file (paths filter) — so it runs
 # once when we add/update the workflow itself and stays quiet on every
-# other commit to the branch. Delete this file once #1686 lands (or
+# other commit to the branch. Delete this file once v0.1.23 ships (or
 # another build arrives that we want to test).
 
 on:
   push:
     paths:
-      - ".github/workflows/verify-vp-1686-sfw.yml"
+      - ".github/workflows/verify-vp-1703-sfw.yml"
 
 jobs:
   verify:
@@ -43,10 +43,10 @@ jobs:
           cd test-project
           echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
 
-      - name: Install vp from pkg-pr-new (PR #1686 / c8ae23e)
+      - name: Install vp from pkg-pr-new (PR #1703 / d0b407c, v0.1.23 release)
         shell: bash
         run: |
-          npm i -g https://pkg.pr.new/voidzero-dev/vite-plus@1686
+          npm i -g https://pkg.pr.new/voidzero-dev/vite-plus@1703
           vp --version
 
       - name: Install sfw (same URL setup-vp would use, no socketdev/action)
@@ -88,10 +88,10 @@ jobs:
       - name: Run `sfw vp install` on the benign project
         shell: bash
         working-directory: test-project
-        # The headline test. Pre-#1686, this fails on macOS/Windows with
-        # `tlsv1 alert unknown ca` because vp's reqwest doesn't honor
-        # HTTPS_PROXY and doesn't trust SSL_CERT_FILE. If #1686's client
-        # refactor is correct, this should pass on all three OSes now.
+        # The headline test. Pre-#1686, this failed on macOS/Windows with
+        # `tlsv1 alert unknown ca` because vp's reqwest didn't honor
+        # HTTPS_PROXY and didn't trust SSL_CERT_FILE. #1703 (v0.1.23) ships
+        # #1686's client refactor; this should pass on all three OSes now.
         run: sfw vp install
 
       - name: Verify the dependency landed (proves install actually ran)
@@ -123,9 +123,9 @@ jobs:
 
   verify-alpine:
     # Same flow as the matrix above, but inside an alpine:3.23 container so we
-    # exercise the musl asset (sfw-free-musl-linux-x86_64). vp's PR #1686 has
-    # to honor HTTPS_PROXY + SSL_CERT_FILE in the musl build the same way it
-    # does in the glibc build.
+    # exercise the musl asset (sfw-free-musl-linux-x86_64). vp's PR #1703
+    # (v0.1.23, incorporating #1686) has to honor HTTPS_PROXY + SSL_CERT_FILE
+    # in the musl build the same way it does in the glibc build.
     runs-on: ubuntu-latest
     container:
       image: alpine:3.23
@@ -140,10 +140,10 @@ jobs:
           cd test-project
           echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
 
-      - name: Install vp from pkg-pr-new (PR #1686 / c8ae23e)
+      - name: Install vp from pkg-pr-new (PR #1703 / d0b407c, v0.1.23 release)
         shell: bash
         run: |
-          npm i -g https://pkg.pr.new/voidzero-dev/vite-plus@1686
+          npm i -g https://pkg.pr.new/voidzero-dev/vite-plus@1703
           vp --version
 
       - name: Install sfw (musl asset)
