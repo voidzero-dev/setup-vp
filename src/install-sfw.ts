@@ -21,19 +21,18 @@ const INSTALL_RETRY_DELAY_MS = 2000;
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 60";
 const PWSH_TIMEOUT_SEC = 60;
 
-// sfw is temporarily only enabled on Linux: sfw's CA cert has an empty
-// Extended Key Usage extension that rustls (used by vp) rejects, so
-// `sfw vp install` fails the TLS handshake on macOS / Windows before sfw can
-// inspect anything. We also fall back when no sfw asset exists for the
-// runner's arch (e.g., riscv64, ppc64 self-hosted Linux runners), so the
-// action degrades gracefully instead of throwing. Tracking + cleanup
-// checklist: https://github.com/voidzero-dev/setup-vp/issues/73
+// sfw is supported wherever a published sfw asset exists for the runner's
+// platform + arch (+ libc on Linux). macOS / Windows work since vite-plus
+// v0.1.23, which honors HTTPS_PROXY and trusts SSL_CERT_FILE so vp's rustls
+// no longer rejects sfw's CA (see https://github.com/voidzero-dev/setup-vp/issues/73).
+// We still fall back when no sfw asset exists for the runner's arch (e.g.,
+// riscv64 / ppc64 self-hosted runners), so the action degrades gracefully
+// instead of throwing.
 export function isSfwSupported(
   platform: NodeJS.Platform = process.platform,
   arch: string = process.arch,
   isMusl: boolean = isMuslLinux(),
 ): boolean {
-  if (platform !== "linux") return false;
   // Defensive: `!!asset` keeps this correct even if `getSfwAssetName` is later
   // refactored to return `undefined`/`null` instead of throw. The try/catch
   // still covers the current throwing contract.
@@ -182,12 +181,11 @@ export function findSfwOnPath(): string | null {
 // wrapped with sfw. Centralizes all the cases and emits one log message per
 // branch so the chosen path is always visible.
 //
-// Order is important: the macOS/Windows platform gate fires BEFORE the
-// PATH-detection branch because the rustls TLS handshake failure (#73) is a
-// platform-wide property of vp's HTTP client — it doesn't matter how sfw got
-// installed; the handshake still fails. So even if a user composes
-// `socketdev/action@<sha>` on macOS/Windows (which would happily put sfw on
-// PATH), we still fall back to plain `vp install`.
+// macOS / Windows / Linux are all supported as of vite-plus v0.1.23 (older vp
+// versions hit a TLS handshake failure on macOS/Windows — see #73). If a user
+// pins vp < 0.1.23 on macOS/Windows with sfw enabled, `sfw vp install` will
+// fail the handshake; that's a documented requirement, not something we guard
+// against here.
 export async function setupSfw(inputs: Inputs): Promise<boolean> {
   if (!inputs.sfw) return false;
 
@@ -196,17 +194,8 @@ export async function setupSfw(inputs: Inputs): Promise<boolean> {
     return false;
   }
 
-  // Platform hard-gate. Linux-only until upstream #73 ships.
-  if (process.platform !== "linux") {
-    const env = `process.platform=${process.platform}, process.arch=${process.arch}`;
-    warning(
-      `sfw is temporarily not supported on macOS/Windows (${env}); falling back to plain \`vp install\` even if sfw is on PATH. Tracking: https://github.com/voidzero-dev/setup-vp/issues/73`,
-    );
-    return false;
-  }
-
-  // On Linux: prefer an externally-provided sfw — typically installed by a
-  // prior `socketdev/action@<sha>` step. That path lets users SHA-pin sfw via
+  // Prefer an externally-provided sfw — typically installed by a prior
+  // `socketdev/action@<sha>` step. That path lets users SHA-pin sfw via
   // Renovate against the upstream action repo, which is stricter than our
   // bundled releases/download URL.
   const existing = findSfwOnPath();
@@ -218,7 +207,7 @@ export async function setupSfw(inputs: Inputs): Promise<boolean> {
   if (!isSfwSupported()) {
     const env = `process.platform=${process.platform}, process.arch=${process.arch}, musl=${isMuslLinux()}`;
     warning(
-      `sfw has no published binary for this Linux runner's architecture (${env}) and none was found on PATH; falling back to plain \`vp install\`. To enable sfw on this arch, install a working sfw binary on PATH in an earlier step (e.g. via \`socketdev/action@<sha>\` or a custom install). Tracking: https://github.com/voidzero-dev/setup-vp/issues/73`,
+      `sfw has no published binary for this runner's platform/architecture (${env}) and none was found on PATH; falling back to plain \`vp install\`. To enable sfw here, install a working sfw binary on PATH in an earlier step (e.g. via \`socketdev/action@<sha>\` or a custom install).`,
     );
     return false;
   }

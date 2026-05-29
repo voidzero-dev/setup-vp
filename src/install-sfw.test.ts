@@ -99,28 +99,25 @@ describe("getSfwAssetName", () => {
 describe("isSfwSupported", () => {
   // Passes platform/arch/isMusl as explicit args so the test doesn't depend on
   // the runtime host (matters for self-hosted runners on unsupported archs).
-  it("returns false on non-Linux platforms regardless of arch / libc", () => {
-    expect(isSfwSupported("darwin", "arm64", false)).toBe(false);
-    expect(isSfwSupported("darwin", "x64", false)).toBe(false);
-    expect(isSfwSupported("win32", "arm64", false)).toBe(false);
-    expect(isSfwSupported("win32", "x64", false)).toBe(false);
-    // isMusl is irrelevant on non-Linux but must not flip the result
-    expect(isSfwSupported("darwin", "arm64", true)).toBe(false);
-    expect(isSfwSupported("win32", "x64", true)).toBe(false);
-  });
-
-  it("returns true on Linux for every supported arch + libc combo", () => {
+  it("returns true for every supported platform + arch combo", () => {
+    // macOS / Windows are supported as of vite-plus v0.1.23
+    expect(isSfwSupported("darwin", "arm64", false)).toBe(true);
+    expect(isSfwSupported("darwin", "x64", false)).toBe(true);
+    expect(isSfwSupported("win32", "arm64", false)).toBe(true);
+    expect(isSfwSupported("win32", "x64", false)).toBe(true);
+    // Linux, both libc flavours
     expect(isSfwSupported("linux", "x64", false)).toBe(true);
     expect(isSfwSupported("linux", "arm64", false)).toBe(true);
     expect(isSfwSupported("linux", "x64", true)).toBe(true);
     expect(isSfwSupported("linux", "arm64", true)).toBe(true);
   });
 
-  it("returns false on Linux when the arch has no published sfw asset", () => {
+  it("returns false when the platform/arch has no published sfw asset", () => {
     expect(isSfwSupported("linux", "ia32", false)).toBe(false);
     expect(isSfwSupported("linux", "ppc64", false)).toBe(false);
-    // Same for the musl flavour
     expect(isSfwSupported("linux", "ia32", true)).toBe(false);
+    expect(isSfwSupported("darwin", "ia32", false)).toBe(false);
+    expect(isSfwSupported("freebsd" as NodeJS.Platform, "x64", false)).toBe(false);
   });
 });
 
@@ -180,33 +177,33 @@ describe("setupSfw", () => {
     expect(warning).not.toHaveBeenCalled();
   });
 
-  it("returns false with a warning on macOS / Windows even when sfw is on PATH", async () => {
+  it("uses an existing sfw on PATH on macOS and skips the download", async () => {
+    // macOS is supported as of vp v0.1.23 — the PATH-detection branch now
+    // applies to all platforms, not just Linux.
     stubPlatform("darwin", "arm64");
-    // Even if findSfwOnPath would return something, the platform gate
-    // must fire first — set up execFileSync to "find" sfw and assert we
-    // still fall back.
     vi.mocked(execFileSync).mockReturnValue("/usr/local/bin/sfw\n");
-    expect(await setupSfw(makeInputs())).toBe(false);
-    expect(warning).toHaveBeenCalledWith(expect.stringContaining("not supported on macOS/Windows"));
-    expect(execFileSync).not.toHaveBeenCalled(); // platform gate beat PATH probe
-  });
-
-  it("uses an existing sfw on PATH and skips the download", async () => {
-    vi.mocked(execFileSync).mockReturnValue("/usr/bin/sfw\n");
     expect(await setupSfw(makeInputs())).toBe(true);
     expect(info).toHaveBeenCalledWith(expect.stringContaining("Using existing sfw on PATH"));
     expect(restoreCache).not.toHaveBeenCalled(); // installSfw never invoked
     expect(exec).not.toHaveBeenCalled();
   });
 
-  it("falls back with a warning on Linux + unsupported arch + no sfw on PATH", async () => {
+  it("uses an existing sfw on PATH on Linux and skips the download", async () => {
+    vi.mocked(execFileSync).mockReturnValue("/usr/bin/sfw\n");
+    expect(await setupSfw(makeInputs())).toBe(true);
+    expect(info).toHaveBeenCalledWith(expect.stringContaining("Using existing sfw on PATH"));
+    expect(restoreCache).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it("falls back with a warning on an unsupported arch + no sfw on PATH", async () => {
     stubPlatform("linux", "ia32");
     vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("not found");
     });
     expect(await setupSfw(makeInputs())).toBe(false);
     expect(warning).toHaveBeenCalledWith(
-      expect.stringContaining("no published binary for this Linux runner"),
+      expect.stringContaining("no published binary for this runner"),
     );
     expect(restoreCache).not.toHaveBeenCalled();
   });

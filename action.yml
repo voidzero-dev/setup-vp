@@ -15,7 +15,7 @@ inputs:
     required: false
     default: "true"
   sfw:
-    description: "Wrap `vp install` with Socket Firewall Free (sfw) to block malicious dependency fetches. Currently Linux-only: on macOS/Windows the action emits a warning and falls back to plain `vp install` (no sfw binary downloaded). Tracking: https://github.com/voidzero-dev/setup-vp/issues/73. See also https://docs.socket.dev/docs/socket-firewall-free."
+    description: "Wrap `vp install` with Socket Firewall Free (sfw) to block malicious dependency fetches. Works on Linux, macOS, and Windows (macOS/Windows require Vite+ v0.1.23+). See https://docs.socket.dev/docs/socket-firewall-free."
     required: false
     default: "false"
   node-version:

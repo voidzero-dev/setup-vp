@@ -138,7 +138,7 @@ steps:
 
 ### With Socket Firewall Free (sfw)
 
-Set `sfw: true` to wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free). The action downloads the matching `sfw` binary from the upstream [releases](https://github.com/SocketDev/sfw-free/releases) (auto-detected per OS/arch, with musl support on Alpine) and runs `sfw vp install …` so the underlying npm / pnpm / yarn fetches are inspected before packages are installed:
+Set `sfw: true` to wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free). The action downloads the matching `sfw` binary from the upstream [releases](https://github.com/SocketDev/sfw-free/releases) (auto-detected per OS/arch, with musl support on Alpine) and runs `sfw vp install …` so the underlying npm / pnpm / yarn fetches are inspected before packages are installed. Works on Linux, macOS, and Windows:
 
 ```yaml
 steps:
@@ -172,8 +172,8 @@ steps:
 
 In the action log you will see `Using existing sfw on PATH: …` when this composition is detected, vs. `Installing sfw from …` for the bundled-download path.
 
-> [!IMPORTANT]
-> **Linux-only for now.** `sfw` ships a self-signed CA whose certificate has an empty Extended Key Usage extension. Strict TLS stacks like rustls (used by `vp`) reject it as `UnknownIssuer`, so `vp install` fails the TLS handshake on macOS / Windows. To keep `sfw: true` safe to set unconditionally in cross-platform workflows, the action **falls back to plain `vp install` with a warning on non-Linux platforms** — it does not download the `sfw` binary there. The platform check will be relaxed once the upstream work tracked in [voidzero-dev/setup-vp#73](https://github.com/voidzero-dev/setup-vp/issues/73) lands.
+> [!NOTE]
+> **macOS / Windows require Vite+ v0.1.23 or newer.** Earlier `vp` releases didn't honor `HTTPS_PROXY` / `SSL_CERT_FILE`, so `sfw vp install` failed the TLS handshake on macOS / Windows (it always worked on Linux). The action's default `version: latest` satisfies this; if you pin an older `vp` and enable `sfw` on macOS / Windows, the install will fail the handshake. On a runner architecture with no published `sfw` binary (e.g. `riscv64`), the action logs a warning and falls back to plain `vp install`.
 
 ### Alpine Container
 
