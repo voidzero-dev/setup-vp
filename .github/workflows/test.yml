@@ -472,7 +472,9 @@ jobs:
     # true`. setup-vp should DETECT the pre-installed sfw on PATH (via
     # findSfwOnPath()) and SKIP its bundled download. We assert that by
     # checking $RUNNER_TEMP/sfw-bin/sfw[.exe] — the exact path
-    # installSfw() would have created — was NOT created.
+    # installSfw() would have created — was NOT created. We also assert the
+    # composed sfw actually BLOCKS a malicious package (lodahs), so this path
+    # is proven to enforce, not just to be wired up.
     # See README "Advanced: stricter supply chain via socketdev/action".
     runs-on: ubuntu-latest
     steps:
@@ -516,6 +518,31 @@ jobs:
       - name: Verify dependency installed under composed sfw
         working-directory: test-project
         run: vp exec node -e "console.log(require('is-odd')(3))"
+
+      - name: Assert composed sfw blocks malicious package (lodahs)
+        shell: bash
+        working-directory: test-project
+        # Proves the composition path actually enforces, not just that sfw is
+        # present. socketdev/action exports SFW_JSON_REPORT_PATH into the env,
+        # which makes sfw write its block report to JSON instead of stdout —
+        # we unset it here so the block-line goes to stdout, matching the
+        # marker check used by test-sfw-blocks-malicious.
+        run: |
+          unset SFW_JSON_REPORT_PATH
+          set +e
+          OUTPUT=$(sfw vp install lodahs 2>&1)
+          CODE=$?
+          set -e
+          printf '%s\n' "$OUTPUT"
+          if [ "$CODE" -eq 0 ]; then
+            echo "::error::composed sfw failed to block lodahs — install exited 0"
+            exit 1
+          fi
+          if ! printf '%s' "$OUTPUT" | grep -qF -- "blocked npm package: name: lodahs"; then
+            echo "::error::composed sfw vp install exited $CODE but the lodahs block-line was not in the output (canary delisted, network blip, or sfw output format changed)."
+            exit 1
+          fi
+          echo "OK: composed sfw blocked lodahs (exit $CODE, block-line found)"
 
   build:
     runs-on: ubuntu-latest
