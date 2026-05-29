@@ -6,6 +6,21 @@ on:
   pull_request:
     branches: [main]
   merge_group:
+  workflow_dispatch:
+    inputs:
+      pr_version:
+        description: "pkg.pr.new PR number or commit SHA to test an unreleased Vite+ build (e.g. 1569). Leave empty to test the latest published release."
+        required: false
+        default: ""
+
+# Push / PR / merge_group runs always test the latest published Vite+. A manual
+# workflow_dispatch can set pr_version to a PR number or commit SHA; the install
+# script picks it up via VP_PR_VERSION, which overrides VP_VERSION and pulls the
+# matching build from pkg.pr.new — so a new Vite+ release can be verified across
+# the whole matrix before it ships. The value is empty on every other event,
+# which the install script treats as "unset" and falls back to the latest release.
+env:
+  VP_PR_VERSION: ${{ github.event.inputs.pr_version }}
 
 jobs:
   test:
@@ -13,15 +28,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        version: [latest, alpha]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - name: Setup Vite+ (${{ matrix.version }})
+      - name: Setup Vite+
         uses: ./
         with:
-          version: ${{ matrix.version }}
           run-install: false
           cache: false
 
@@ -33,15 +46,13 @@ jobs:
       fail-fast: false
       matrix:
         node-version: ["lts", "22", "24"]
-        version: [latest, alpha]
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - name: Setup Vite+ (${{ matrix.version }}) with Node.js ${{ matrix.node-version }}
+      - name: Setup Vite+ with Node.js ${{ matrix.node-version }}
         uses: ./
         with:
-          version: ${{ matrix.version }}
           node-version: ${{ matrix.node-version }}
           run-install: false
           cache: false
@@ -59,10 +70,6 @@ jobs:
           fi
 
   test-cache-pnpm:
-    strategy:
-      fail-fast: false
-      matrix:
-        version: [latest, alpha]
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -74,11 +81,10 @@ jobs:
           echo '{"name":"test-project","private":true}' > package.json
           touch pnpm-lock.yaml
 
-      - name: Setup Vite+ (${{ matrix.version }}) with pnpm cache
+      - name: Setup Vite+ with pnpm cache
         uses: ./
         id: setup
         with:
-          version: ${{ matrix.version }}
           run-install: false
           cache: true
           cache-dependency-path: test-project/pnpm-lock.yaml
@@ -90,10 +96,6 @@ jobs:
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
   test-cache-npm:
-    strategy:
-      fail-fast: false
-      matrix:
-        version: [latest, alpha]
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -105,11 +107,10 @@ jobs:
           echo '{"name":"test-project","private":true}' > package.json
           echo '{"name":"test-project","lockfileVersion":3}' > package-lock.json
 
-      - name: Setup Vite+ (${{ matrix.version }}) with npm cache
+      - name: Setup Vite+ with npm cache
         uses: ./
         id: setup
         with:
-          version: ${{ matrix.version }}
           run-install: false
           cache: true
           cache-dependency-path: test-project/package-lock.json
@@ -121,10 +122,6 @@ jobs:
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
   test-cache-yarn:
-    strategy:
-      fail-fast: false
-      matrix:
-        version: [latest, alpha]
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -136,11 +133,10 @@ jobs:
           echo '{"name":"test-project","private":true}' > package.json
           touch yarn.lock
 
-      - name: Setup Vite+ (${{ matrix.version }}) with yarn cache
+      - name: Setup Vite+ with yarn cache
         uses: ./
         id: setup
         with:
-          version: ${{ matrix.version }}
           run-install: false
           cache: true
           cache-dependency-path: test-project/yarn.lock
@@ -155,7 +151,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [latest, alpha]
         lockfile: [bun.lock, bun.lockb]
     runs-on: ubuntu-latest
     steps:
@@ -168,11 +163,10 @@ jobs:
           echo '{"name":"test-project","private":true}' > package.json
           touch ${{ matrix.lockfile }}
 
-      - name: Setup Vite+ (${{ matrix.version }}) with bun cache (${{ matrix.lockfile }})
+      - name: Setup Vite+ with bun cache (${{ matrix.lockfile }})
         uses: ./
         id: setup
         with:
-          version: ${{ matrix.version }}
           run-install: false
           cache: true
           cache-dependency-path: test-project/${{ matrix.lockfile }}
@@ -188,15 +182,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        version: [latest, alpha]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - name: Setup Vite+ (${{ matrix.version }})
+      - name: Setup Vite+
         uses: ./
         with:
-          version: ${{ matrix.version }}
           run-install: false
           cache: false
 
@@ -208,7 +200,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        version: [latest, alpha]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -220,10 +211,9 @@ jobs:
           cd test-project
           echo '{"name":"test-project","private":true,"scripts":{"hello":"node -e \"console.log(1+1)\""}}' > package.json
 
-      - name: Setup Vite+ (${{ matrix.version }}) with install
+      - name: Setup Vite+ with install
         uses: ./
         with:
-          version: ${{ matrix.version }}
           run-install: |
             - cwd: test-project
           cache: false
@@ -237,18 +227,13 @@ jobs:
         run: vp run hello
 
   test-registry-url:
-    strategy:
-      fail-fast: false
-      matrix:
-        version: [latest, alpha]
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - name: Setup Vite+ (${{ matrix.version }}) with registry-url
+      - name: Setup Vite+ with registry-url
         uses: ./
         with:
-          version: ${{ matrix.version }}
           run-install: false
           cache: false
           registry-url: "https://npm.pkg.github.com"
@@ -266,10 +251,6 @@ jobs:
           echo "NODE_AUTH_TOKEN is set: ${NODE_AUTH_TOKEN:+yes}"
 
   test-alpine-container:
-    strategy:
-      fail-fast: false
-      matrix:
-        version: [latest, alpha]
     runs-on: ubuntu-latest
     container:
       image: alpine:3.23
@@ -279,10 +260,9 @@ jobs:
 
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - name: Setup Vite+ (${{ matrix.version }})
+      - name: Setup Vite+
         uses: ./
         with:
-          version: ${{ matrix.version }}
           run-install: false
           cache: false
 
@@ -298,9 +278,10 @@ jobs:
     # manager vp auto-detects via lockfile (pnpm/npm/yarn/bun); macOS / Windows
     # run pnpm only because the PM choice doesn't change the sfw wrap path —
     # those cells exist to prove the cross-platform sfw download + wrap works.
-    # vp version is left at the action default (`latest`) — sfw is decoupled
-    # from vp's release channel. Other test jobs (test-cache-*,
-    # test-node-version, etc.) still cover the alpha channel for vp itself.
+    # vp version follows the workflow default (`latest`, or the pr_version
+    # pkg.pr.new build on manual dispatch via VP_PR_VERSION) — sfw is decoupled
+    # from vp's release channel, so it just rides whatever vp the rest of the
+    # matrix is testing.
     strategy:
       fail-fast: false
       matrix:
@@ -365,11 +346,12 @@ jobs:
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
   test-sfw-alpine:
-    # vp version is left at the action default (`latest`) — sfw's musl asset
-    # selection is decoupled from vp's release channel.
-    # NOTE: if this job is later re-matrixed (alpha+latest, multiple alpine
-    # versions, etc.), restore `strategy: { fail-fast: false }` so a flake in
-    # one shard doesn't cancel the others.
+    # vp version follows the workflow default (`latest`, or a pr_version
+    # pkg.pr.new build on manual dispatch) — sfw's musl asset selection is
+    # decoupled from vp's release channel.
+    # NOTE: if this job is later re-matrixed (multiple vp builds, multiple
+    # alpine versions, etc.), restore `strategy: { fail-fast: false }` so a
+    # flake in one shard doesn't cancel the others.
     runs-on: ubuntu-latest
     container:
       image: alpine:3.23
@@ -408,8 +390,9 @@ jobs:
     # If this job ever stops blocking, either sfw is misconfigured or the
     # canary itself has been delisted — swap it for another Socket-flagged
     # package from https://socket.dev/blog/category/threat-research.
-    # vp version is left at the action default (`latest`) — sfw block behavior
-    # is decoupled from vp's release channel.
+    # vp version follows the workflow default (`latest`, or a pr_version
+    # pkg.pr.new build on manual dispatch) — sfw block behavior is decoupled
+    # from vp's release channel.
     # Runs on all three OSes: a fail-open regression in vp/sfw's proxy or CA
     # handling can be platform-specific (the #73 rustls cert-trust class of
     # bug was), so each OS needs its own block assertion — benign-install
@@ -546,6 +529,12 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    # This job verifies the action's own artifacts (dist/ committed and up to
+    # date, types, unit tests). Pin it to the latest published Vite+ even on a
+    # pr_version dispatch: a pre-release bundler could shift dist/ output and
+    # fail the "dist is up to date" diff for reasons unrelated to the change.
+    env:
+      VP_PR_VERSION: ""
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
