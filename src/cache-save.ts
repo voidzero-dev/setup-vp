@@ -33,7 +33,7 @@ export async function saveCache(): Promise<void> {
   try {
     const cacheId = await saveCacheAction(cachePaths, primaryKey);
     if (cacheId === -1) {
-      warning("Cache save failed or was skipped.");
+      info("Cache not saved (key already reserved by a concurrent job, or save was skipped).");
       return;
     }
     info(`Cache saved with key: ${primaryKey}`);
