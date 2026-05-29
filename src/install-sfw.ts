@@ -96,7 +96,6 @@ export async function installSfw(): Promise<void> {
   // accept a different version's binary as a fallback. All cache calls are
   // best-effort: any failure falls through to the download path.
   const cacheKey = `sfw-${SFW_VERSION}-${process.platform}-${process.arch}-${isMuslLinux() ? "musl" : "glibc"}`;
-  let cacheHit = false;
   try {
     const matchedKey = await restoreCache([binDir], cacheKey);
     if (matchedKey && existsSync(binPath)) {
@@ -105,7 +104,6 @@ export async function installSfw(): Promise<void> {
       }
       addPath(binDir);
       info(`sfw restored from cache: ${matchedKey}`);
-      cacheHit = true;
       return;
     }
   } catch (error) {
@@ -127,18 +125,16 @@ export async function installSfw(): Promise<void> {
         }
         addPath(binDir);
         info(`sfw installed at ${binPath}`);
-        // Save to cache for future runs. Skipped on cache-hit branch (return
-        // above). On a re-key collision @actions/cache throws
-        // ReserveCacheError — swallow it like any other cache failure.
-        if (!cacheHit) {
-          try {
-            await saveCache([binDir], cacheKey);
-            info(`sfw cached under key: ${cacheKey}`);
-          } catch (error) {
-            warning(
-              `sfw cache save failed (${error instanceof Error ? error.message : String(error)}); continuing.`,
-            );
-          }
+        // Save to cache for future runs. We only reach here on a cache miss
+        // (the hit branch returns above). On a re-key collision @actions/cache
+        // throws ReserveCacheError — swallow it like any other cache failure.
+        try {
+          await saveCache([binDir], cacheKey);
+          info(`sfw cached under key: ${cacheKey}`);
+        } catch (error) {
+          warning(
+            `sfw cache save failed (${error instanceof Error ? error.message : String(error)}); continuing.`,
+          );
         }
         return;
       }
