@@ -14,7 +14,7 @@ import type { Inputs } from "./types.js";
 // reproducibility. For stricter supply-chain hygiene, users can compose
 // `socketdev/action@<sha>` ahead of this action — see README "Advanced:
 // stricter supply chain via socketdev/action".
-const SFW_VERSION = "v1.11.0";
+const SFW_VERSION = "v1.12.0";
 const SFW_RELEASE_BASE = `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}`;
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
