@@ -253,7 +253,7 @@ jobs:
   test-alpine-container:
     runs-on: ubuntu-latest
     container:
-      image: alpine:3.23
+      image: alpine:3.24
     steps:
       - name: Install Alpine dependencies
         run: apk add --no-cache bash curl gcompat libstdc++
@@ -354,7 +354,7 @@ jobs:
     # flake in one shard doesn't cancel the others.
     runs-on: ubuntu-latest
     container:
-      image: alpine:3.23
+      image: alpine:3.24
     steps:
       - name: Install Alpine dependencies
         run: apk add --no-cache bash curl gcompat libstdc++
