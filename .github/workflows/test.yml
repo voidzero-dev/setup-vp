@@ -45,10 +45,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # NOTE: Node 20 is expected to FAIL. Vite+ requires Node
-        # ^22.18.0 || >=24.11.0, so `vp install` rejects Node 20 at its engine
-        # gate. This entry is kept red on purpose until Vite+ adds Node 20
-        # support; remove this note once it does.
         node-version: ["lts", "20", "22", "24"]
     runs-on: ubuntu-latest
     steps:
@@ -58,11 +54,11 @@ jobs:
         run: |
           mkdir -p test-project
           cd test-project
-          echo '{"name":"test-project","private":true}' > package.json
+          # Pin pnpm to v10. Vite+'s bundled pnpm 11 requires node:sqlite
+          # (Node >= 22.5) and crashes on Node 20; pnpm 10 still runs on Node 20.
+          echo '{"name":"test-project","private":true,"packageManager":"pnpm@10.34.3"}' > package.json
 
-      # Runs `vp env use <version>` then `vp install`. The install enforces
-      # Vite+'s Node engine range, so Node 20 throws here while supported
-      # versions install cleanly.
+      # Runs `vp env use <version>` then `vp install` in the test project.
       - name: Setup Vite+ with Node.js ${{ matrix.node-version }}
         uses: ./
         with:
