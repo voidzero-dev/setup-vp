@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["lts", "20", "22", "24"]
+        node-version: ["lts", "22", "24"]
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -68,6 +68,54 @@ jobs:
           if [ "${{ matrix.node-version }}" != "lts" ]; then
             echo "$ACTUAL" | grep -q "^v${{ matrix.node-version }}\." || (echo "Expected Node.js v${{ matrix.node-version }}.x but got $ACTUAL" && exit 1)
           fi
+
+  # Negative test: Vite+ requires Node.js ^22.18.0 || >=24.11.0, so Node 20 is
+  # unsupported. `vp env use 20` and `vp --version` both succeed (the engine gate
+  # is not enforced there), so a "happy path" matrix entry for 20 would pass
+  # vacuously. A real workload command like `vp install` is what enforces the
+  # gate, so this job pins that failure mode: vp install must reject Node 20 with
+  # a clear incompatibility error. Reproduces the rolldown CI failure and guards
+  # against a regression (Vite+ silently accepting Node 20, or changing the text).
+  test-node-20-incompatible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      # Installs Vite+ and selects Node 20 (both succeed). run-install is
+      # disabled here so the engine gate is exercised explicitly in the step
+      # below, where the output can be captured and asserted on.
+      - name: Setup Vite+ with Node.js 20
+        uses: ./
+        with:
+          node-version: "20"
+          run-install: false
+          cache: false
+
+      - name: Create test project
+        run: |
+          mkdir -p test-project
+          cd test-project
+          echo '{"name":"test-project","private":true}' > package.json
+
+      - name: Assert vp install rejects Node 20
+        shell: bash
+        working-directory: test-project
+        run: |
+          set +e
+          OUTPUT=$(vp install 2>&1)
+          CODE=$?
+          set -e
+          echo "$OUTPUT"
+          echo "vp install exit code: $CODE"
+          if [ "$CODE" -eq 0 ]; then
+            echo "::error::vp install unexpectedly succeeded on Node 20. Vite+ may now support Node 20 (check its engines range, currently ^22.18.0 || >=24.11.0). If so, delete this negative test and add 20 back to the test-node-version matrix."
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -qiF "is incompatible with Vite+ CLI"; then
+            echo "::error::vp install exited $CODE on Node 20 but without the expected incompatibility error. It likely failed for an unrelated reason, or Vite+ changed the engine-gate message. Update the marker grep if the message format changed."
+            exit 1
+          fi
+          echo "OK: vp install rejected Node 20 with the expected incompatibility error (exit $CODE)."
 
   test-cache-pnpm:
     runs-on: ubuntu-latest
