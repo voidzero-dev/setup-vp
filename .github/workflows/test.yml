@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["lts", "22", "24"]
+        node-version: ["lts", "20", "22", "24"]
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
