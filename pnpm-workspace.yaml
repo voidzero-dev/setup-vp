@@ -1,0 +1,7 @@
+# Exempts the Vite+ toolchain from vp's minimumReleaseAge supply-chain gate so a
+# freshly published vite-plus release isn't rejected by `vp install`.
+# Note: vp also treats the dir holding this file as a workspace root, so the CI
+# fixtures that run vp are created outside the repo (see .github/workflows/test.yml).
+minimumReleaseAgeExclude:
+  - vite-plus
+  - "@voidzero-dev/vite-plus-*"

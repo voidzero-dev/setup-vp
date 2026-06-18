@@ -50,13 +50,19 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      # Create the throwaway fixture under $RUNNER_TEMP, outside the repo. The
+      # repo commits a pnpm-workspace.yaml (for the release-age exclude), so a
+      # fixture inside the repo would be treated as part of this repo's
+      # workspace and `vp install`/`vp run` would resolve to the repo root.
+      # ${RUNNER_TEMP//\\//} normalizes Windows backslashes for bash.
       - name: Create test project
+        shell: bash
         run: |
-          mkdir -p test-project
-          cd test-project
+          DIR="${RUNNER_TEMP//\\//}/test-project"
+          mkdir -p "$DIR"
           # Pin pnpm to v10. Vite+'s bundled pnpm 11 requires node:sqlite
           # (Node >= 22.5) and crashes on Node 20; pnpm 10 still runs on Node 20.
-          echo '{"name":"test-project","private":true,"packageManager":"pnpm@10.34.3"}' > package.json
+          echo '{"name":"test-project","private":true,"packageManager":"pnpm@10.34.3"}' > "$DIR/package.json"
 
       # Runs `vp env use <version>` then `vp install` in the test project.
       - name: Setup Vite+ with Node.js ${{ matrix.node-version }}
@@ -64,7 +70,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           run-install: |
-            - cwd: test-project
+            - cwd: ${{ runner.temp }}/test-project
           cache: false
 
       - name: Verify installation
@@ -214,26 +220,28 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      # Fixture lives under $RUNNER_TEMP (outside the repo) so the committed
+      # pnpm-workspace.yaml doesn't make vp resolve it to the repo root.
       - name: Create test project
         shell: bash
         run: |
-          mkdir -p test-project
-          cd test-project
-          echo '{"name":"test-project","private":true,"scripts":{"hello":"node -e \"console.log(1+1)\""}}' > package.json
+          DIR="${RUNNER_TEMP//\\//}/test-project"
+          mkdir -p "$DIR"
+          echo '{"name":"test-project","private":true,"scripts":{"hello":"node -e \"console.log(1+1)\""}}' > "$DIR/package.json"
 
       - name: Setup Vite+ with install
         uses: ./
         with:
           run-install: |
-            - cwd: test-project
+            - cwd: ${{ runner.temp }}/test-project
           cache: false
 
       - name: Verify vp exec in project
-        working-directory: test-project
+        working-directory: ${{ runner.temp }}/test-project
         run: vp exec node -e "console.log('vp exec in project works')"
 
       - name: Verify vp run in project
-        working-directory: test-project
+        working-directory: ${{ runner.temp }}/test-project
         run: vp run hello
 
   test-registry-url:
@@ -309,6 +317,8 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      # Fixture lives under $RUNNER_TEMP (outside the repo) so the committed
+      # pnpm-workspace.yaml doesn't make vp resolve it to the repo root.
       - name: Create test project for ${{ matrix.package-manager }}
         shell: bash
         run: |
@@ -319,10 +329,10 @@ jobs:
             bun)  LOCKFILE=bun.lock; CONTENTS='' ;;
             *)    echo "Unsupported package-manager: ${{ matrix.package-manager }}" >&2; exit 1 ;;
           esac
-          mkdir -p test-project
-          cd test-project
-          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
-          printf '%s' "$CONTENTS" > "$LOCKFILE"
+          DIR="${RUNNER_TEMP//\\//}/test-project"
+          mkdir -p "$DIR"
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > "$DIR/package.json"
+          printf '%s' "$CONTENTS" > "$DIR/$LOCKFILE"
 
       - name: Configure Yarn .yarnrc.yml (Linux + yarn only)
         if: matrix.package-manager == 'yarn' && runner.os == 'Linux'
@@ -338,21 +348,21 @@ jobs:
           {
             echo "nodeLinker: node-modules"
             echo "enableImmutableInstalls: false"
-          } > test-project/.yarnrc.yml
+          } > "${RUNNER_TEMP//\\//}/test-project/.yarnrc.yml"
 
       - name: Setup Vite+ with sfw + ${{ matrix.package-manager }}
         uses: ./
         with:
           sfw: true
           run-install: |
-            - cwd: test-project
+            - cwd: ${{ runner.temp }}/test-project
           cache: false
 
       - name: Verify sfw is on PATH
         run: sfw --version
 
       - name: Verify dependency installed via ${{ matrix.package-manager }}
-        working-directory: test-project
+        working-directory: ${{ runner.temp }}/test-project
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
   test-sfw-alpine:
@@ -371,25 +381,31 @@ jobs:
 
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      # Fixture lives outside the repo so the committed pnpm-workspace.yaml
+      # doesn't make vp resolve it to the repo root. This is a container job:
+      # ${{ runner.temp }} would expand to the HOST path, but the shell and the
+      # action both run inside the container (where RUNNER_TEMP maps to /__w/_temp),
+      # so a host path passed via YAML wouldn't exist in the container. Use a
+      # literal in-container path (/tmp, outside the /__w workspace mount) that
+      # needs no host<->container translation.
       - name: Create test project with a real dependency
         run: |
-          mkdir -p test-project
-          cd test-project
-          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+          mkdir -p /tmp/test-project
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > /tmp/test-project/package.json
 
       - name: Setup Vite+ with sfw (musl)
         uses: ./
         with:
           sfw: true
           run-install: |
-            - cwd: test-project
+            - cwd: /tmp/test-project
           cache: false
 
       - name: Verify sfw is on PATH (musl)
         run: sfw --version
 
       - name: Verify dependency installed under sfw (musl)
-        working-directory: test-project
+        working-directory: /tmp/test-project
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
   test-sfw-blocks-malicious:
@@ -415,24 +431,26 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      # Fixture lives under $RUNNER_TEMP (outside the repo) so the committed
+      # pnpm-workspace.yaml doesn't make vp resolve it to the repo root.
       - name: Create test project with a benign dependency
         shell: bash
         run: |
-          mkdir -p test-project
-          cd test-project
-          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+          DIR="${RUNNER_TEMP//\\//}/test-project"
+          mkdir -p "$DIR"
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > "$DIR/package.json"
 
       - name: Setup Vite+ with sfw and install benign dep
         uses: ./
         with:
           sfw: true
           run-install: |
-            - cwd: test-project
+            - cwd: ${{ runner.temp }}/test-project
           cache: false
 
       - name: Assert sfw blocks malicious package (lodahs typosquat of lodash)
         shell: bash
-        working-directory: test-project
+        working-directory: ${{ runner.temp }}/test-project
         # Exit code alone isn't sufficient: a non-zero exit from npm 404,
         # network blip, or vp crash would also produce a false positive. We
         # also require the literal sfw block-line for lodahs in the combined
@@ -473,12 +491,14 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
+      # Fixture lives under $RUNNER_TEMP (outside the repo) so the committed
+      # pnpm-workspace.yaml doesn't make vp resolve it to the repo root.
       - name: Create test project with a real dependency
         shell: bash
         run: |
-          mkdir -p test-project
-          cd test-project
-          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > package.json
+          DIR="${RUNNER_TEMP//\\//}/test-project"
+          mkdir -p "$DIR"
+          echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > "$DIR/package.json"
 
       - name: Install sfw via socketdev/action
         uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f
@@ -491,7 +511,7 @@ jobs:
         with:
           sfw: true
           run-install: |
-            - cwd: test-project
+            - cwd: ${{ runner.temp }}/test-project
           cache: false
 
       - name: Verify setup-vp used the composed sfw (no bundled download)
@@ -509,12 +529,12 @@ jobs:
           echo "OK: setup-vp used the pre-installed sfw (no bundled download at \$RUNNER_TEMP/sfw-bin/)"
 
       - name: Verify dependency installed under composed sfw
-        working-directory: test-project
+        working-directory: ${{ runner.temp }}/test-project
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
       - name: Assert composed sfw blocks malicious package (lodahs)
         shell: bash
-        working-directory: test-project
+        working-directory: ${{ runner.temp }}/test-project
         # Proves the composition path actually enforces, not just that sfw is
         # present. socketdev/action exports SFW_JSON_REPORT_PATH into the env,
         # which makes sfw write its block report to JSON instead of stdout —
