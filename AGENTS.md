@@ -41,7 +41,7 @@ The action has main and post execution phases. Both are served by `src/index.ts`
   1. Parse and validate inputs.
   2. Install Vite+ globally via official bash/PowerShell install scripts.
   3. Set up Node.js with `vp env use` when requested.
-  4. Configure registry auth when `registry-url`, `scope`, or repo `.npmrc` requires it.
+  4. Configure registry auth from `registry-url`, or propagate auth from the project `.npmrc`.
   5. Restore dependency cache when enabled.
   6. Run `vp install` when requested, optionally wrapped with `sfw`.
 
@@ -63,7 +63,7 @@ The action has main and post execution phases. Both are served by `src/index.ts`
 
 ### Lock File Detection
 
-Auto-detects package manager from lock files: `pnpm-lock.yaml`, `bun.lockb`, `bun.lock`, `package-lock.json`, `yarn.lock`.
+Auto-detects package manager from lock files: `pnpm-lock.yaml`, `bun.lockb`, `bun.lock`, `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`.
 
 ## Testing
 
