@@ -142,6 +142,8 @@ function makeInputs(overrides: Partial<Inputs> = {}): Inputs {
     workingDirectory: undefined,
     runInstall: [{}],
     sfw: true,
+    installPnpm: false,
+    pnpmVersion: undefined,
     cache: false,
     cacheDependencyPath: undefined,
     registryUrl: undefined,

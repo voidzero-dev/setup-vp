@@ -18,6 +18,14 @@ inputs:
     description: "Wrap `vp install` with Socket Firewall Free (sfw) to block malicious dependency fetches. Works on Linux, macOS, and Windows (macOS/Windows require Vite+ v0.1.23+). See https://docs.socket.dev/docs/socket-firewall-free."
     required: false
     default: "false"
+  install-pnpm:
+    description: "Install pnpm globally with npm after Node.js setup"
+    required: false
+    default: "false"
+  pnpm-version:
+    description: "Version of pnpm to install globally when install-pnpm is true"
+    required: false
+    default: "latest"
   node-version:
     description: "Node.js version to install via `vp env use`. Defaults to Node.js latest LTS version."
     required: false

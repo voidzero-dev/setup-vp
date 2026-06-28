@@ -66,6 +66,18 @@ steps:
       run-install: true
 ```
 
+### With Global pnpm
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  - uses: voidzero-dev/setup-vp@v1
+    with:
+      node-version: "lts"
+      install-pnpm: true
+      pnpm-version: "10.34.3"
+```
+
 ### Specific Version
 
 ```yaml
@@ -219,6 +231,8 @@ jobs:
 | `working-directory`     | Project directory used for relative paths, lockfile auto-detection, environment checks, and default install | No       | Workspace root |
 | `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                              | No       | `true`         |
 | `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)    | No       | `false`        |
+| `install-pnpm`          | Install pnpm globally with npm after Node.js setup                                                          | No       | `false`        |
+| `pnpm-version`          | Version of pnpm to install globally when `install-pnpm` is true                                             | No       | `latest`       |
 | `cache`                 | Enable caching of project dependencies                                                                      | No       | `false`        |
 | `cache-dependency-path` | Path to lock file for cache key generation                                                                  | No       | Auto-detected  |
 | `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`   | No       |                |

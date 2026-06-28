@@ -3,6 +3,7 @@ import { exec, getExecOutput } from "@actions/exec";
 import { getInputs } from "./inputs.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { setupSfw } from "./install-sfw.js";
+import { installPnpm } from "./install-pnpm.js";
 import { runViteInstall } from "./run-install.js";
 import { restoreCache } from "./cache-restore.js";
 import { saveCache } from "./cache-save.js";
@@ -32,25 +33,28 @@ async function runMain(inputs: Inputs): Promise<void> {
     await exec("vp", ["env", "use", nodeVersion]);
   }
 
-  // Step 4: Configure registry authentication
+  // Step 4: Install pnpm globally if requested
+  await installPnpm(inputs);
+
+  // Step 5: Configure registry authentication
   if (inputs.registryUrl) {
     configAuthentication(inputs.registryUrl, inputs.scope);
   } else {
     propagateProjectNpmrcAuth(projectDir);
   }
 
-  // Step 5: Restore cache if enabled
+  // Step 6: Restore cache if enabled
   if (inputs.cache) {
     await restoreCache(inputs);
   }
 
-  // Step 6: Install Socket Firewall Free if requested (must run before vp install).
+  // Step 7: Install Socket Firewall Free if requested (must run before vp install).
   // setupSfw centralizes all the decision branches: run-install disabled, sfw
   // already on PATH (e.g. via socketdev/action@<sha>), supported platform
   // (downloads our pinned binary), unsupported platform (falls back).
   const effectiveSfw = await setupSfw(inputs);
 
-  // Step 7: Run vp install if requested
+  // Step 8: Run vp install if requested
   if (inputs.runInstall.length > 0) {
     await runViteInstall({ ...inputs, sfw: effectiveSfw });
   }

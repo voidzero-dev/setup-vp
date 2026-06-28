@@ -30,8 +30,12 @@ describe("getInputs", () => {
       workingDirectory: undefined,
       runInstall: [],
       sfw: false,
+      installPnpm: false,
+      pnpmVersion: undefined,
       cache: false,
       cacheDependencyPath: undefined,
+      registryUrl: undefined,
+      scope: undefined,
     });
   });
 
@@ -117,6 +121,30 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs.sfw).toBe(true);
+  });
+
+  it("should parse install-pnpm input", () => {
+    vi.mocked(getInput).mockReturnValue("");
+    vi.mocked(getBooleanInput).mockImplementation((name) => {
+      if (name === "install-pnpm") return true;
+      return false;
+    });
+
+    const inputs = getInputs();
+
+    expect(inputs.installPnpm).toBe(true);
+  });
+
+  it("should parse pnpm-version input", () => {
+    vi.mocked(getInput).mockImplementation((name) => {
+      if (name === "pnpm-version") return "10.34.3";
+      return "";
+    });
+    vi.mocked(getBooleanInput).mockReturnValue(false);
+
+    const inputs = getInputs();
+
+    expect(inputs.pnpmVersion).toBe("10.34.3");
   });
 
   it("should parse node-version-file input", () => {

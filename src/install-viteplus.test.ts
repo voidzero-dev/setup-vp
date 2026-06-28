@@ -25,6 +25,8 @@ const baseInputs: Inputs = {
   workingDirectory: undefined,
   runInstall: [],
   sfw: false,
+  installPnpm: false,
+  pnpmVersion: undefined,
   cache: false,
   cacheDependencyPath: undefined,
   registryUrl: undefined,
