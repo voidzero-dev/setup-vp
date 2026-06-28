@@ -10,6 +10,9 @@ inputs:
     description: "Version of Vite+ to install"
     required: false
     default: "latest"
+  version-file:
+    description: "Path to package.json containing the vite-plus dependency version. Overrides version when specified."
+    required: false
   run-install:
     description: "Run `vp install` after setup. Accepts boolean or YAML object with cwd/args."
     required: false

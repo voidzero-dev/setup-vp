@@ -7,6 +7,7 @@ import { RunInstallInputSchema } from "./types.js";
 export function getInputs(): Inputs {
   return {
     version: getInput("version") || "latest",
+    versionFile: getInput("version-file") || undefined,
     nodeVersion: getInput("node-version") || undefined,
     nodeVersionFile: getInput("node-version-file") || undefined,
     workingDirectory: getInput("working-directory") || undefined,

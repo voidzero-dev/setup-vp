@@ -78,6 +78,22 @@ steps:
       cache: true
 ```
 
+### Version From package.json
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  - uses: voidzero-dev/setup-vp@v1
+    with:
+      version-file: package.json
+      node-version: "lts"
+      cache: true
+```
+
+When `package.json` uses a pnpm catalog entry such as
+`"vite-plus": "catalog:"` or `"vite-plus": "catalog:ci"`, the action resolves
+the version from `pnpm-workspace.yaml`.
+
 ### Advanced Run Install
 
 ```yaml
@@ -214,6 +230,7 @@ jobs:
 | Input                   | Description                                                                                                 | Required | Default        |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------- | -------- | -------------- |
 | `version`               | Version of Vite+ to install                                                                                 | No       | `latest`       |
+| `version-file`          | Path to `package.json` containing the `vite-plus` dependency version. Overrides `version` when specified    | No       |                |
 | `node-version`          | Node.js version to install via `vp env use`                                                                 | No       | Latest LTS     |
 | `node-version-file`     | Path to file containing Node.js version (`.nvmrc`, `.node-version`, `.tool-versions`, `package.json`)       | No       |                |
 | `working-directory`     | Project directory used for relative paths, lockfile auto-detection, environment checks, and default install | No       | Workspace root |
@@ -224,7 +241,7 @@ jobs:
 | `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`   | No       |                |
 | `scope`                 | Optional scope for scoped registries. Falls back to repo owner for GitHub Packages                          | No       |                |
 
-When `working-directory` is set, relative `run-install.cwd`, `node-version-file`, and `cache-dependency-path` values are resolved from that directory.
+When `working-directory` is set, relative `version-file`, `run-install.cwd`, `node-version-file`, and `cache-dependency-path` values are resolved from that directory.
 
 ## Outputs
 

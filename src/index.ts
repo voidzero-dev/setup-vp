@@ -11,11 +11,15 @@ import type { Inputs } from "./types.js";
 import { resolveNodeVersionFile } from "./node-version-file.js";
 import { configAuthentication, propagateProjectNpmrcAuth } from "./auth.js";
 import { getConfiguredProjectDir } from "./utils.js";
+import { resolveVitePlusVersionFile } from "./viteplus-version-file.js";
 
 async function runMain(inputs: Inputs): Promise<void> {
   // Mark that post action should run
   saveState(State.IsPost, "true");
   const projectDir = getConfiguredProjectDir(inputs);
+  const resolvedInputs = inputs.versionFile
+    ? { ...inputs, version: resolveVitePlusVersionFile(inputs.versionFile, projectDir) }
+    : inputs;
 
   // Step 1: Resolve Node.js version (needed for cache key)
   let nodeVersion = inputs.nodeVersion;
@@ -24,7 +28,7 @@ async function runMain(inputs: Inputs): Promise<void> {
   }
 
   // Step 2: Install Vite+
-  await installVitePlus(inputs);
+  await installVitePlus(resolvedInputs);
 
   // Step 3: Set up Node.js version if specified
   if (nodeVersion) {
@@ -41,18 +45,18 @@ async function runMain(inputs: Inputs): Promise<void> {
 
   // Step 5: Restore cache if enabled
   if (inputs.cache) {
-    await restoreCache(inputs);
+    await restoreCache(resolvedInputs);
   }
 
   // Step 6: Install Socket Firewall Free if requested (must run before vp install).
   // setupSfw centralizes all the decision branches: run-install disabled, sfw
   // already on PATH (e.g. via socketdev/action@<sha>), supported platform
   // (downloads our pinned binary), unsupported platform (falls back).
-  const effectiveSfw = await setupSfw(inputs);
+  const effectiveSfw = await setupSfw(resolvedInputs);
 
   // Step 7: Run vp install if requested
   if (inputs.runInstall.length > 0) {
-    await runViteInstall({ ...inputs, sfw: effectiveSfw });
+    await runViteInstall({ ...resolvedInputs, sfw: effectiveSfw });
   }
 
   // Print version info at the end
