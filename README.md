@@ -21,6 +21,23 @@ steps:
   - uses: voidzero-dev/setup-vp@v1
 ```
 
+### GitLab CI/CD
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+
+build:
+  extends: .setup-vp
+  script:
+    - vp run build
+```
+
+The GitLab template installs Vite+, supports dependency caching, and runs
+`vp install` by default. Override variables such as `VP_VERSION`,
+`NODE_VERSION`, `VP_WORKING_DIRECTORY`, `VP_RUN_INSTALL`, and
+`VP_INSTALL_ARGS` from your job when needed.
+
 ### With Node.js Version
 
 ```yaml

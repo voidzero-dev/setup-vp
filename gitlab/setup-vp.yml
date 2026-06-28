@@ -1,0 +1,57 @@
+# Reusable GitLab CI/CD template for Vite+.
+#
+# Usage:
+#   include:
+#     - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+#
+#   build:
+#     extends: .setup-vp
+#     script:
+#       - vp run build
+
+.setup-vp:
+  image: node:24-bookworm
+  variables:
+    VP_VERSION: "latest"
+    VP_NODE_MANAGER: "yes"
+    VP_WORKING_DIRECTORY: "."
+    VP_RUN_INSTALL: "true"
+    VP_INSTALL_ARGS: ""
+    VP_HOME: "$CI_PROJECT_DIR/.vite-plus"
+    COREPACK_HOME: "$CI_PROJECT_DIR/.corepack"
+    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.npm"
+    NPM_CONFIG_STORE_DIR: "$CI_PROJECT_DIR/.pnpm-store"
+    PNPM_HOME: "$CI_PROJECT_DIR/.pnpm-home"
+    PNPM_STORE_DIR: "$CI_PROJECT_DIR/.pnpm-store"
+    YARN_CACHE_FOLDER: "$CI_PROJECT_DIR/.yarn/cache"
+    BUN_INSTALL_CACHE_DIR: "$CI_PROJECT_DIR/.bun/install/cache"
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+        - package-lock.json
+        - npm-shrinkwrap.json
+        - yarn.lock
+        - bun.lock
+        - bun.lockb
+      prefix: "setup-vp-$CI_JOB_IMAGE"
+    paths:
+      - .vite-plus/
+      - .corepack/
+      - .npm/
+      - .pnpm-home/
+      - .pnpm-store/
+      - .yarn/cache/
+      - .bun/install/cache/
+    policy: pull-push
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends ca-certificates curl
+    - export PATH="$VP_HOME/bin:$PNPM_HOME:$PATH"
+    - export VP_VERSION="${VP_VERSION:-latest}"
+    - export VITE_PLUS_VERSION="$VP_VERSION"
+    - mkdir -p "$VP_HOME" "$COREPACK_HOME" "$PNPM_HOME" "$NPM_CONFIG_CACHE" "$PNPM_STORE_DIR" "$YARN_CACHE_FOLDER" "$BUN_INSTALL_CACHE_DIR"
+    - curl -fsSL https://viteplus.dev/install.sh | bash
+    - if [ -n "${NODE_VERSION:-}" ]; then vp env use "$NODE_VERSION"; fi
+    - corepack enable || true
+    - cd "$VP_WORKING_DIRECTORY"
+    - if [ "$VP_RUN_INSTALL" = "true" ]; then vp install $VP_INSTALL_ARGS; fi
