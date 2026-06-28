@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [main]
   merge_group:
+  schedule:
+    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       pr_version:
