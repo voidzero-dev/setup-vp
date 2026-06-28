@@ -10,7 +10,7 @@ import { State, Outputs } from "./types.js";
 import type { Inputs } from "./types.js";
 import { resolveNodeVersionFile } from "./node-version-file.js";
 import { configAuthentication, propagateProjectNpmrcAuth } from "./auth.js";
-import { getConfiguredProjectDir } from "./utils.js";
+import { getConfiguredProjectDir, EMPTY_STDIN } from "./utils.js";
 
 async function runMain(inputs: Inputs): Promise<void> {
   // Mark that post action should run
@@ -29,7 +29,7 @@ async function runMain(inputs: Inputs): Promise<void> {
   // Step 3: Set up Node.js version if specified
   if (nodeVersion) {
     info(`Setting up Node.js ${nodeVersion} via vp env use...`);
-    await exec("vp", ["env", "use", nodeVersion]);
+    await exec("vp", ["env", "use", nodeVersion], { input: EMPTY_STDIN });
   }
 
   // Step 4: Configure registry authentication
@@ -61,7 +61,11 @@ async function runMain(inputs: Inputs): Promise<void> {
 
 async function printViteVersion(cwd: string): Promise<void> {
   try {
-    const result = await getExecOutput("vp", ["--version"], { cwd, silent: true });
+    const result = await getExecOutput("vp", ["--version"], {
+      cwd,
+      silent: true,
+      input: EMPTY_STDIN,
+    });
     const versionOutput = result.stdout.trim();
     info(versionOutput);
 

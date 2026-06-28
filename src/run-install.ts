@@ -1,7 +1,7 @@
 import { startGroup, endGroup, setFailed, info, error as logError } from "@actions/core";
 import { getExecOutput } from "@actions/exec";
 import type { Inputs } from "./types.js";
-import { getConfiguredProjectDir, getInstallCwd } from "./utils.js";
+import { getConfiguredProjectDir, getInstallCwd, EMPTY_STDIN } from "./utils.js";
 
 const MAX_ERROR_TAIL = 4000;
 
@@ -31,6 +31,9 @@ export async function runViteInstall(inputs: Inputs): Promise<void> {
       const { exitCode, stdout, stderr } = await getExecOutput(cmd, args, {
         cwd,
         ignoreReturnCode: true,
+        // Close stdin (EOF) so the package-manager PowerShell wrappers Vite+
+        // spawns on Windows do not block on an open stdin pipe. See EMPTY_STDIN.
+        input: EMPTY_STDIN,
       });
       endGroup();
 

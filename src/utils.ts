@@ -7,6 +7,23 @@ import type { Inputs } from "./types.js";
 import { LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
 
+/**
+ * Empty stdin payload (EOF) for child processes we spawn.
+ *
+ * On Windows runners stdin is not a TTY. Vite+ routes the package-manager
+ * `.cmd` shims (pnpm/npm/yarn) through PowerShell, whose `.ps1` wrappers
+ * introspect stdin (`$MyInvocation.ExpectingInput`) and block forever when the
+ * child's stdin pipe is left open and empty, hanging the job for hours until
+ * GitHub cancels it. `@actions/exec` leaves the child's stdin open unless
+ * `input` is set, so we pass an empty buffer to send EOF immediately.
+ *
+ * A `Buffer` (not `""`, which is falsy) is required: `@actions/exec` only calls
+ * `cp.stdin.end(input)` when `input` is truthy.
+ *
+ * See https://github.com/voidzero-dev/setup-vp/issues/90
+ */
+export const EMPTY_STDIN = Buffer.alloc(0);
+
 export function getVitePlusHome(): string {
   const home = process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
   return join(home || homedir(), ".vite-plus");
