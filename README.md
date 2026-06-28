@@ -31,6 +31,23 @@ steps:
       node-version: "lts"
 ```
 
+### Runtime Only
+
+Set `run-install: false` when a workflow only needs `vp` and the requested
+Node.js runtime, or when you want to run installation commands yourself. This
+keeps setup-vp from running `vp install` in the workspace and avoids creating
+project files in repositories that do not have a package manifest at that path.
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  - uses: voidzero-dev/setup-vp@v1
+    with:
+      working-directory: docs
+      node-version: "lts"
+      run-install: false
+```
+
 ### With Node.js Version File
 
 ```yaml
