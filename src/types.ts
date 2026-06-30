@@ -1,9 +1,9 @@
-import { z } from "zod";
+import { z } from "zod/mini";
 
 // Run install configuration schema
 export const RunInstallSchema = z.object({
-  cwd: z.string().optional(),
-  args: z.array(z.string()).optional(),
+  cwd: z.optional(z.string()),
+  args: z.optional(z.array(z.string())),
 });
 
 export const RunInstallInputSchema = z.union([

@@ -1,6 +1,6 @@
 import { getInput, getBooleanInput } from "@actions/core";
 import { parse as parseYaml } from "yaml";
-import { z } from "zod";
+import { z } from "zod/mini";
 import type { Inputs, RunInstall } from "./types.js";
 import { RunInstallInputSchema } from "./types.js";
 
@@ -39,7 +39,7 @@ function parseRunInstall(input: string): RunInstall[] {
     if (Array.isArray(result)) return result;
     return [result];
   } catch (error) {
-    if (error instanceof z.ZodError) {
+    if (error instanceof z.core.$ZodError) {
       throw new Error(
         `Invalid run-install input: ${error.issues.map((e) => e.message).join(", ")}`,
       );
