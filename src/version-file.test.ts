@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolveVitePlusVersionFile } from "./version-file.js";
 
 vi.mock("@actions/core", () => ({
@@ -8,12 +8,12 @@ vi.mock("@actions/core", () => ({
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
-  existsSync: vi.fn(),
 }));
 
 /**
- * Back the mocked fs with a simple path -> content map so both package.json and
- * pnpm-workspace.yaml reads (and the upward existsSync walk) resolve correctly.
+ * Back the mocked fs with a simple path -> content map. Resolution reads files
+ * directly and treats a read failure as "missing", so the walk resolves against
+ * this map with no separate existence check.
  */
 function mockFiles(files: Record<string, string>): void {
   vi.mocked(readFileSync).mockImplementation((path) => {
@@ -23,7 +23,6 @@ function mockFiles(files: Record<string, string>): void {
     }
     return content;
   });
-  vi.mocked(existsSync).mockImplementation((path) => files[path as string] !== undefined);
 }
 
 describe("resolveVitePlusVersionFile", () => {
@@ -137,6 +136,39 @@ describe("resolveVitePlusVersionFile", () => {
       expect(resolveVitePlusVersionFile("package.json")).toBe("vnext");
     });
 
+    it("should preserve a capitalized V-prefixed dist-tag (v-strip is case-sensitive)", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "V2beta" } }),
+      });
+
+      expect(resolveVitePlusVersionFile("package.json")).toBe("V2beta");
+    });
+
+    it.each(["^0.2.0", "~0.2.0", ">=0.2.0", "0.2.0 || 0.3.0", "*"])(
+      "should reject the non-exact range spec %s",
+      (range) => {
+        mockFiles({
+          "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": range } }),
+        });
+
+        expect(() => resolveVitePlusVersionFile("package.json")).toThrow(
+          /requires an exact version or dist-tag/,
+        );
+      },
+    );
+
+    it("should reject a non-registry alias spec (npm:)", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({
+          devDependencies: { "vite-plus": "npm:vite-plus@0.2.0" },
+        }),
+      });
+
+      expect(() => resolveVitePlusVersionFile("package.json")).toThrow(
+        /requires an exact version or dist-tag/,
+      );
+    });
+
     it("should throw when no vite-plus entry is present", () => {
       mockFiles({
         "/workspace/package.json": JSON.stringify({ devDependencies: { vite: "6.0.0" } }),
@@ -223,6 +255,43 @@ describe("resolveVitePlusVersionFile", () => {
     it("should throw when no catalog source is found", () => {
       mockFiles({
         "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "catalog:" } }),
+      });
+
+      expect(() => resolveVitePlusVersionFile("package.json")).toThrow(
+        /Could not resolve "catalog:" for vite-plus: no matching catalog entry found/,
+      );
+    });
+
+    it("should preserve trailing precision of an unquoted numeric catalog version", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "catalog:" } }),
+        // Unquoted `1.0` would coerce to the number 1 under YAML's core schema.
+        "/workspace/pnpm-workspace.yaml": "catalog:\n  vite-plus: 1.0\n",
+      });
+
+      expect(resolveVitePlusVersionFile("package.json")).toBe("1.0");
+    });
+
+    it("should skip a malformed catalog entry and keep walking to a valid ancestor", () => {
+      mockFiles({
+        // Nearer catalog nests the entry as an object (malformed).
+        "/workspace/packages/app/pnpm-workspace.yaml":
+          "catalog:\n  vite-plus:\n    version: 0.2.0\n",
+        "/workspace/packages/app/package.json": JSON.stringify({
+          dependencies: { "vite-plus": "catalog:" },
+        }),
+        // Valid entry lives further up.
+        "/workspace/pnpm-workspace.yaml": "catalog:\n  vite-plus: 0.9.0\n",
+      });
+
+      expect(resolveVitePlusVersionFile("package.json", "/workspace/packages/app")).toBe("0.9.0");
+    });
+
+    it("should not resolve a catalog located outside the workspace root", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ dependencies: { "vite-plus": "catalog:" } }),
+        // Catalog outside GITHUB_WORKSPACE must not leak in.
+        "/pnpm-workspace.yaml": "catalog:\n  vite-plus: 9.9.9\n",
       });
 
       expect(() => resolveVitePlusVersionFile("package.json")).toThrow(

@@ -1,5 +1,5 @@
 import { info } from "@actions/core";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { DISPLAY_NAME } from "./types.js";
@@ -77,9 +77,11 @@ export function resolveVitePlusVersionFile(filePath: string, baseDir?: string): 
     throw new Error(`No ${PACKAGE_NAME} version found in ${filePath}`);
   }
 
-  // Strip a leading 'v' prefix from a version (e.g. "v0.2.0" -> "0.2.0"), but
-  // only before a digit so v-prefixed dist-tags like "vnext" are preserved.
-  version = version.trim().replace(/^v(?=\d)/i, "");
+  // Strip a leading lowercase 'v' prefix from a version (e.g. "v0.2.0" ->
+  // "0.2.0"), but only before a digit so v-prefixed dist-tags like "vnext" (or a
+  // capitalized "V2beta") are preserved.
+  version = version.trim().replace(/^v(?=\d)/, "");
+  assertInstallableVersion(version, filePath);
 
   info(`Resolved ${DISPLAY_NAME} version '${version}' from ${filePath}`);
   return version;
@@ -144,30 +146,27 @@ function findDepSpec(pkg: Record<string, unknown>): string | undefined {
 function resolveCatalogSpec(spec: string, startDir: string): string {
   const catalogName = spec.slice(CATALOG_PREFIX.length).trim() || "default";
 
+  // Catalogs live at the workspace/repo root, so search from the manifest up to
+  // (and including) the workspace root, but no further: a catalog outside the
+  // checked-out repo must not leak in (e.g. on self-hosted runners).
+  const boundary = getWorkspaceDir();
+
   let dir = startDir;
   for (;;) {
     for (const name of YAML_CATALOG_SOURCES) {
-      const candidate = join(dir, name);
-      if (existsSync(candidate)) {
-        const version = asVersion(
-          tryCatalogEntryFromYaml(candidate, catalogName),
-          `in ${name} at ${dir}`,
-        );
-        if (version !== undefined) return version;
-      }
-    }
-
-    const pkgPath = join(dir, "package.json");
-    if (existsSync(pkgPath)) {
-      const version = asVersion(
-        tryCatalogEntryFromPackageJson(pkgPath, catalogName),
-        `in package.json at ${dir}`,
-      );
+      const version = tryYamlCatalogVersion(join(dir, name), catalogName, `in ${name} at ${dir}`);
       if (version !== undefined) return version;
     }
 
+    const version = tryPackageJsonCatalogVersion(
+      join(dir, "package.json"),
+      catalogName,
+      `in package.json at ${dir}`,
+    );
+    if (version !== undefined) return version;
+
     const parent = dirname(dir);
-    if (parent === dir) break;
+    if (dir === boundary || parent === dir) break;
     dir = parent;
   }
 
@@ -195,31 +194,47 @@ function catalogEntryFromYaml(path: string, catalogName: string): unknown {
   const content = readFile(path, basename(path));
   let config: unknown;
   try {
-    config = parseYaml(content);
+    // Parse with the failsafe schema so every scalar stays a string: an unquoted
+    // version like `1.10` must not be coerced to the number 1.1 (dropping the
+    // trailing zero) before we read it.
+    config = parseYaml(content, { schema: "failsafe" });
   } catch {
     throw new Error(`Failed to parse ${basename(path)}: invalid YAML`);
   }
   return catalogEntry(config, catalogName);
 }
 
-// Lenient variants used during the upward walk: an unparseable or unrelated
-// ancestor file should be skipped, not abort resolution.
-function tryCatalogEntryFromYaml(path: string, catalogName: string): unknown {
+// Lenient catalog readers used during the upward walk: a missing, unparseable,
+// or malformed ancestor source is skipped (returns undefined) so the walk keeps
+// climbing rather than aborting.
+function tryYamlCatalogVersion(
+  path: string,
+  catalogName: string,
+  where: string,
+): string | undefined {
   try {
-    return catalogEntryFromYaml(path, catalogName);
+    return asVersion(catalogEntryFromYaml(path, catalogName), where);
   } catch {
     return undefined;
   }
 }
 
-function tryCatalogEntryFromPackageJson(path: string, catalogName: string): unknown {
+function tryPackageJsonCatalogVersion(
+  path: string,
+  catalogName: string,
+  where: string,
+): string | undefined {
   let pkg: unknown;
   try {
     pkg = JSON.parse(readFileSync(path, "utf-8"));
   } catch {
     return undefined;
   }
-  return packageJsonCatalogEntry(pkg, catalogName);
+  try {
+    return asVersion(packageJsonCatalogEntry(pkg, catalogName), where);
+  } catch {
+    return undefined;
+  }
 }
 
 // bun accepts catalogs at the top level of package.json or nested under
@@ -240,4 +255,21 @@ function asVersion(entry: unknown, where: string): string | undefined {
   if (typeof entry === "string") return entry;
   if (typeof entry === "number") return String(entry);
   throw new Error(`Invalid ${PACKAGE_NAME} entry ${where}`);
+}
+
+// A resolved version must be installable straight off the npm registry: an exact
+// version (e.g. "0.2.0") or a dist-tag (e.g. "latest", "next"). Semver ranges
+// (`^`, `~`, `>=`, `||`, `*`, spaces) and non-registry aliases (`npm:`, `git:`,
+// `file:`, ...) can't be resolved by the install script, so reject them with an
+// actionable error instead of forwarding a value that 404s at install time.
+const NON_EXACT_VERSION_RE = /[\s^~<>=|*]/;
+
+function assertInstallableVersion(version: string, filePath: string): void {
+  if (NON_EXACT_VERSION_RE.test(version) || version.includes(":")) {
+    throw new Error(
+      `Cannot use "${version}" resolved from ${filePath}: version-file requires an exact version or ` +
+        `dist-tag (semver ranges like "^0.2.0" and aliases like "npm:"/"git:" are not supported). ` +
+        `Pin an exact version, use a catalog, or set the action's \`version\` input.`,
+    );
+  }
 }

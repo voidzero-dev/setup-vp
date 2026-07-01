@@ -137,7 +137,8 @@ just declare an exact version (`"vite-plus": "0.2.0"`) and it is used as-is.
 You can also point `version-file` straight at `pnpm-workspace.yaml` or
 `.yarnrc.yml` to read its default catalog entry. An explicit `version` always
 takes precedence over `version-file`. The resolved value must be an exact
-version or dist-tag (semver ranges such as `^0.2.0` are not resolved).
+version or dist-tag; a semver range such as `^0.2.0` (or an alias like `npm:` /
+`git:`) is rejected with a clear error rather than forwarded to the installer.
 
 ### Advanced Run Install
 
