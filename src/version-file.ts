@@ -17,11 +17,11 @@ const DEP_FIELDS = [
   "peerDependencies",
 ] as const;
 
-// YAML files that can hold a `catalog:` protocol definition. pnpm uses
-// pnpm-workspace.yaml; yarn (>= 4.10) uses .yarnrc.yml. Both share the same
-// top-level `catalog:` / `catalogs:` shape. bun keeps catalogs in the root
-// package.json instead (handled separately during the upward walk).
-const YAML_CATALOG_SOURCES = ["pnpm-workspace.yaml", "pnpm-workspace.yml", ".yarnrc.yml"];
+// YAML files that can hold a `catalog:` protocol definition. pnpm reads only
+// pnpm-workspace.yaml (there is no `.yml` variant); yarn (>= 4.10) uses
+// .yarnrc.yml. Both share the same top-level `catalog:` / `catalogs:` shape. bun
+// keeps catalogs in the root package.json instead (handled during the walk).
+const YAML_CATALOG_SOURCES = ["pnpm-workspace.yaml", ".yarnrc.yml"];
 
 interface CatalogContainer {
   catalog?: Record<string, unknown>;

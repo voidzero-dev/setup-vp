@@ -81,7 +81,7 @@ describe("resolveVitePlusVersionFile", () => {
       mockFiles({ "/workspace/.nvmrc": "20\n" });
 
       expect(() => resolveVitePlusVersionFile(".nvmrc")).toThrow(
-        "Unsupported version-file: .nvmrc (expected package.json, pnpm-workspace.yaml, pnpm-workspace.yml, .yarnrc.yml)",
+        "Unsupported version-file: .nvmrc (expected package.json, pnpm-workspace.yaml, .yarnrc.yml)",
       );
     });
   });
