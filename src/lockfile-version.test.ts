@@ -219,6 +219,20 @@ describe("parseVitePlusVersionFromLockfile", () => {
         parseVitePlusVersionFromLockfile(lock("pnpm-lock.yaml", LockFileType.Pnpm, content)),
       ).toBe("0.1.24");
     });
+
+    it("ignores a scoped look-alike in the packages scan fallback", () => {
+      const content = [
+        "packages:",
+        "  /@acme/vite-plus@9.9.9:",
+        "    resolution: {integrity: a}",
+        "  /vite-plus@0.2.0:",
+        "    resolution: {integrity: b}",
+        "",
+      ].join("\n");
+      expect(
+        parseVitePlusVersionFromLockfile(lock("pnpm-lock.yaml", LockFileType.Pnpm, content)),
+      ).toBe("0.2.0");
+    });
   });
 
   describe("yarn.lock", () => {

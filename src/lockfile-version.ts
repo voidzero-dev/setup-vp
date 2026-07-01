@@ -205,10 +205,13 @@ function fromPnpmLock(content: string, subPath: string): string | undefined {
   }
 
   // No importer data (old single-package lockfile): read top-level deps, then a
-  // last-resort scan of the packages section.
+  // last-resort scan of the packages section. Anchor to the start of a package
+  // key (indent, optional leading `/` for v6) so a scoped look-alike such as
+  // `@acme/vite-plus@9.9.9` — where `/vite-plus@` appears mid-key — is not
+  // matched.
   const rootVersion = pnpmImporterVersion(root);
   if (rootVersion) return rootVersion;
-  const match = content.match(/(?:^|[\s/'"])vite-plus@(\d+\.\d+\.\d+[^\s():'"]*)/m);
+  const match = content.match(/^\s*\/?vite-plus@(\d+\.\d+\.\d+[^\s():'"]*)/m);
   return match?.[1];
 }
 
