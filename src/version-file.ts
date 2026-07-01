@@ -293,18 +293,21 @@ function asVersion(entry: unknown, where: string): string | undefined {
 }
 
 // A resolved version must be installable straight off the npm registry: an exact
-// version (e.g. "0.2.0") or a dist-tag (e.g. "latest", "next"). Semver ranges
-// (`^`, `~`, `>=`, `||`, `*`, spaces) and non-registry aliases (`npm:`, `git:`,
-// `file:`, ...) can't be resolved by the install script, so reject them with an
-// actionable error instead of forwarding a value that 404s at install time.
-const NON_EXACT_VERSION_RE = /[\s^~<>=|*]/;
+// version (`major.minor.patch`, optionally with `-prerelease` / `+build`) or a
+// dist-tag (a name starting with a letter, e.g. "latest", "next", "vnext").
+// Everything else can't be resolved by the install script and must be rejected
+// with an actionable error rather than forwarded to a 404: operator ranges
+// (`^0.2.0`, `>=0.2.0`, `*`, `||`), marker-less ranges npm still treats as
+// ranges (partial `0.2` / `1`, x-ranges `0.2.x`), and non-registry aliases
+// (`npm:`, `git:`, `file:`, which fail the letter-led tag shape on `:` / `@`).
+const EXACT_VERSION_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
+const DIST_TAG_RE = /^[A-Za-z][0-9A-Za-z._-]*$/;
 
 function assertInstallableVersion(version: string, filePath: string): void {
-  if (NON_EXACT_VERSION_RE.test(version) || version.includes(":")) {
-    throw new Error(
-      `Cannot use "${version}" resolved from ${filePath}: version-file requires an exact version or ` +
-        `dist-tag (semver ranges like "^0.2.0" and aliases like "npm:"/"git:" are not supported). ` +
-        `Pin an exact version, use a catalog, or set the action's \`version\` input.`,
-    );
-  }
+  if (EXACT_VERSION_RE.test(version) || DIST_TAG_RE.test(version)) return;
+  throw new Error(
+    `Cannot use "${version}" resolved from ${filePath}: version-file requires an exact version or ` +
+      `dist-tag (semver ranges like "^0.2.0" or "0.2" and aliases like "npm:"/"git:" are not supported). ` +
+      `Pin an exact version, use a catalog, or set the action's \`version\` input.`,
+  );
 }

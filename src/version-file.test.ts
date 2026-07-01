@@ -148,18 +148,35 @@ describe("resolveVitePlusVersionFile", () => {
       expect(resolveVitePlusVersionFile("package.json")).toBe("V2beta");
     });
 
-    it.each(["^0.2.0", "~0.2.0", ">=0.2.0", "0.2.0 || 0.3.0", "*"])(
-      "should reject the non-exact range spec %s",
-      (range) => {
-        mockFiles({
-          "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": range } }),
-        });
+    it.each([
+      "^0.2.0",
+      "~0.2.0",
+      ">=0.2.0",
+      "0.2.0 || 0.3.0",
+      "*",
+      // Marker-less ranges: partial versions and x-ranges npm treats as ranges
+      // but the registry can't resolve to a single version.
+      "0.2",
+      "1",
+      "0.2.x",
+      "1.x",
+    ])("should reject the non-exact range spec %s", (range) => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": range } }),
+      });
 
-        expect(() => resolveVitePlusVersionFile("package.json")).toThrow(
-          /requires an exact version or dist-tag/,
-        );
-      },
-    );
+      expect(() => resolveVitePlusVersionFile("package.json")).toThrow(
+        /requires an exact version or dist-tag/,
+      );
+    });
+
+    it("should accept a plain dist-tag", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "next" } }),
+      });
+
+      expect(resolveVitePlusVersionFile("package.json")).toBe("next");
+    });
 
     it("should reject a non-registry alias spec (npm:)", () => {
       mockFiles({
@@ -269,11 +286,13 @@ describe("resolveVitePlusVersionFile", () => {
     it("should preserve trailing precision of an unquoted numeric catalog version", () => {
       mockFiles({
         "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "catalog:" } }),
-        // Unquoted `1.0` would coerce to the number 1 under YAML's core schema.
-        "/workspace/pnpm-workspace.yaml": "catalog:\n  vite-plus: 1.0\n",
+        // Unquoted `1.10` would coerce to the number 1.1 under YAML's core schema.
+        // It is a partial version (rejected), but the error must show the exact
+        // "1.10" the user wrote, proving the failsafe parse kept its precision.
+        "/workspace/pnpm-workspace.yaml": "catalog:\n  vite-plus: 1.10\n",
       });
 
-      expect(resolveVitePlusVersionFile("package.json")).toBe("1.0");
+      expect(() => resolveVitePlusVersionFile("package.json")).toThrow(/Cannot use "1\.10"/);
     });
 
     it("should skip a malformed catalog entry and keep walking to a valid ancestor", () => {
