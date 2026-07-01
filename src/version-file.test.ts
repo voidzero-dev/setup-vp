@@ -303,6 +303,32 @@ describe("resolveVitePlusVersionFile", () => {
       );
     });
 
+    it("should not walk above the manifest dir when it is outside the workspace", () => {
+      mockFiles({
+        "/outside/project/package.json": JSON.stringify({
+          dependencies: { "vite-plus": "catalog:" },
+        }),
+        // An unrelated catalog above an out-of-workspace manifest (e.g. a
+        // self-hosted runner's home dir) must not be walked into.
+        "/outside/pnpm-workspace.yaml": "catalog:\n  vite-plus: 9.9.9\n",
+      });
+
+      expect(() => resolveVitePlusVersionFile("package.json", "/outside/project")).toThrow(
+        /Could not resolve "catalog:" for vite-plus: no matching catalog entry found/,
+      );
+    });
+
+    it("should resolve a catalog in the manifest's own dir even outside the workspace", () => {
+      mockFiles({
+        "/outside/project/package.json": JSON.stringify({
+          dependencies: { "vite-plus": "catalog:" },
+        }),
+        "/outside/project/pnpm-workspace.yaml": "catalog:\n  vite-plus: 0.4.2\n",
+      });
+
+      expect(resolveVitePlusVersionFile("package.json", "/outside/project")).toBe("0.4.2");
+    });
+
     it("should throw when the catalog has no vite-plus entry", () => {
       mockFiles({
         "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "catalog:" } }),

@@ -100,7 +100,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Pins an exact version distinct from `latest` (0.2.1) so a match
+          # Pins an older exact version (not the current `latest`) so a match
           # proves the pin was honored rather than a coincidental latest.
           - scenario: exact
             expected: "0.2.0"

@@ -1,6 +1,6 @@
 import { info, debug } from "@actions/core";
 import { readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { DISPLAY_NAME } from "./types.js";
 import { getWorkspaceDir, resolvePath } from "./utils.js";
@@ -169,8 +169,11 @@ function resolveCatalogSpec(spec: string, startDir: string): string {
   const catalogName = spec.slice(CATALOG_PREFIX.length).trim() || "default";
 
   // Catalogs live at the workspace/repo root, so search from the manifest up to
-  // (and including) the workspace root, but no further: a catalog outside the
-  // checked-out repo must not leak in (e.g. on self-hosted runners).
+  // (and including) the workspace root, but never step outside it: a catalog
+  // outside the checked-out repo must not leak in (e.g. on self-hosted runners).
+  // When the manifest itself is outside the workspace (an absolute
+  // working-directory / version-file), only its own directory is searched, since
+  // there is no in-repo root to anchor the walk.
   const boundary = getWorkspaceDir();
 
   let dir = startDir;
@@ -188,7 +191,10 @@ function resolveCatalogSpec(spec: string, startDir: string): string {
     if (version !== undefined) return version;
 
     const parent = dirname(dir);
-    if (dir === boundary || parent === dir) break;
+    // Stop at the workspace root, at the filesystem root, or before ascending
+    // out of the workspace (which also breaks immediately when startDir is
+    // already outside it, leaving only the manifest's own dir searched).
+    if (dir === boundary || parent === dir || !isWithin(parent, boundary)) break;
     dir = parent;
   }
 
@@ -196,6 +202,13 @@ function resolveCatalogSpec(spec: string, startDir: string): string {
     `Could not resolve "${spec}" for ${PACKAGE_NAME}: no matching catalog entry found in ` +
       `pnpm-workspace.yaml, .yarnrc.yml, or a package.json catalog (searched up from ${startDir})`,
   );
+}
+
+// Is `child` at or below `parent`? Used to keep the catalog walk from ascending
+// out of the workspace root.
+function isWithin(child: string, parent: string): boolean {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
 /**
