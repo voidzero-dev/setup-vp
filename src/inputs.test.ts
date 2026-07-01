@@ -24,7 +24,8 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs).toEqual({
-      version: "latest",
+      version: "",
+      versionFile: undefined,
       nodeVersion: undefined,
       nodeVersionFile: undefined,
       workingDirectory: undefined,
@@ -45,6 +46,18 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs.version).toBe("1.2.3");
+  });
+
+  it("should parse version-file input", () => {
+    vi.mocked(getInput).mockImplementation((name) => {
+      if (name === "version-file") return "package.json";
+      return "";
+    });
+    vi.mocked(getBooleanInput).mockReturnValue(false);
+
+    const inputs = getInputs();
+
+    expect(inputs.versionFile).toBe("package.json");
   });
 
   it("should parse run-install as true", () => {

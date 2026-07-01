@@ -9,6 +9,7 @@ import { saveCache } from "./cache-save.js";
 import { State, Outputs } from "./types.js";
 import type { Inputs } from "./types.js";
 import { resolveNodeVersionFile } from "./node-version-file.js";
+import { resolveVitePlusVersionFile } from "./version-file.js";
 import { configAuthentication, propagateProjectNpmrcAuth } from "./auth.js";
 import { getConfiguredProjectDir } from "./utils.js";
 
@@ -23,34 +24,45 @@ async function runMain(inputs: Inputs): Promise<void> {
     nodeVersion = resolveNodeVersionFile(inputs.nodeVersionFile, projectDir);
   }
 
-  // Step 2: Install Vite+
-  await installVitePlus(inputs);
+  // Step 2: Resolve the Vite+ version. An explicit `version` wins; otherwise
+  // resolve from `version-file` (package.json / pnpm catalog); fall back to
+  // "latest" when neither is provided.
+  let version = inputs.version;
+  if (!version && inputs.versionFile) {
+    version = resolveVitePlusVersionFile(inputs.versionFile, projectDir);
+  }
+  if (!version) {
+    version = "latest";
+  }
 
-  // Step 3: Set up Node.js version if specified
+  // Step 3: Install Vite+
+  await installVitePlus({ ...inputs, version });
+
+  // Step 4: Set up Node.js version if specified
   if (nodeVersion) {
     info(`Setting up Node.js ${nodeVersion} via vp env use...`);
     await exec("vp", ["env", "use", nodeVersion]);
   }
 
-  // Step 4: Configure registry authentication
+  // Step 5: Configure registry authentication
   if (inputs.registryUrl) {
     configAuthentication(inputs.registryUrl, inputs.scope);
   } else {
     propagateProjectNpmrcAuth(projectDir);
   }
 
-  // Step 5: Restore cache if enabled
+  // Step 6: Restore cache if enabled
   if (inputs.cache) {
     await restoreCache(inputs);
   }
 
-  // Step 6: Install Socket Firewall Free if requested (must run before vp install).
+  // Step 7: Install Socket Firewall Free if requested (must run before vp install).
   // setupSfw centralizes all the decision branches: run-install disabled, sfw
   // already on PATH (e.g. via socketdev/action@<sha>), supported platform
   // (downloads our pinned binary), unsupported platform (falls back).
   const effectiveSfw = await setupSfw(inputs);
 
-  // Step 7: Run vp install if requested
+  // Step 8: Run vp install if requested
   if (inputs.runInstall.length > 0) {
     await runViteInstall({ ...inputs, sfw: effectiveSfw });
   }

@@ -78,6 +78,67 @@ steps:
       cache: true
 ```
 
+### Version from `package.json` / Catalog
+
+Keep a single source of truth for the Vite+ version by resolving it from the
+checked-out project instead of duplicating it in the workflow. Point
+`version-file` at a `package.json` and the action reads its `vite-plus` entry:
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  - uses: voidzero-dev/setup-vp@v1
+    with:
+      version-file: package.json
+      cache: true
+```
+
+When the `package.json` entry is `catalog:` / `catalog:<name>`, it is resolved
+through the nearest catalog source (searching upward from the manifest),
+covering every package manager that implements the `catalog:` protocol:
+
+```jsonc
+// package.json
+{
+  "devDependencies": {
+    "vite-plus": "catalog:",
+  },
+}
+```
+
+- **pnpm**: `pnpm-workspace.yaml`
+
+  ```yaml
+  catalog:
+    vite-plus: 0.2.0
+  ```
+
+- **yarn** (>= 4.10): `.yarnrc.yml`
+
+  ```yaml
+  catalog:
+    vite-plus: 0.2.0
+  ```
+
+- **bun**: root `package.json` (`catalog`/`catalogs`, top-level or under `workspaces`)
+
+  ```jsonc
+  {
+    "workspaces": {
+      "packages": ["packages/*"],
+      "catalog": { "vite-plus": "0.2.0" },
+    },
+  }
+  ```
+
+For **npm** (no catalog feature) or any project that pins the version directly,
+just declare an exact version (`"vite-plus": "0.2.0"`) and it is used as-is.
+
+You can also point `version-file` straight at `pnpm-workspace.yaml` or
+`.yarnrc.yml` to read its default catalog entry. An explicit `version` always
+takes precedence over `version-file`. The resolved value must be an exact
+version or dist-tag (semver ranges such as `^0.2.0` are not resolved).
+
 ### Advanced Run Install
 
 ```yaml
@@ -213,7 +274,8 @@ jobs:
 
 | Input                   | Description                                                                                                 | Required | Default        |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------- | -------- | -------------- |
-| `version`               | Version of Vite+ to install                                                                                 | No       | `latest`       |
+| `version`               | Version of Vite+ to install. Takes precedence over `version-file`                                           | No       | `latest`       |
+| `version-file`          | Path to a file to resolve the Vite+ version from (`package.json`, `pnpm-workspace.yaml`, or `.yarnrc.yml`)  | No       |                |
 | `node-version`          | Node.js version to install via `vp env use`                                                                 | No       | Latest LTS     |
 | `node-version-file`     | Path to file containing Node.js version (`.nvmrc`, `.node-version`, `.tool-versions`, `package.json`)       | No       |                |
 | `working-directory`     | Project directory used for relative paths, lockfile auto-detection, environment checks, and default install | No       | Workspace root |
@@ -224,7 +286,7 @@ jobs:
 | `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`   | No       |                |
 | `scope`                 | Optional scope for scoped registries. Falls back to repo owner for GitHub Packages                          | No       |                |
 
-When `working-directory` is set, relative `run-install.cwd`, `node-version-file`, and `cache-dependency-path` values are resolved from that directory.
+When `working-directory` is set, relative `run-install.cwd`, `node-version-file`, `version-file`, and `cache-dependency-path` values are resolved from that directory.
 
 ## Outputs
 

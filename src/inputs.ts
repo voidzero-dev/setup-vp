@@ -6,7 +6,10 @@ import { RunInstallInputSchema } from "./types.js";
 
 export function getInputs(): Inputs {
   return {
-    version: getInput("version") || "latest",
+    // Keep raw here (may be empty); the effective version, including any
+    // version-file resolution and the "latest" fallback, is computed in runMain.
+    version: getInput("version"),
+    versionFile: getInput("version-file") || undefined,
     nodeVersion: getInput("node-version") || undefined,
     nodeVersionFile: getInput("node-version-file") || undefined,
     workingDirectory: getInput("working-directory") || undefined,

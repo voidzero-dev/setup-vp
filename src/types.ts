@@ -19,6 +19,7 @@ export type RunInstall = z.infer<typeof RunInstallSchema>;
 // Main inputs interface
 export interface Inputs {
   readonly version: string;
+  readonly versionFile?: string;
   readonly nodeVersion?: string;
   readonly nodeVersionFile?: string;
   readonly workingDirectory?: string;

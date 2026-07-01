@@ -7,9 +7,12 @@ branding:
 
 inputs:
   version:
-    description: "Version of Vite+ to install"
+    description: "Version of Vite+ to install. Takes precedence over version-file. Defaults to the latest release when neither is set."
     required: false
-    default: "latest"
+    default: ""
+  version-file:
+    description: "Path to a file to resolve the Vite+ version from (package.json, pnpm-workspace.yaml, or .yarnrc.yml). A package.json `vite-plus` entry of `catalog:`/`catalog:<name>` is resolved through the nearest catalog source: pnpm-workspace.yaml (pnpm), .yarnrc.yml (yarn), or a root package.json `catalog`/`catalogs` (bun). Ignored when version is specified."
+    required: false
   run-install:
     description: "Run `vp install` after setup. Accepts boolean or YAML object with cwd/args."
     required: false
