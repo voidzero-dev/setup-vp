@@ -719,4 +719,22 @@ describe("resolveVitePlusVersion (precedence)", () => {
 
     expect(resolveVitePlusVersion(baseInputs, "/workspace")).toBe("latest");
   });
+
+  it("does not consult the lockfile for a non-registry spec (workspace:/file:)", () => {
+    mockFiles({
+      // A workspace/local spec's lockfile "version" is not the npm package, so
+      // it must not be installed from the registry.
+      "/workspace/package.json": JSON.stringify({
+        devDependencies: { "vite-plus": "workspace:*" },
+      }),
+      "/workspace/pnpm-lock.yaml": [
+        "packages:",
+        "  vite-plus@0.2.0:",
+        "    resolution: {}",
+        "",
+      ].join("\n"),
+    });
+
+    expect(resolveVitePlusVersion(baseInputs, "/workspace")).toBe("latest");
+  });
 });

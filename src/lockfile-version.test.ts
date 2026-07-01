@@ -149,6 +149,32 @@ describe("parseVitePlusVersionFromLockfile", () => {
       ).toBe("0.2.0");
     });
 
+    it("returns undefined when the matching importer has no vite-plus (no global leak)", () => {
+      const content = [
+        "importers:",
+        "  packages/app:",
+        "    dependencies:",
+        "      other-dep:",
+        "        specifier: ^1.0.0",
+        "        version: 1.0.0",
+        "  packages/tooling:",
+        "    devDependencies:",
+        "      vite-plus:",
+        "        specifier: ^9.0.0",
+        "        version: 9.9.9",
+        "packages:",
+        "  vite-plus@9.9.9:",
+        "    resolution: {integrity: x}",
+        "",
+      ].join("\n");
+      expect(
+        parseVitePlusVersionFromLockfile(
+          lock("pnpm-lock.yaml", LockFileType.Pnpm, content),
+          "packages/app",
+        ),
+      ).toBeUndefined();
+    });
+
     it("falls back to scanning packages keys when there is no importer entry", () => {
       const content = [
         "packages:",

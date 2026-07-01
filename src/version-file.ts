@@ -46,10 +46,11 @@ export function resolveVitePlusVersion(inputs: Inputs, projectDir: string): stri
 
   return (
     tryResolveVitePlusVersionFromProject(projectDir) ??
-    // Only consult the lockfile when the project actually declares a direct
-    // vite-plus dependency, so a transitive or other-workspace vite-plus in a
-    // shared lockfile isn't mistaken for this project's pin.
-    (projectDeclaresVitePlus(projectDir)
+    // Consult the lockfile only when the project declares a direct vite-plus
+    // dependency the lockfile can legitimately resolve to a published version,
+    // so a transitive/other-workspace entry or a non-registry spec isn't
+    // mistaken for this project's pin.
+    (shouldConsultLockfile(projectDir)
       ? tryResolveVitePlusVersionFromLockfile(projectDir, inputs.cacheDependencyPath)
       : undefined) ??
     "latest"
@@ -57,19 +58,31 @@ export function resolveVitePlusVersion(inputs: Inputs, projectDir: string): stri
 }
 
 /**
- * Does the project's package.json declare a direct `vite-plus` dependency
- * (including a `catalog:` reference)? Gates the lockfile fallback.
+ * Gate for the lockfile fallback: the project's package.json must declare a
+ * direct vite-plus dependency whose spec the lockfile can resolve to a published
+ * npm version — a semver range or a `catalog:` reference. Non-registry specs
+ * (file:/git:/workspace:/link:/npm: aliases, owner/repo shorthands) would expose
+ * a lockfile "version" that doesn't correspond to the npm package, so they are
+ * excluded (the run falls back to "latest").
  */
-function projectDeclaresVitePlus(projectDir: string): boolean {
+function shouldConsultLockfile(projectDir: string): boolean {
   try {
     const pkg = JSON.parse(readFileSync(join(projectDir, "package.json"), "utf-8")) as Record<
       string,
       unknown
     >;
-    return findDepSpec(pkg) !== undefined;
+    const spec = findDepSpec(pkg);
+    return spec !== undefined && isLockfileResolvableSpec(spec);
   } catch {
     return false;
   }
+}
+
+function isLockfileResolvableSpec(spec: string): boolean {
+  if (spec.startsWith(CATALOG_PREFIX)) return true;
+  // Exclude non-registry protocols/aliases (contain ':' or '@') and repo/path
+  // shorthands (contain '/' or '\\'); only plain semver ranges qualify.
+  return !/[:/@\\]/.test(spec);
 }
 
 /**

@@ -178,24 +178,17 @@ function fromPnpmLock(content: string, subPath: string): string | undefined {
   const root = doc as Record<string, unknown>;
   const importers = root.importers as Record<string, unknown> | undefined;
   if (importers && typeof importers === "object") {
-    const key = subPath || "."; // pnpm uses "." for the workspace root importer
-    if (key in importers) {
-      // Trust only the selected importer so another package's pin can't leak in.
-      const version = pnpmImporterVersion(importers[key]);
-      if (version) return version;
-    } else {
-      // No matching importer (unexpected key/layout): scan them as a fallback.
-      for (const container of Object.values(importers)) {
-        const version = pnpmImporterVersion(container);
-        if (version) return version;
-      }
-    }
-  } else {
-    // Old single-package lockfiles keep deps at the top level.
-    const version = pnpmImporterVersion(root);
-    if (version) return version;
+    // Trust only the importer for the selected project (pnpm uses "." for the
+    // workspace root). If it is absent or does not list vite-plus, fall back
+    // (undefined) rather than leaking another importer's or package's version.
+    const key = subPath || ".";
+    return key in importers ? pnpmImporterVersion(importers[key]) : undefined;
   }
 
+  // No importer data (old single-package lockfile): read top-level deps, then a
+  // last-resort scan of the packages section.
+  const rootVersion = pnpmImporterVersion(root);
+  if (rootVersion) return rootVersion;
   const match = content.match(/(?:^|[\s/'"])vite-plus@(\d+\.\d+\.\d+[^\s():'"]*)/m);
   return match?.[1];
 }
