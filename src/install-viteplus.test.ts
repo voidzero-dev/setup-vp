@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vite-plus/test";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { exec } from "@actions/exec";
 import { warning } from "@actions/core";
 import { installVitePlus } from "./install-viteplus.js";
@@ -32,8 +32,22 @@ const baseInputs: Inputs = {
 };
 
 describe("installVitePlus", () => {
+  // installVitePlus spreads process.env into the child env, so a VP_PR_VERSION
+  // inherited from the runner (setup-vp's own CI sets it) would make these tests
+  // non-hermetic. Clear it before each test and restore the original after.
+  const originalPrVersion = process.env.VP_PR_VERSION;
+
+  beforeEach(() => {
+    delete process.env.VP_PR_VERSION;
+  });
+
   afterEach(() => {
     vi.resetAllMocks();
+    if (originalPrVersion === undefined) {
+      delete process.env.VP_PR_VERSION;
+    } else {
+      process.env.VP_PR_VERSION = originalPrVersion;
+    }
   });
 
   it("should succeed on first attempt without retrying", async () => {
@@ -128,6 +142,15 @@ describe("installVitePlus", () => {
     vi.mocked(exec).mockResolvedValueOnce(0);
 
     await installVitePlus({ ...baseInputs, version: "0.2.1" });
+
+    const options = vi.mocked(exec).mock.calls[0][2] as { env: { [key: string]: string } };
+    expect(options.env.VP_PR_VERSION).toBeUndefined();
+  });
+
+  it("should not treat too-short commit suffixes as pkg.pr.new builds", async () => {
+    vi.mocked(exec).mockResolvedValueOnce(0);
+
+    await installVitePlus({ ...baseInputs, version: "0.0.0-commit.a" });
 
     const options = vi.mocked(exec).mock.calls[0][2] as { env: { [key: string]: string } };
     expect(options.env.VP_PR_VERSION).toBeUndefined();
