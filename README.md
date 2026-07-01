@@ -97,9 +97,10 @@ steps:
       cache: true
 ```
 
-To resolve from a specific file, set `version-file` explicitly. Unlike the
-auto-detect default, an explicit `version-file` that can't be resolved fails the
-run rather than falling back to `latest`:
+To resolve from a specific file, set `version-file` explicitly. Like the
+auto-detect default, an explicit `version-file` that can't be resolved logs a
+warning and falls back to `latest` (it does not fail the run); the warning is
+worth watching for, since it means the pinned version was not applied:
 
 ```yaml
 steps:
@@ -155,7 +156,8 @@ You can also point `version-file` straight at `pnpm-workspace.yaml` or
 `.yarnrc.yml` to read its default catalog entry. An explicit `version` always
 takes precedence over `version-file`. The resolved value must be an exact
 version or dist-tag; a semver range such as `^0.2.0` (or an alias like `npm:` /
-`git:`) is rejected with a clear error rather than forwarded to the installer.
+`git:`) can't be resolved, so it is skipped with a warning and the action falls
+back to `latest` rather than forwarding an uninstallable value.
 
 ### Advanced Run Install
 

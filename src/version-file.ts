@@ -1,4 +1,4 @@
-import { info, debug } from "@actions/core";
+import { info, debug, warning } from "@actions/core";
 import { readFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -88,13 +88,37 @@ export function resolveVitePlusVersionFile(filePath: string, baseDir?: string): 
 }
 
 /**
+ * Resolve an explicit `version-file` without failing the run: any error (missing
+ * file, no vite-plus entry, unresolvable spec, invalid JSON/YAML) is logged as a
+ * warning and returns undefined so the caller can fall back to "latest".
+ *
+ * A warning (not debug) because the user explicitly configured version-file, so a
+ * fallback to "latest" is worth surfacing.
+ */
+export function tryResolveVitePlusVersionFile(
+  filePath: string,
+  baseDir?: string,
+): string | undefined {
+  try {
+    return resolveVitePlusVersionFile(filePath, baseDir);
+  } catch (error) {
+    warning(
+      `Could not resolve the ${DISPLAY_NAME} version from version-file "${filePath}": ${
+        error instanceof Error ? error.message : String(error)
+      }. Falling back to "latest".`,
+    );
+    return undefined;
+  }
+}
+
+/**
  * Best-effort auto-detection of the Vite+ version from the project's
  * package.json, used when neither `version` nor `version-file` is configured.
  *
- * Unlike an explicit `version-file`, this never throws: a missing manifest, no
- * vite-plus entry, or an entry that can't be resolved to an exact version (e.g.
- * a semver range like `^0.2.0`) simply returns undefined so the caller can fall
- * back to "latest".
+ * Unlike an explicit `version-file`, this logs at debug (the common "no pin"
+ * case shouldn't warn on every run): a missing manifest, no vite-plus entry, or
+ * an entry that can't be resolved to an exact version (e.g. a semver range like
+ * `^0.2.0`) simply returns undefined so the caller can fall back to "latest".
  */
 export function tryResolveVitePlusVersionFromProject(projectDir: string): string | undefined {
   try {

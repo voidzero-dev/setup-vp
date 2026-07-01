@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { readFileSync } from "node:fs";
+import { warning } from "@actions/core";
 import {
   resolveVitePlusVersionFile,
+  tryResolveVitePlusVersionFile,
   tryResolveVitePlusVersionFromProject,
 } from "./version-file.js";
 
 vi.mock("@actions/core", () => ({
   info: vi.fn(),
   debug: vi.fn(),
+  warning: vi.fn(),
 }));
 
 vi.mock("node:fs", () => ({
@@ -503,6 +506,42 @@ describe("resolveVitePlusVersionFile", () => {
       expect(() => resolveVitePlusVersionFile("pnpm-workspace.yaml")).toThrow(
         /Failed to parse pnpm-workspace\.yaml: invalid YAML/,
       );
+    });
+  });
+
+  describe("tryResolveVitePlusVersionFile (lenient version-file)", () => {
+    it("returns the resolved version on success", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "0.2.0" } }),
+      });
+
+      expect(tryResolveVitePlusVersionFile("package.json")).toBe("0.2.0");
+      expect(warning).not.toHaveBeenCalled();
+    });
+
+    it("warns and returns undefined when the file is missing", () => {
+      mockFiles({});
+
+      expect(tryResolveVitePlusVersionFile("package.json")).toBeUndefined();
+      expect(warning).toHaveBeenCalledWith(expect.stringMatching(/Falling back to "latest"/));
+    });
+
+    it("warns and returns undefined for an unresolvable range", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "^0.2.0" } }),
+      });
+
+      expect(tryResolveVitePlusVersionFile("package.json")).toBeUndefined();
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringMatching(/version-file "package.json".*requires an exact version/s),
+      );
+    });
+
+    it("warns and returns undefined on invalid JSON", () => {
+      mockFiles({ "/workspace/package.json": "not json{" });
+
+      expect(tryResolveVitePlusVersionFile("package.json")).toBeUndefined();
+      expect(warning).toHaveBeenCalledOnce();
     });
   });
 

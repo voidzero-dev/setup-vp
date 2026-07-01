@@ -10,7 +10,7 @@ import { State, Outputs } from "./types.js";
 import type { Inputs } from "./types.js";
 import { resolveNodeVersionFile } from "./node-version-file.js";
 import {
-  resolveVitePlusVersionFile,
+  tryResolveVitePlusVersionFile,
   tryResolveVitePlusVersionFromProject,
 } from "./version-file.js";
 import { configAuthentication, propagateProjectNpmrcAuth } from "./auth.js";
@@ -29,12 +29,13 @@ async function runMain(inputs: Inputs): Promise<void> {
 
   // Step 2: Resolve the Vite+ version. Precedence:
   //   1. explicit `version`
-  //   2. explicit `version-file` (package.json / catalog), hard error if unresolvable
+  //   2. explicit `version-file` (package.json / catalog); warns and falls
+  //      through on any resolution failure rather than failing the run
   //   3. auto-detect from the project's package.json (best effort)
   //   4. "latest"
   let version: string | undefined = inputs.version;
   if (!version && inputs.versionFile) {
-    version = resolveVitePlusVersionFile(inputs.versionFile, projectDir);
+    version = tryResolveVitePlusVersionFile(inputs.versionFile, projectDir);
   }
   if (!version && !inputs.versionFile) {
     version = tryResolveVitePlusVersionFromProject(projectDir);
