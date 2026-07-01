@@ -1,0 +1,68 @@
+name: Rebuild action bundle
+
+# The `needs-bundle-rebuild` label (Renovate adds it for bumps to deps compiled
+# into dist/index.mjs, or to the vite-plus bundler) triggers a rebuild of the
+# bundle and a push of the refreshed dist/, so the "Verify dist is up to date"
+# check passes without a manual `vp run build`.
+on:
+  pull_request:
+    types: [labeled]
+
+permissions: {}
+
+concurrency:
+  group: rebuild-bundle-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  rebuild:
+    name: rebuild bundle
+    # Only for our label, and only same-repo branches we can push back to
+    # (Renovate PRs are same-repo; fork PRs can't be pushed to).
+    if: >-
+      github.event.label.name == 'needs-bundle-rebuild' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # A GitHub App token so the follow-up push re-triggers the PR's required
+      # checks; a push with the default GITHUB_TOKEN does not (loop prevention).
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      # Actions are pinned to a full commit SHA (org policy).
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild the action bundle
+        run: pnpm build
+
+      - name: Commit and push the rebuilt bundle if it changed
+        run: |
+          if git diff --quiet -- dist/; then
+            echo "Bundle already up to date; nothing to push."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/
+          git commit -m "chore: rebuild action bundle for dependency update"
+          git push
