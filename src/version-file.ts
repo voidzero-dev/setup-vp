@@ -1,4 +1,4 @@
-import { info } from "@actions/core";
+import { info, debug } from "@actions/core";
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -85,6 +85,28 @@ export function resolveVitePlusVersionFile(filePath: string, baseDir?: string): 
 
   info(`Resolved ${DISPLAY_NAME} version '${version}' from ${filePath}`);
   return version;
+}
+
+/**
+ * Best-effort auto-detection of the Vite+ version from the project's
+ * package.json, used when neither `version` nor `version-file` is configured.
+ *
+ * Unlike an explicit `version-file`, this never throws: a missing manifest, no
+ * vite-plus entry, or an entry that can't be resolved to an exact version (e.g.
+ * a semver range like `^0.2.0`) simply returns undefined so the caller can fall
+ * back to "latest".
+ */
+export function tryResolveVitePlusVersionFromProject(projectDir: string): string | undefined {
+  try {
+    return resolveVitePlusVersionFile("package.json", projectDir);
+  } catch (error) {
+    debug(
+      `Could not auto-detect ${DISPLAY_NAME} version from package.json in ${projectDir}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return undefined;
+  }
 }
 
 function readFile(fullPath: string, label: string): string {

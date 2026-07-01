@@ -81,8 +81,25 @@ steps:
 ### Version from `package.json` / Catalog
 
 Keep a single source of truth for the Vite+ version by resolving it from the
-checked-out project instead of duplicating it in the workflow. Point
-`version-file` at a `package.json` and the action reads its `vite-plus` entry:
+checked-out project instead of duplicating it in the workflow.
+
+By default (when neither `version` nor `version-file` is set), the action reads
+the `vite-plus` entry from the project's `package.json` and installs that
+version, falling back to `latest` when it can't be resolved to an exact version
+(no `vite-plus` entry, or a semver range like `^0.2.0`). So a project that pins
+`vite-plus` needs no extra configuration:
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  - uses: voidzero-dev/setup-vp@v1
+    with:
+      cache: true
+```
+
+To resolve from a specific file, set `version-file` explicitly. Unlike the
+auto-detect default, an explicit `version-file` that can't be resolved fails the
+run rather than falling back to `latest`:
 
 ```yaml
 steps:
@@ -273,19 +290,19 @@ jobs:
 
 ## Inputs
 
-| Input                   | Description                                                                                                 | Required | Default        |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------- | -------- | -------------- |
-| `version`               | Version of Vite+ to install. Takes precedence over `version-file`                                           | No       | `latest`       |
-| `version-file`          | Path to a file to resolve the Vite+ version from (`package.json`, `pnpm-workspace.yaml`, or `.yarnrc.yml`)  | No       |                |
-| `node-version`          | Node.js version to install via `vp env use`                                                                 | No       | Latest LTS     |
-| `node-version-file`     | Path to file containing Node.js version (`.nvmrc`, `.node-version`, `.tool-versions`, `package.json`)       | No       |                |
-| `working-directory`     | Project directory used for relative paths, lockfile auto-detection, environment checks, and default install | No       | Workspace root |
-| `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                              | No       | `true`         |
-| `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)    | No       | `false`        |
-| `cache`                 | Enable caching of project dependencies                                                                      | No       | `false`        |
-| `cache-dependency-path` | Path to lock file for cache key generation                                                                  | No       | Auto-detected  |
-| `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`   | No       |                |
-| `scope`                 | Optional scope for scoped registries. Falls back to repo owner for GitHub Packages                          | No       |                |
+| Input                   | Description                                                                                                 | Required | Default         |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- | -------- | --------------- |
+| `version`               | Version of Vite+ to install. Takes precedence over `version-file`                                           | No       | auto / `latest` |
+| `version-file`          | Path to a file to resolve the Vite+ version from (`package.json`, `pnpm-workspace.yaml`, or `.yarnrc.yml`)  | No       |                 |
+| `node-version`          | Node.js version to install via `vp env use`                                                                 | No       | Latest LTS      |
+| `node-version-file`     | Path to file containing Node.js version (`.nvmrc`, `.node-version`, `.tool-versions`, `package.json`)       | No       |                 |
+| `working-directory`     | Project directory used for relative paths, lockfile auto-detection, environment checks, and default install | No       | Workspace root  |
+| `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                              | No       | `true`          |
+| `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)    | No       | `false`         |
+| `cache`                 | Enable caching of project dependencies                                                                      | No       | `false`         |
+| `cache-dependency-path` | Path to lock file for cache key generation                                                                  | No       | Auto-detected   |
+| `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`   | No       |                 |
+| `scope`                 | Optional scope for scoped registries. Falls back to repo owner for GitHub Packages                          | No       |                 |
 
 When `working-directory` is set, relative `run-install.cwd`, `node-version-file`, `version-file`, and `cache-dependency-path` values are resolved from that directory.
 

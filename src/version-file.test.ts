@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { readFileSync } from "node:fs";
-import { resolveVitePlusVersionFile } from "./version-file.js";
+import {
+  resolveVitePlusVersionFile,
+  tryResolveVitePlusVersionFromProject,
+} from "./version-file.js";
 
 vi.mock("@actions/core", () => ({
   info: vi.fn(),
+  debug: vi.fn(),
 }));
 
 vi.mock("node:fs", () => ({
@@ -454,6 +458,47 @@ describe("resolveVitePlusVersionFile", () => {
       expect(() => resolveVitePlusVersionFile("pnpm-workspace.yaml")).toThrow(
         /Failed to parse pnpm-workspace\.yaml: invalid YAML/,
       );
+    });
+  });
+
+  describe("tryResolveVitePlusVersionFromProject (auto-detect default)", () => {
+    it("returns the version from the project's package.json", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "0.2.0" } }),
+      });
+
+      expect(tryResolveVitePlusVersionFromProject("/workspace")).toBe("0.2.0");
+    });
+
+    it("resolves a catalog entry from the project", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "catalog:" } }),
+        "/workspace/pnpm-workspace.yaml": "catalog:\n  vite-plus: 0.2.5\n",
+      });
+
+      expect(tryResolveVitePlusVersionFromProject("/workspace")).toBe("0.2.5");
+    });
+
+    it("returns undefined when package.json is missing", () => {
+      mockFiles({});
+
+      expect(tryResolveVitePlusVersionFromProject("/workspace")).toBeUndefined();
+    });
+
+    it("returns undefined when vite-plus is not a dependency", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { vite: "6.0.0" } }),
+      });
+
+      expect(tryResolveVitePlusVersionFromProject("/workspace")).toBeUndefined();
+    });
+
+    it("returns undefined for a non-exact range so the caller falls back to latest", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "^0.2.0" } }),
+      });
+
+      expect(tryResolveVitePlusVersionFromProject("/workspace")).toBeUndefined();
     });
   });
 });

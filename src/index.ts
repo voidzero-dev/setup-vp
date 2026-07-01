@@ -9,7 +9,10 @@ import { saveCache } from "./cache-save.js";
 import { State, Outputs } from "./types.js";
 import type { Inputs } from "./types.js";
 import { resolveNodeVersionFile } from "./node-version-file.js";
-import { resolveVitePlusVersionFile } from "./version-file.js";
+import {
+  resolveVitePlusVersionFile,
+  tryResolveVitePlusVersionFromProject,
+} from "./version-file.js";
 import { configAuthentication, propagateProjectNpmrcAuth } from "./auth.js";
 import { getConfiguredProjectDir } from "./utils.js";
 
@@ -24,12 +27,17 @@ async function runMain(inputs: Inputs): Promise<void> {
     nodeVersion = resolveNodeVersionFile(inputs.nodeVersionFile, projectDir);
   }
 
-  // Step 2: Resolve the Vite+ version. An explicit `version` wins; otherwise
-  // resolve from `version-file` (package.json / pnpm catalog); fall back to
-  // "latest" when neither is provided.
-  let version = inputs.version;
+  // Step 2: Resolve the Vite+ version. Precedence:
+  //   1. explicit `version`
+  //   2. explicit `version-file` (package.json / catalog), hard error if unresolvable
+  //   3. auto-detect from the project's package.json (best effort)
+  //   4. "latest"
+  let version: string | undefined = inputs.version;
   if (!version && inputs.versionFile) {
     version = resolveVitePlusVersionFile(inputs.versionFile, projectDir);
+  }
+  if (!version && !inputs.versionFile) {
+    version = tryResolveVitePlusVersionFromProject(projectDir);
   }
   if (!version) {
     version = "latest";

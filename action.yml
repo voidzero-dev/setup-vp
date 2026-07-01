@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: "Version of Vite+ to install. Takes precedence over version-file. Defaults to the latest release when neither is set."
+    description: "Version of Vite+ to install. Takes precedence over version-file. When neither is set, the version is auto-detected from the project's package.json (its vite-plus dependency or catalog entry), falling back to the latest release."
     required: false
     default: ""
   version-file:
