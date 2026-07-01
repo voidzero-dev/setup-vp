@@ -31,9 +31,10 @@ const PWSH_TIMEOUT_SEC = 15;
 // install script does not read `.npmrc`: it resolves `VP_VERSION` straight
 // from the npm registry, so a commit build 404s there. Extract the commit SHA
 // so we can route it through the script's pkg.pr.new path via VP_PR_VERSION.
-// The SHA is 7-40 hex chars (short SHA through full SHA) so trivial suffixes
-// like `0.0.0-commit.a` are not mistaken for commit builds.
-const PKG_PR_NEW_COMMIT_RE = /^0\.0\.0-commit\.([0-9a-f]{7,40})$/i;
+// The bridge only ever publishes `0.0.0-commit.<full 40-char sha>`, and the
+// install script maps a 40-char SHA straight to that build, so require exactly
+// 40 hex chars and nothing shorter is mistaken for a commit build.
+const PKG_PR_NEW_COMMIT_RE = /^0\.0\.0-commit\.([0-9a-f]{40})$/i;
 
 function pkgPrNewCommitSha(version: string): string | undefined {
   return version.match(PKG_PR_NEW_COMMIT_RE)?.[1];

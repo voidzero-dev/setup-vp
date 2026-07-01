@@ -135,8 +135,9 @@ describe("installVitePlus", () => {
       expected: undefined,
     },
     {
-      desc: "should not treat too-short commit suffixes as pkg.pr.new builds",
-      version: "0.0.0-commit.a",
+      desc: "should require a full 40-char SHA and ignore near-miss lengths",
+      // 39 hex chars: matched the old 7-40 bound but not the tightened 40.
+      version: `0.0.0-commit.${commitSha.slice(0, 39)}`,
       expected: undefined,
     },
   ])("$desc", async ({ version, expected }) => {
