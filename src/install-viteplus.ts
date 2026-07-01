@@ -25,6 +25,18 @@ const INSTALL_RETRY_DELAY_MS = 2000;
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 15";
 const PWSH_TIMEOUT_SEC = 15;
 
+// pkg.pr.new preview builds are published as `0.0.0-commit.<sha>` (for example
+// via the vite-plus registry bridge that `vp migrate` writes into `.npmrc`).
+// Those builds live only on pkg.pr.new, never on the npm registry, and the
+// install script does not read `.npmrc`: it resolves `VP_VERSION` straight
+// from the npm registry, so a commit build 404s there. Extract the commit SHA
+// so we can route it through the script's pkg.pr.new path via VP_PR_VERSION.
+const PKG_PR_NEW_COMMIT_RE = /^0\.0\.0-commit\.([0-9a-f]+)$/i;
+
+function pkgPrNewCommitSha(version: string): string | undefined {
+  return version.match(PKG_PR_NEW_COMMIT_RE)?.[1];
+}
+
 export async function installVitePlus(inputs: Inputs): Promise<void> {
   const { version } = inputs;
 
@@ -37,6 +49,13 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     VP_VERSION: version,
     VITE_PLUS_VERSION: version,
   } as { [key: string]: string };
+
+  // For pkg.pr.new preview builds, tell the install script to fetch from
+  // pkg.pr.new (bypassing the npm registry) instead of resolving VP_VERSION.
+  const prVersion = pkgPrNewCommitSha(version);
+  if (prVersion) {
+    env.VP_PR_VERSION = prVersion;
+  }
 
   const urls = process.platform === "win32" ? INSTALL_URLS_PS1 : INSTALL_URLS_SH;
   const maxAttempts = INSTALL_MAX_ROUNDS * urls.length;

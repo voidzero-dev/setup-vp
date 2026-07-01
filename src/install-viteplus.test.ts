@@ -113,4 +113,23 @@ describe("installVitePlus", () => {
     expect(script).toContain("--max-time");
     expect(script).toMatch(/\| bash$/);
   });
+
+  it("should route pkg.pr.new commit builds through VP_PR_VERSION", async () => {
+    vi.mocked(exec).mockResolvedValueOnce(0);
+
+    const sha = "7d848b3da1987fa60b4cf18487fcc36a2a697e94";
+    await installVitePlus({ ...baseInputs, version: `0.0.0-commit.${sha}` });
+
+    const options = vi.mocked(exec).mock.calls[0][2] as { env: { [key: string]: string } };
+    expect(options.env.VP_PR_VERSION).toBe(sha);
+  });
+
+  it("should not set VP_PR_VERSION for regular published versions", async () => {
+    vi.mocked(exec).mockResolvedValueOnce(0);
+
+    await installVitePlus({ ...baseInputs, version: "0.2.1" });
+
+    const options = vi.mocked(exec).mock.calls[0][2] as { env: { [key: string]: string } };
+    expect(options.env.VP_PR_VERSION).toBeUndefined();
+  });
 });
