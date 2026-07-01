@@ -9,11 +9,7 @@ import { saveCache } from "./cache-save.js";
 import { State, Outputs } from "./types.js";
 import type { Inputs } from "./types.js";
 import { resolveNodeVersionFile } from "./node-version-file.js";
-import {
-  tryResolveVitePlusVersionFile,
-  tryResolveVitePlusVersionFromProject,
-} from "./version-file.js";
-import { tryResolveVitePlusVersionFromLockfile } from "./lockfile-version.js";
+import { resolveVitePlusVersion } from "./version-file.js";
 import { configAuthentication, propagateProjectNpmrcAuth } from "./auth.js";
 import { getConfiguredProjectDir, parseInstalledVpVersion } from "./utils.js";
 
@@ -28,55 +24,36 @@ async function runMain(inputs: Inputs): Promise<void> {
     nodeVersion = resolveNodeVersionFile(inputs.nodeVersionFile, projectDir);
   }
 
-  // Step 2: Resolve the Vite+ version. Precedence:
-  //   1. explicit `version`
-  //   2. explicit `version-file` (package.json / catalog); warns and falls
-  //      through on any resolution failure rather than failing the run
-  //   3. auto-detect from the project's package.json (exact pin / catalog)
-  //   4. auto-detect the exact version from the lockfile (resolves a package.json
-  //      range like `^0.2.0` to what is actually locked)
-  //   5. "latest"
-  let version: string | undefined = inputs.version;
-  if (!version && inputs.versionFile) {
-    version = tryResolveVitePlusVersionFile(inputs.versionFile, projectDir);
-  }
-  if (!version && !inputs.versionFile) {
-    version =
-      tryResolveVitePlusVersionFromProject(projectDir) ??
-      tryResolveVitePlusVersionFromLockfile(projectDir, inputs.cacheDependencyPath);
-  }
-  if (!version) {
-    version = "latest";
-  }
-
-  // Step 3: Install Vite+
+  // Step 2: Resolve the Vite+ version (version > version-file > package.json >
+  // lockfile > latest; see resolveVitePlusVersion) and install it.
+  const version = resolveVitePlusVersion(inputs, projectDir);
   await installVitePlus({ ...inputs, version });
 
-  // Step 4: Set up Node.js version if specified
+  // Step 3: Set up Node.js version if specified
   if (nodeVersion) {
     info(`Setting up Node.js ${nodeVersion} via vp env use...`);
     await exec("vp", ["env", "use", nodeVersion]);
   }
 
-  // Step 5: Configure registry authentication
+  // Step 4: Configure registry authentication
   if (inputs.registryUrl) {
     configAuthentication(inputs.registryUrl, inputs.scope);
   } else {
     propagateProjectNpmrcAuth(projectDir);
   }
 
-  // Step 6: Restore cache if enabled
+  // Step 5: Restore cache if enabled
   if (inputs.cache) {
     await restoreCache(inputs);
   }
 
-  // Step 7: Install Socket Firewall Free if requested (must run before vp install).
+  // Step 6: Install Socket Firewall Free if requested (must run before vp install).
   // setupSfw centralizes all the decision branches: run-install disabled, sfw
   // already on PATH (e.g. via socketdev/action@<sha>), supported platform
   // (downloads our pinned binary), unsupported platform (falls back).
   const effectiveSfw = await setupSfw(inputs);
 
-  // Step 8: Run vp install if requested
+  // Step 7: Run vp install if requested
   if (inputs.runInstall.length > 0) {
     await runViteInstall({ ...inputs, sfw: effectiveSfw });
   }

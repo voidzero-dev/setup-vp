@@ -78,6 +78,7 @@ const LOCK_FILES: Array<{ filename: string; type: LockFileType }> = [
 export function detectLockFile(
   explicitPath?: string,
   workspace = getWorkspaceDir(),
+  silent = false,
 ): LockFileInfo | undefined {
   // If explicit path provided, use it
   if (explicitPath) {
@@ -105,7 +106,7 @@ export function detectLockFile(
   for (const lockInfo of LOCK_FILES) {
     if (workspaceContents.includes(lockInfo.filename)) {
       const fullPath = join(workspace, lockInfo.filename);
-      info(`Auto-detected lock file: ${lockInfo.filename}`);
+      if (!silent) info(`Auto-detected lock file: ${lockInfo.filename}`);
       return {
         type: lockInfo.type,
         path: fullPath,

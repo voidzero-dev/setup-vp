@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { warning } from "@actions/core";
 import {
+  resolveVitePlusVersion,
   resolveVitePlusVersionFile,
   tryResolveVitePlusVersionFile,
   tryResolveVitePlusVersionFromProject,
 } from "./version-file.js";
+import type { Inputs } from "./types.js";
 
 vi.mock("@actions/core", () => ({
   info: vi.fn(),
@@ -15,12 +17,14 @@ vi.mock("@actions/core", () => ({
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
+  readdirSync: vi.fn(() => []),
 }));
 
 /**
  * Back the mocked fs with a simple path -> content map. Resolution reads files
  * directly and treats a read failure as "missing", so the walk resolves against
- * this map with no separate existence check.
+ * this map with no separate existence check. `readdirSync` is derived from the
+ * map so lockfile auto-detection sees the same fixture files.
  */
 function mockFiles(files: Record<string, string>): void {
   vi.mocked(readFileSync).mockImplementation((path) => {
@@ -29,6 +33,12 @@ function mockFiles(files: Record<string, string>): void {
       throw new Error(`ENOENT: ${String(path)}`);
     }
     return content;
+  });
+  vi.mocked(readdirSync).mockImplementation((dir) => {
+    const prefix = `${String(dir)}/`;
+    return Object.keys(files)
+      .filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes("/"))
+      .map((p) => p.slice(prefix.length)) as never;
   });
 }
 
@@ -584,5 +594,91 @@ describe("resolveVitePlusVersionFile", () => {
 
       expect(tryResolveVitePlusVersionFromProject("/workspace")).toBeUndefined();
     });
+  });
+});
+
+describe("resolveVitePlusVersion (precedence)", () => {
+  const originalEnv = process.env;
+
+  const baseInputs: Inputs = {
+    version: "",
+    versionFile: undefined,
+    nodeVersion: undefined,
+    nodeVersionFile: undefined,
+    workingDirectory: undefined,
+    runInstall: [],
+    sfw: false,
+    cache: false,
+    cacheDependencyPath: undefined,
+    registryUrl: undefined,
+    scope: undefined,
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    process.env = { ...originalEnv, GITHUB_WORKSPACE: "/workspace" };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it("uses an explicit version verbatim, ignoring the project", () => {
+    mockFiles({
+      "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "0.2.0" } }),
+    });
+
+    expect(resolveVitePlusVersion({ ...baseInputs, version: "9.9.9" }, "/workspace")).toBe("9.9.9");
+  });
+
+  it("resolves from an explicit version-file", () => {
+    mockFiles({
+      "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "0.2.0" } }),
+    });
+
+    expect(
+      resolveVitePlusVersion({ ...baseInputs, versionFile: "package.json" }, "/workspace"),
+    ).toBe("0.2.0");
+  });
+
+  it("falls back to latest when an explicit version-file can't be resolved", () => {
+    mockFiles({});
+
+    expect(
+      resolveVitePlusVersion({ ...baseInputs, versionFile: "package.json" }, "/workspace"),
+    ).toBe("latest");
+  });
+
+  it("auto-detects an exact pin from package.json", () => {
+    mockFiles({
+      "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "0.2.0" } }),
+    });
+
+    expect(resolveVitePlusVersion(baseInputs, "/workspace")).toBe("0.2.0");
+  });
+
+  it("resolves a package.json range from the lockfile", () => {
+    mockFiles({
+      "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "^0.2.0" } }),
+      "/workspace/pnpm-lock.yaml": [
+        "importers:",
+        "  .:",
+        "    devDependencies:",
+        "      vite-plus:",
+        "        specifier: ^0.2.0",
+        "        version: 0.2.0",
+        "",
+      ].join("\n"),
+    });
+
+    expect(resolveVitePlusVersion(baseInputs, "/workspace")).toBe("0.2.0");
+  });
+
+  it("falls back to latest when nothing pins a resolvable version", () => {
+    mockFiles({
+      "/workspace/package.json": JSON.stringify({ devDependencies: { vite: "^6.0.0" } }),
+    });
+
+    expect(resolveVitePlusVersion(baseInputs, "/workspace")).toBe("latest");
   });
 });

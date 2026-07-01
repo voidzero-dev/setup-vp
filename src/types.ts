@@ -62,3 +62,5 @@ export enum Outputs {
 
 // Package constants
 export const DISPLAY_NAME = "Vite+";
+// The published package name on the npm registry.
+export const PACKAGE_NAME = "vite-plus";

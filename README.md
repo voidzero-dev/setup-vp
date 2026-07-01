@@ -157,10 +157,11 @@ just declare an exact version (`"vite-plus": "0.2.0"`) and it is used as-is.
 
 You can also point `version-file` straight at `pnpm-workspace.yaml` or
 `.yarnrc.yml` to read its default catalog entry. An explicit `version` always
-takes precedence over `version-file`. The resolved value must be an exact
-version or dist-tag; a semver range such as `^0.2.0` (or an alias like `npm:` /
-`git:`) can't be resolved, so it is skipped with a warning and the action falls
-back to `latest` rather than forwarding an uninstallable value.
+takes precedence over `version-file`. A resolved value must be an exact version
+or dist-tag: when an explicit `version-file` yields a semver range (e.g.
+`^0.2.0`) or an alias (`npm:` / `git:`), it can't be installed directly, so the
+action warns and falls back to `latest`. (Auto-detection instead resolves a
+`package.json` range through the lockfile, as described above.)
 
 ### Advanced Run Install
 

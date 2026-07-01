@@ -2,11 +2,11 @@ import { info, debug, warning } from "@actions/core";
 import { readFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { DISPLAY_NAME } from "./types.js";
+import { DISPLAY_NAME, PACKAGE_NAME } from "./types.js";
+import type { Inputs } from "./types.js";
 import { getWorkspaceDir, resolvePath } from "./utils.js";
+import { tryResolveVitePlusVersionFromLockfile } from "./lockfile-version.js";
 
-// The published package name for Vite+ on the npm registry.
-const PACKAGE_NAME = "vite-plus";
 const CATALOG_PREFIX = "catalog:";
 
 // package.json fields checked for the vite-plus spec, in priority order.
@@ -26,6 +26,29 @@ const YAML_CATALOG_SOURCES = ["pnpm-workspace.yaml", ".yarnrc.yml"];
 interface CatalogContainer {
   catalog?: Record<string, unknown>;
   catalogs?: Record<string, Record<string, unknown> | undefined>;
+}
+
+/**
+ * Resolve the Vite+ version to install, applying the full precedence:
+ *   1. explicit `version`
+ *   2. explicit `version-file` (warns and falls through if unresolvable)
+ *   3. auto-detect from the project's package.json (exact pin / catalog)
+ *   4. auto-detect the exact version from the lockfile (resolves a package.json
+ *      range like `^0.2.0` to what is actually locked)
+ *   5. "latest"
+ */
+export function resolveVitePlusVersion(inputs: Inputs, projectDir: string): string {
+  if (inputs.version) return inputs.version;
+
+  if (inputs.versionFile) {
+    return tryResolveVitePlusVersionFile(inputs.versionFile, projectDir) ?? "latest";
+  }
+
+  return (
+    tryResolveVitePlusVersionFromProject(projectDir) ??
+    tryResolveVitePlusVersionFromLockfile(projectDir, inputs.cacheDependencyPath) ??
+    "latest"
+  );
 }
 
 /**
@@ -203,15 +226,11 @@ function resolveCatalogSpec(spec: string, startDir: string): string {
   let dir = startDir;
   for (;;) {
     for (const name of YAML_CATALOG_SOURCES) {
-      const version = tryYamlCatalogVersion(join(dir, name), catalogName, `in ${name} at ${dir}`);
+      const version = tryYamlCatalogVersion(join(dir, name), catalogName);
       if (version !== undefined) return version;
     }
 
-    const version = tryPackageJsonCatalogVersion(
-      join(dir, "package.json"),
-      catalogName,
-      `in package.json at ${dir}`,
-    );
+    const version = tryPackageJsonCatalogVersion(join(dir, "package.json"), catalogName);
     if (version !== undefined) return version;
 
     const parent = dirname(dir);
@@ -229,10 +248,11 @@ function resolveCatalogSpec(spec: string, startDir: string): string {
 }
 
 // Is `child` at or below `parent`? Used to keep the catalog walk from ascending
-// out of the workspace root.
+// out of the workspace root. (An empty relative path — child === parent — also
+// satisfies the checks below.)
 function isWithin(child: string, parent: string): boolean {
   const rel = relative(parent, child);
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  return !rel.startsWith("..") && !isAbsolute(rel);
 }
 
 /**
@@ -265,32 +285,20 @@ function catalogEntryFromYaml(path: string, catalogName: string): unknown {
 
 // Lenient catalog readers used during the upward walk: a missing, unparseable,
 // or malformed ancestor source is skipped (returns undefined) so the walk keeps
-// climbing rather than aborting.
-function tryYamlCatalogVersion(
-  path: string,
-  catalogName: string,
-  where: string,
-): string | undefined {
+// climbing rather than aborting. The `where` detail on asVersion is dropped here
+// because these callers swallow the error anyway.
+function tryYamlCatalogVersion(path: string, catalogName: string): string | undefined {
   try {
-    return asVersion(catalogEntryFromYaml(path, catalogName), where);
+    return asVersion(catalogEntryFromYaml(path, catalogName));
   } catch {
     return undefined;
   }
 }
 
-function tryPackageJsonCatalogVersion(
-  path: string,
-  catalogName: string,
-  where: string,
-): string | undefined {
-  let pkg: unknown;
+function tryPackageJsonCatalogVersion(path: string, catalogName: string): string | undefined {
   try {
-    pkg = JSON.parse(readFileSync(path, "utf-8"));
-  } catch {
-    return undefined;
-  }
-  try {
-    return asVersion(packageJsonCatalogEntry(pkg, catalogName), where);
+    const pkg: unknown = JSON.parse(readFileSync(path, "utf-8"));
+    return asVersion(packageJsonCatalogEntry(pkg, catalogName));
   } catch {
     return undefined;
   }
@@ -309,11 +317,11 @@ function packageJsonCatalogEntry(pkg: unknown, catalogName: string): unknown {
 // Entries are normally quoted version strings; YAML can also parse an unquoted
 // numeric-looking version as a number. Anything else (e.g. a nested object) is
 // malformed config and throws.
-function asVersion(entry: unknown, where: string): string | undefined {
+function asVersion(entry: unknown, where?: string): string | undefined {
   if (entry == null) return undefined;
   if (typeof entry === "string") return entry;
   if (typeof entry === "number") return String(entry);
-  throw new Error(`Invalid ${PACKAGE_NAME} entry ${where}`);
+  throw new Error(`Invalid ${PACKAGE_NAME} entry${where ? ` ${where}` : ""}`);
 }
 
 // A resolved version must be installable straight off the npm registry: an exact

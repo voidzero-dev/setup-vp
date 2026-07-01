@@ -1,11 +1,10 @@
-import { info, debug, warning } from "@actions/core";
+import { info, debug } from "@actions/core";
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
-import { DISPLAY_NAME } from "./types.js";
+import { DISPLAY_NAME, PACKAGE_NAME, LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
 import { detectLockFile } from "./utils.js";
 
-const PACKAGE_NAME = "vite-plus";
 // Lockfiles always record fully-resolved versions, so a valid result starts with
 // major.minor.patch; use this to sanity-check extracted values.
 const VERSION_START_RE = /^\d+\.\d+\.\d+/;
@@ -23,13 +22,19 @@ export function tryResolveVitePlusVersionFromLockfile(
   projectDir: string,
   cacheDependencyPath?: string,
 ): string | undefined {
-  const lock = detectLockFile(cacheDependencyPath, projectDir);
+  // Detect silently: on the cache path `restoreCache` logs the authoritative
+  // "Auto-detected lock file" line, and a successful resolve reports its own
+  // "Resolved ... from <lockfile>" below.
+  const lock = detectLockFile(cacheDependencyPath, projectDir, true);
   if (!lock) return undefined;
 
-  if (lock.filename === "bun.lockb") {
-    warning(
-      `Cannot read ${lock.filename} (a binary lockfile) to resolve the ${DISPLAY_NAME} version; ` +
-        `falling back to "latest". Use the text bun.lock, or set the \`version\` input.`,
+  if (lock.filename.endsWith(".lockb")) {
+    // Binary lockfile (bun.lockb) can't be read. This is a best-effort
+    // auto-detect (the user opted into nothing), so stay at debug like the
+    // package.json auto-detect sibling rather than warning every run.
+    debug(
+      `Cannot read ${lock.filename} (binary) to resolve the ${DISPLAY_NAME} version; using "latest". ` +
+        `Use the text bun.lock, or set the \`version\` input.`,
     );
     return undefined;
   }
@@ -50,6 +55,10 @@ export function tryResolveVitePlusVersionFromLockfile(
  * that does not pin vite-plus.
  */
 export function parseVitePlusVersionFromLockfile(lock: LockFileInfo): string | undefined {
+  // bun ships two lockfiles under the same LockFileType; only the text one is
+  // readable, so screen out the binary variant before dispatching on type.
+  if (lock.filename.endsWith(".lockb")) return undefined;
+
   let content: string;
   try {
     content = readFileSync(lock.path, "utf-8");
@@ -57,23 +66,23 @@ export function parseVitePlusVersionFromLockfile(lock: LockFileInfo): string | u
     return undefined;
   }
 
+  // Dispatch on the package-manager type (honoring detectLockFile's inference for
+  // non-standard filenames) rather than re-enumerating filenames.
   let version: string | undefined;
-  switch (lock.filename) {
-    case "package-lock.json":
-    case "npm-shrinkwrap.json":
+  switch (lock.type) {
+    case LockFileType.Npm:
       version = fromNpmLock(content);
       break;
-    case "pnpm-lock.yaml":
+    case LockFileType.Pnpm:
       version = fromPnpmLock(content);
       break;
-    case "yarn.lock":
+    case LockFileType.Yarn:
       version = fromYarnLock(content);
       break;
-    case "bun.lock":
+    case LockFileType.Bun:
       version = fromBunTextLock(content);
       break;
     default:
-      // bun.lockb (binary) or any unknown filename.
       return undefined;
   }
 
