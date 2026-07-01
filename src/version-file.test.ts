@@ -121,12 +121,20 @@ describe("resolveVitePlusVersionFile", () => {
       expect(resolveVitePlusVersionFile("package.json")).toBe("0.4.0");
     });
 
-    it("should strip a leading v prefix", () => {
+    it("should strip a leading v prefix from a version", () => {
       mockFiles({
         "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "v0.2.0" } }),
       });
 
       expect(resolveVitePlusVersionFile("package.json")).toBe("0.2.0");
+    });
+
+    it("should preserve a v-prefixed dist-tag (only strip v before a digit)", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "vnext" } }),
+      });
+
+      expect(resolveVitePlusVersionFile("package.json")).toBe("vnext");
     });
 
     it("should throw when no vite-plus entry is present", () => {

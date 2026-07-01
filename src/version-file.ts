@@ -77,8 +77,9 @@ export function resolveVitePlusVersionFile(filePath: string, baseDir?: string): 
     throw new Error(`No ${PACKAGE_NAME} version found in ${filePath}`);
   }
 
-  // Strip a leading 'v' prefix (e.g. "v0.2.0" -> "0.2.0").
-  version = version.trim().replace(/^v/i, "");
+  // Strip a leading 'v' prefix from a version (e.g. "v0.2.0" -> "0.2.0"), but
+  // only before a digit so v-prefixed dist-tags like "vnext" are preserved.
+  version = version.trim().replace(/^v(?=\d)/i, "");
 
   info(`Resolved ${DISPLAY_NAME} version '${version}' from ${filePath}`);
   return version;
