@@ -127,14 +127,20 @@ describe("resolveVitePlusVersionFile", () => {
       expect(resolveVitePlusVersionFile("package.json")).toBe("0.3.0");
     });
 
-    it("should read from optionalDependencies", () => {
+    it("should ignore optionalDependencies and peerDependencies", () => {
+      // peerDependencies is a compatibility range, not an installed version, and
+      // optionalDependencies is not where a toolchain belongs — neither is a
+      // valid source for the version to install.
       mockFiles({
         "/workspace/package.json": JSON.stringify({
           optionalDependencies: { "vite-plus": "0.4.0" },
+          peerDependencies: { "vite-plus": ">=0.2.0" },
         }),
       });
 
-      expect(resolveVitePlusVersionFile("package.json")).toBe("0.4.0");
+      expect(() => resolveVitePlusVersionFile("package.json")).toThrow(
+        "No vite-plus version found in package.json",
+      );
     });
 
     it("should strip a leading v prefix from a version", () => {
