@@ -2,7 +2,7 @@ import { info, warning, debug } from "@actions/core";
 import { getExecOutput } from "@actions/exec";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, basename, relative } from "node:path";
+import { isAbsolute, join, basename, relative, sep } from "node:path";
 import type { Inputs } from "./types.js";
 import { LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
@@ -13,10 +13,13 @@ export function getVitePlusHome(): string {
 }
 
 // Is `child` at or below `parent`? Used to bound upward directory walks (catalog
-// sources, lockfiles) to the workspace root.
+// sources, lockfiles) to the workspace root. A leading ".." *segment* means the
+// path escaped `parent`; guard the segment boundary so a child directory merely
+// named "..foo" is not misclassified as outside.
 export function isWithin(child: string, parent: string): boolean {
   const rel = relative(parent, child);
-  return !rel.startsWith("..") && !isAbsolute(rel);
+  if (isAbsolute(rel)) return false; // different root/drive
+  return rel !== ".." && !rel.startsWith(`..${sep}`);
 }
 
 /**

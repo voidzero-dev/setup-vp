@@ -1,6 +1,6 @@
 import { info, debug } from "@actions/core";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { DISPLAY_NAME, PACKAGE_NAME, LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
@@ -91,9 +91,9 @@ function textBunLockBeside(lock: LockFileInfo): LockFileInfo | undefined {
 // root, or when the project is outside the lockfile's tree). pnpm importer keys
 // and npm workspace lock paths are relative to the lockfile and slash-separated.
 function workspaceSubPath(lockDir: string, projectDir: string): string {
+  if (!isWithin(projectDir, lockDir)) return ""; // project outside the lockfile's tree
   const rel = relative(lockDir, projectDir);
-  if (!rel || rel.startsWith("..") || isAbsolute(rel)) return "";
-  return rel.split(sep).join("/");
+  return rel ? rel.split(sep).join("/") : "";
 }
 
 /**

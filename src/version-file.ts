@@ -31,7 +31,8 @@ interface CatalogContainer {
 /**
  * Resolve the Vite+ version to install, applying the full precedence:
  *   1. explicit `version`
- *   2. explicit `version-file` (warns and falls through if unresolvable)
+ *   2. explicit `version-file` (warns and falls back to "latest" if
+ *      unresolvable; does not continue to auto-detect / lockfile)
  *   3. auto-detect from the project's package.json (exact pin / catalog)
  *   4. auto-detect the exact version from the lockfile (resolves a package.json
  *      range like `^0.2.0` to what is actually locked)
@@ -81,7 +82,8 @@ function shouldConsultLockfile(projectDir: string): boolean {
 function isLockfileResolvableSpec(spec: string): boolean {
   if (spec.startsWith(CATALOG_PREFIX)) return true;
   // Exclude non-registry protocols/aliases (contain ':' or '@') and repo/path
-  // shorthands (contain '/' or '\\'); only plain semver ranges qualify.
+  // shorthands (the '/' and '\\' in the class are intentional); only plain
+  // semver ranges qualify.
   return !/[:/@\\]/.test(spec);
 }
 

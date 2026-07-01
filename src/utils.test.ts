@@ -7,6 +7,7 @@ import {
   getConfiguredProjectDir,
   getCacheDirectories,
   getInstallCwd,
+  isWithin,
   parseInstalledVpVersion,
   resolvePath,
 } from "./utils.js";
@@ -501,5 +502,23 @@ describe("parseInstalledVpVersion", () => {
 
   it("returns 'unknown' when no version can be parsed", () => {
     expect(parseInstalledVpVersion("no version here")).toBe("unknown");
+  });
+});
+
+describe("isWithin", () => {
+  it("treats a directory as within itself", () => {
+    expect(isWithin("/a/b", "/a/b")).toBe(true);
+  });
+
+  it("treats a nested child as within", () => {
+    expect(isWithin("/a/b/c/d", "/a/b")).toBe(true);
+  });
+
+  it("treats an escaping path as outside", () => {
+    expect(isWithin("/a/x", "/a/b")).toBe(false);
+  });
+
+  it("does not misclassify a child directory named '..foo'", () => {
+    expect(isWithin("/a/b/..foo", "/a/b")).toBe(true);
   });
 });

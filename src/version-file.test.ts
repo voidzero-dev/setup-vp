@@ -15,14 +15,12 @@ vi.mock("@actions/core", () => ({
   warning: vi.fn(),
 }));
 
-// Cover every node:fs binding used across the imported module graph (utils.ts /
-// lockfile-version.ts also import existsSync / statSync), not just the ones
-// these tests exercise, so the mock can't break as code paths shift.
-vi.mock("node:fs", () => ({
+// Preserve the real node:fs (so transitively-loaded modules keep every binding)
+// and override only what these tests drive, matching utils.test.ts.
+vi.mock("node:fs", async () => ({
+  ...(await vi.importActual<typeof import("node:fs")>("node:fs")),
   readFileSync: vi.fn(),
   readdirSync: vi.fn(() => []),
-  existsSync: vi.fn(() => false),
-  statSync: vi.fn(),
 }));
 
 /**
@@ -709,6 +707,22 @@ describe("resolveVitePlusVersion (precedence)", () => {
       // No direct vite-plus, but a shared lockfile records it (transitive /
       // another workspace) — must not be mistaken for this project's pin.
       "/workspace/package.json": JSON.stringify({ devDependencies: { vite: "^6.0.0" } }),
+      "/workspace/pnpm-lock.yaml": [
+        "packages:",
+        "  vite-plus@0.2.0:",
+        "    resolution: {}",
+        "",
+      ].join("\n"),
+    });
+
+    expect(resolveVitePlusVersion(baseInputs, "/workspace")).toBe("latest");
+  });
+
+  it("does not consult the lockfile for a repo/path shorthand spec (owner/repo)", () => {
+    mockFiles({
+      "/workspace/package.json": JSON.stringify({
+        devDependencies: { "vite-plus": "voidzero-dev/vite-plus" },
+      }),
       "/workspace/pnpm-lock.yaml": [
         "packages:",
         "  vite-plus@0.2.0:",

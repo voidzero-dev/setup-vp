@@ -14,13 +14,13 @@ vi.mock("@actions/core", () => ({
   warning: vi.fn(),
 }));
 
-// Cover every node:fs binding used across the imported module graph (utils.ts
-// also imports statSync), not just the ones these tests exercise.
-vi.mock("node:fs", () => ({
+// Preserve the real node:fs and override only what these tests drive, matching
+// utils.test.ts.
+vi.mock("node:fs", async () => ({
+  ...(await vi.importActual<typeof import("node:fs")>("node:fs")),
   readFileSync: vi.fn(),
   readdirSync: vi.fn(),
   existsSync: vi.fn(),
-  statSync: vi.fn(),
 }));
 
 function lock(filename: string, type: LockFileType, content: string): LockFileInfo {
