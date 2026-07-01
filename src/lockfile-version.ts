@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { DISPLAY_NAME, PACKAGE_NAME, LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
-import { detectLockFile } from "./utils.js";
+import { detectLockFile, getWorkspaceDir, isWithin } from "./utils.js";
 
 // Lockfiles always record fully-resolved versions, so a valid result starts with
 // major.minor.patch; use this to sanity-check extracted values.
@@ -26,7 +26,7 @@ export function tryResolveVitePlusVersionFromLockfile(
   // Detect silently: on the cache path `restoreCache` logs the authoritative
   // "Auto-detected lock file" line, and a successful resolve reports its own
   // "Resolved ... from <lockfile>" below.
-  const detected = detectLockFile(cacheDependencyPath, projectDir, true);
+  const detected = detectLockfileForProject(projectDir, cacheDependencyPath);
   if (!detected) return undefined;
 
   // detectLockFile prioritizes the binary bun.lockb, but a readable text
@@ -53,6 +53,29 @@ export function tryResolveVitePlusVersionFromLockfile(
   }
 
   debug(`No ${DISPLAY_NAME} version found in ${lock.path}`);
+  return undefined;
+}
+
+// Locate the project's lockfile. An explicit cache-dependency-path is used
+// as-is; otherwise auto-detect from the project directory upward to the
+// workspace root, since in a monorepo the lockfile usually lives at the repo
+// root rather than inside a working-directory subpackage.
+function detectLockfileForProject(
+  projectDir: string,
+  cacheDependencyPath?: string,
+): LockFileInfo | undefined {
+  if (cacheDependencyPath) {
+    return detectLockFile(cacheDependencyPath, projectDir, true);
+  }
+  const boundary = getWorkspaceDir();
+  let dir = projectDir;
+  for (;;) {
+    const lock = detectLockFile(undefined, dir, true);
+    if (lock) return lock;
+    const parent = dirname(dir);
+    if (dir === boundary || parent === dir || !isWithin(parent, boundary)) break;
+    dir = parent;
+  }
   return undefined;
 }
 

@@ -1,10 +1,10 @@
 import { info, debug, warning } from "@actions/core";
 import { readFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { DISPLAY_NAME, PACKAGE_NAME } from "./types.js";
 import type { Inputs } from "./types.js";
-import { getWorkspaceDir, resolvePath } from "./utils.js";
+import { getWorkspaceDir, isWithin, resolvePath } from "./utils.js";
 import { tryResolveVitePlusVersionFromLockfile } from "./lockfile-version.js";
 
 const CATALOG_PREFIX = "catalog:";
@@ -269,14 +269,6 @@ function resolveCatalogSpec(spec: string, startDir: string): string {
     `Could not resolve "${spec}" for ${PACKAGE_NAME}: no matching catalog entry found in ` +
       `pnpm-workspace.yaml, .yarnrc.yml, or a package.json catalog (searched up from ${startDir})`,
   );
-}
-
-// Is `child` at or below `parent`? Used to keep the catalog walk from ascending
-// out of the workspace root. (An empty relative path — child === parent — also
-// satisfies the checks below.)
-function isWithin(child: string, parent: string): boolean {
-  const rel = relative(parent, child);
-  return !rel.startsWith("..") && !isAbsolute(rel);
 }
 
 /**

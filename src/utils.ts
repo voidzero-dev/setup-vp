@@ -2,7 +2,7 @@ import { info, warning, debug } from "@actions/core";
 import { getExecOutput } from "@actions/exec";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, basename } from "node:path";
+import { isAbsolute, join, basename, relative } from "node:path";
 import type { Inputs } from "./types.js";
 import { LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
@@ -10,6 +10,13 @@ import type { LockFileInfo } from "./types.js";
 export function getVitePlusHome(): string {
   const home = process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
   return join(home || homedir(), ".vite-plus");
+}
+
+// Is `child` at or below `parent`? Used to bound upward directory walks (catalog
+// sources, lockfiles) to the workspace root.
+export function isWithin(child: string, parent: string): boolean {
+  const rel = relative(parent, child);
+  return !rel.startsWith("..") && !isAbsolute(rel);
 }
 
 /**
