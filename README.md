@@ -85,8 +85,11 @@ checked-out project instead of duplicating it in the workflow.
 
 By default (when neither `version` nor `version-file` is set), the action reads
 the `vite-plus` entry from the project's `package.json` and installs that
-version, falling back to `latest` when it can't be resolved to an exact version
-(no `vite-plus` entry, or a semver range like `^0.2.0`). So a project that pins
+version. When that entry is a semver range like `^0.2.0` (which can't be
+installed directly), it is resolved to the exact version recorded in the
+lockfile (`pnpm-lock.yaml`, `package-lock.json`, `npm-shrinkwrap.json`,
+`yarn.lock`, or `bun.lock`; the binary `bun.lockb` can't be read). It falls back
+to `latest` only when nothing pins a resolvable version. So a project that pins
 `vite-plus` needs no extra configuration:
 
 ```yaml

@@ -106,8 +106,14 @@ jobs:
             expected: "0.2.0"
           - scenario: catalog
             expected: "0.2.0"
-          # A range can't be resolved off the registry, so auto-detect must fall
-          # back to `latest` instead of failing the run.
+          # A package.json range resolves to the exact version pinned by the
+          # lockfile rather than falling back to latest.
+          - scenario: lockfile-pnpm
+            expected: "0.2.0"
+          - scenario: lockfile-npm
+            expected: "0.2.0"
+          # A range with no lockfile can't be resolved, so auto-detect falls back
+          # to `latest` instead of failing the run.
           - scenario: fallback-range
             expected: latest
     runs-on: ubuntu-latest
@@ -126,6 +132,14 @@ jobs:
             catalog)
               echo '{"name":"fixture","private":true,"devDependencies":{"vite-plus":"catalog:"}}' > "$DIR/package.json"
               printf 'catalog:\n  vite-plus: 0.2.0\n' > "$DIR/pnpm-workspace.yaml"
+              ;;
+            lockfile-pnpm)
+              echo '{"name":"fixture","private":true,"devDependencies":{"vite-plus":"^0.2.0"}}' > "$DIR/package.json"
+              printf 'importers:\n  .:\n    devDependencies:\n      vite-plus:\n        specifier: ^0.2.0\n        version: 0.2.0\n' > "$DIR/pnpm-lock.yaml"
+              ;;
+            lockfile-npm)
+              echo '{"name":"fixture","private":true,"devDependencies":{"vite-plus":"^0.2.0"}}' > "$DIR/package.json"
+              echo '{"name":"fixture","lockfileVersion":3,"packages":{"":{"devDependencies":{"vite-plus":"^0.2.0"}},"node_modules/vite-plus":{"version":"0.2.0"}}}' > "$DIR/package-lock.json"
               ;;
             fallback-range)
               echo '{"name":"fixture","private":true,"devDependencies":{"vite-plus":"^0.2.0"}}' > "$DIR/package.json"

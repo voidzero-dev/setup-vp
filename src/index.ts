@@ -13,6 +13,7 @@ import {
   tryResolveVitePlusVersionFile,
   tryResolveVitePlusVersionFromProject,
 } from "./version-file.js";
+import { tryResolveVitePlusVersionFromLockfile } from "./lockfile-version.js";
 import { configAuthentication, propagateProjectNpmrcAuth } from "./auth.js";
 import { getConfiguredProjectDir, parseInstalledVpVersion } from "./utils.js";
 
@@ -31,14 +32,18 @@ async function runMain(inputs: Inputs): Promise<void> {
   //   1. explicit `version`
   //   2. explicit `version-file` (package.json / catalog); warns and falls
   //      through on any resolution failure rather than failing the run
-  //   3. auto-detect from the project's package.json (best effort)
-  //   4. "latest"
+  //   3. auto-detect from the project's package.json (exact pin / catalog)
+  //   4. auto-detect the exact version from the lockfile (resolves a package.json
+  //      range like `^0.2.0` to what is actually locked)
+  //   5. "latest"
   let version: string | undefined = inputs.version;
   if (!version && inputs.versionFile) {
     version = tryResolveVitePlusVersionFile(inputs.versionFile, projectDir);
   }
   if (!version && !inputs.versionFile) {
-    version = tryResolveVitePlusVersionFromProject(projectDir);
+    version =
+      tryResolveVitePlusVersionFromProject(projectDir) ??
+      tryResolveVitePlusVersionFromLockfile(projectDir, inputs.cacheDependencyPath);
   }
   if (!version) {
     version = "latest";
