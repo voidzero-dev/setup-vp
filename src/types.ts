@@ -19,6 +19,7 @@ export type RunInstall = z.infer<typeof RunInstallSchema>;
 // Main inputs interface
 export interface Inputs {
   readonly version: string;
+  readonly versionFile?: string;
   readonly nodeVersion?: string;
   readonly nodeVersionFile?: string;
   readonly workingDirectory?: string;
@@ -61,3 +62,5 @@ export enum Outputs {
 
 // Package constants
 export const DISPLAY_NAME = "Vite+";
+// The published package name on the npm registry.
+export const PACKAGE_NAME = "vite-plus";
