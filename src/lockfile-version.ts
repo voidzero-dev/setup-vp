@@ -150,10 +150,15 @@ function fromNpmLock(content: string, subPath: string): string | undefined {
     return undefined;
   }
 
-  const packages = json.packages as Record<string, { version?: unknown }> | undefined;
+  const packages = json.packages as Record<string, Record<string, unknown>> | undefined;
   if (subPath) {
     const scoped = packages?.[`${subPath}/node_modules/${PACKAGE_NAME}`]?.version;
     if (typeof scoped === "string") return scoped;
+    // Not installed under the package itself: the hoisted root entry only
+    // belongs to this package if it is a lockfile member that declares
+    // vite-plus. Otherwise (a nested project absent from this lockfile) the root
+    // version is unrelated, so fall back rather than install it.
+    if (!npmPackageDeclaresVitePlus(packages?.[subPath])) return undefined;
   }
   const top = packages?.[`node_modules/${PACKAGE_NAME}`]?.version;
   if (typeof top === "string") return top;
@@ -161,6 +166,20 @@ function fromNpmLock(content: string, subPath: string): string | undefined {
   const deps = json.dependencies as Record<string, { version?: unknown }> | undefined;
   const v1 = deps?.[PACKAGE_NAME]?.version;
   return typeof v1 === "string" ? v1 : undefined;
+}
+
+// Does an npm lockfile package node (packages["<subPath>"]) declare vite-plus in
+// its dependencies / devDependencies? Confirms the hoisted root install belongs
+// to this package.
+function npmPackageDeclaresVitePlus(node: Record<string, unknown> | undefined): boolean {
+  if (!node) return false;
+  for (const field of ["dependencies", "devDependencies"] as const) {
+    const deps = node[field];
+    if (deps && typeof deps === "object" && PACKAGE_NAME in (deps as Record<string, unknown>)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // pnpm: prefer the importer for the selected project (its exact resolved

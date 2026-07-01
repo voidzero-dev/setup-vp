@@ -76,6 +76,39 @@ describe("parseVitePlusVersionFromLockfile", () => {
       ).toBe("0.2.0");
     });
 
+    it("uses the hoisted root entry for a workspace member that declares vite-plus", () => {
+      const content = JSON.stringify({
+        lockfileVersion: 3,
+        packages: {
+          "": {},
+          "packages/app": { devDependencies: { "vite-plus": "^0.2.0" } },
+          "node_modules/vite-plus": { version: "0.2.0" },
+        },
+      });
+      expect(
+        parseVitePlusVersionFromLockfile(
+          lock("package-lock.json", LockFileType.Npm, content),
+          "packages/app",
+        ),
+      ).toBe("0.2.0");
+    });
+
+    it("does not use the hoisted root entry for a nested package absent from the lockfile", () => {
+      const content = JSON.stringify({
+        lockfileVersion: 3,
+        packages: {
+          "": { devDependencies: { "vite-plus": "^9.0.0" } },
+          "node_modules/vite-plus": { version: "9.9.9" },
+        },
+      });
+      expect(
+        parseVitePlusVersionFromLockfile(
+          lock("package-lock.json", LockFileType.Npm, content),
+          "nested/app",
+        ),
+      ).toBeUndefined();
+    });
+
     it("returns undefined when vite-plus is absent", () => {
       const content = JSON.stringify({ lockfileVersion: 3, packages: { "": {} } });
       expect(
