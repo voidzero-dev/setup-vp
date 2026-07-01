@@ -78,7 +78,7 @@ describe("resolveVitePlusVersionFile", () => {
       mockFiles({ "/workspace/.nvmrc": "20\n" });
 
       expect(() => resolveVitePlusVersionFile(".nvmrc")).toThrow(
-        "Unsupported version-file: .nvmrc (expected package.json, pnpm-workspace.yaml, or .yarnrc.yml)",
+        "Unsupported version-file: .nvmrc (expected package.json, pnpm-workspace.yaml, pnpm-workspace.yml, .yarnrc.yml)",
       );
     });
   });
@@ -320,6 +320,27 @@ describe("resolveVitePlusVersionFile", () => {
       });
 
       expect(resolveVitePlusVersionFile("package.json", "/workspace/packages/app")).toBe("0.5.2");
+    });
+
+    it("should resolve from a directly-targeted root package.json's own top-level catalog", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({
+          workspaces: ["packages/*"],
+          catalog: { "vite-plus": "0.5.3" },
+        }),
+      });
+
+      expect(resolveVitePlusVersionFile("package.json")).toBe("0.5.3");
+    });
+
+    it("should resolve from a directly-targeted root package.json catalog under workspaces", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({
+          workspaces: { packages: ["packages/*"], catalog: { "vite-plus": "0.5.4" } },
+        }),
+      });
+
+      expect(resolveVitePlusVersionFile("package.json")).toBe("0.5.4");
     });
 
     it("should prefer a pnpm-workspace.yaml catalog over an ancestor package.json catalog", () => {

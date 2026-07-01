@@ -42,6 +42,9 @@ interface CatalogContainer {
  *      - .yarnrc.yml (yarn)
  *      - a root package.json `catalog`/`catalogs` (bun, top-level or under
  *        `workspaces`)
+ *    A package.json that declares its own default catalog but does not list
+ *    vite-plus as a dependency (e.g. a bun workspace root) resolves from that
+ *    catalog directly.
  *  - pnpm-workspace.yaml / .yarnrc.yml: reads the `vite-plus` entry directly
  *    from the default catalog.
  *
@@ -55,16 +58,18 @@ export function resolveVitePlusVersionFile(filePath: string, baseDir?: string): 
 
   let version: string | undefined;
   if (YAML_CATALOG_SOURCES.includes(filename)) {
-    const entry = catalogEntryFromYaml(fullPath, "default");
-    if (!isPresent(entry)) {
+    version = asVersion(
+      catalogEntryFromYaml(fullPath, "default"),
+      `in default catalog of ${fullPath}`,
+    );
+    if (version === undefined) {
       throw new Error(`${PACKAGE_NAME} not found in default catalog of ${fullPath}`);
     }
-    version = asVersion(entry, `in default catalog of ${fullPath}`);
   } else if (filename === "package.json") {
     version = resolveFromPackageJson(fullPath);
   } else {
     throw new Error(
-      `Unsupported version-file: ${filePath} (expected package.json, pnpm-workspace.yaml, or .yarnrc.yml)`,
+      `Unsupported version-file: ${filePath} (expected package.json, ${YAML_CATALOG_SOURCES.join(", ")})`,
     );
   }
 
@@ -98,7 +103,11 @@ function resolveFromPackageJson(pkgPath: string): string | undefined {
   }
 
   const spec = findDepSpec(pkg);
-  if (!spec) return undefined;
+  if (!spec) {
+    // A directly-targeted package.json may itself declare the default catalog
+    // (e.g. a bun workspace root) without listing vite-plus as a dependency.
+    return asVersion(packageJsonCatalogEntry(pkg, "default"), `in default catalog of ${pkgPath}`);
+  }
 
   if (spec.startsWith(CATALOG_PREFIX)) {
     return resolveCatalogSpec(spec, dirname(pkgPath));
@@ -139,15 +148,21 @@ function resolveCatalogSpec(spec: string, startDir: string): string {
     for (const name of YAML_CATALOG_SOURCES) {
       const candidate = join(dir, name);
       if (existsSync(candidate)) {
-        const entry = tryCatalogEntryFromYaml(candidate, catalogName);
-        if (isPresent(entry)) return asVersion(entry, `in ${name} at ${dir}`);
+        const version = asVersion(
+          tryCatalogEntryFromYaml(candidate, catalogName),
+          `in ${name} at ${dir}`,
+        );
+        if (version !== undefined) return version;
       }
     }
 
     const pkgPath = join(dir, "package.json");
     if (existsSync(pkgPath)) {
-      const entry = tryCatalogEntryFromPackageJson(pkgPath, catalogName);
-      if (isPresent(entry)) return asVersion(entry, `in package.json at ${dir}`);
+      const version = asVersion(
+        tryCatalogEntryFromPackageJson(pkgPath, catalogName),
+        `in package.json at ${dir}`,
+      );
+      if (version !== undefined) return version;
     }
 
     const parent = dirname(dir);
@@ -203,20 +218,24 @@ function tryCatalogEntryFromPackageJson(path: string, catalogName: string): unkn
   } catch {
     return undefined;
   }
-  // bun accepts catalogs at the top level or nested under `workspaces`.
+  return packageJsonCatalogEntry(pkg, catalogName);
+}
+
+// bun accepts catalogs at the top level of package.json or nested under
+// `workspaces`; check both.
+function packageJsonCatalogEntry(pkg: unknown, catalogName: string): unknown {
   return (
     catalogEntry(pkg, catalogName) ??
-    catalogEntry((pkg as { workspaces?: unknown }).workspaces, catalogName)
+    catalogEntry((pkg as { workspaces?: unknown } | null)?.workspaces, catalogName)
   );
 }
 
-function isPresent(value: unknown): value is string | number {
-  return value !== undefined && value !== null;
-}
-
-function asVersion(entry: unknown, where: string): string {
-  // Catalog entries are normally quoted version strings; YAML can also parse an
-  // unquoted numeric-looking version as a number.
+// Coerce a raw catalog entry to a version string, or undefined when absent.
+// Entries are normally quoted version strings; YAML can also parse an unquoted
+// numeric-looking version as a number. Anything else (e.g. a nested object) is
+// malformed config and throws.
+function asVersion(entry: unknown, where: string): string | undefined {
+  if (entry == null) return undefined;
   if (typeof entry === "string") return entry;
   if (typeof entry === "number") return String(entry);
   throw new Error(`Invalid ${PACKAGE_NAME} entry ${where}`);
