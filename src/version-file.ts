@@ -9,11 +9,13 @@ import { tryResolveVitePlusVersionFromLockfile } from "./lockfile-version.js";
 
 const CATALOG_PREFIX = "catalog:";
 
-// package.json fields checked for the vite-plus spec, in priority order. Only
-// the fields that record the version a project installs are considered:
+// package.json fields checked for the vite-plus spec, in priority order.
+// devDependencies is first: vite-plus is a dev toolchain, so that is its
+// canonical home (it only differs from dependencies if a project lists it in
+// both). Only fields that record the version a project installs are considered:
 // peerDependencies is a compatibility range (not an installed version) and
 // optionalDependencies is not where a build toolchain belongs.
-const DEP_FIELDS = ["dependencies", "devDependencies"] as const;
+const DEP_FIELDS = ["devDependencies", "dependencies"] as const;
 
 // YAML files that can hold a `catalog:` protocol definition. pnpm reads only
 // pnpm-workspace.yaml (there is no `.yml` variant); yarn (>= 4.10) uses

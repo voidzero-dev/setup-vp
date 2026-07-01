@@ -116,7 +116,7 @@ describe("resolveVitePlusVersionFile", () => {
       expect(resolveVitePlusVersionFile("package.json")).toBe("0.2.1");
     });
 
-    it("should prefer dependencies over devDependencies", () => {
+    it("should prefer devDependencies over dependencies", () => {
       mockFiles({
         "/workspace/package.json": JSON.stringify({
           dependencies: { "vite-plus": "0.3.0" },
@@ -124,7 +124,7 @@ describe("resolveVitePlusVersionFile", () => {
         }),
       });
 
-      expect(resolveVitePlusVersionFile("package.json")).toBe("0.3.0");
+      expect(resolveVitePlusVersionFile("package.json")).toBe("0.2.0");
     });
 
     it("should ignore optionalDependencies and peerDependencies", () => {
