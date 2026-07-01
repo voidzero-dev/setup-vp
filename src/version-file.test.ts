@@ -15,9 +15,14 @@ vi.mock("@actions/core", () => ({
   warning: vi.fn(),
 }));
 
+// Cover every node:fs binding used across the imported module graph (utils.ts /
+// lockfile-version.ts also import existsSync / statSync), not just the ones
+// these tests exercise, so the mock can't break as code paths shift.
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
   readdirSync: vi.fn(() => []),
+  existsSync: vi.fn(() => false),
+  statSync: vi.fn(),
 }));
 
 /**
