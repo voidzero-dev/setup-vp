@@ -219,23 +219,40 @@ function pnpmImporterVersion(importer: unknown): string | undefined {
 }
 
 // yarn (classic + berry): entry headers are unindented and contain `vite-plus@`;
-// the resolved version is on an indented `version "x"` / `version: x` line.
+// the resolved version is on an indented `version "x"` / `version: x` line. yarn
+// lockfiles don't map workspaces to resolutions, so if more than one distinct
+// vite-plus version is present the selection is ambiguous — return undefined and
+// let the caller fall back rather than guess another workspace's version.
 function fromYarnLock(content: string): string | undefined {
+  const versions = new Set<string>();
   const lines = content.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     if (/^\s/.test(lines[i])) continue; // skip indented (in-block) lines
     if (!/(?:^|[",\s])vite-plus@/.test(lines[i])) continue; // not a vite-plus entry header
     for (let j = i + 1; j < lines.length && /^\s/.test(lines[j]); j++) {
       const m = lines[j].match(/^\s+version:?\s+"?(\d+\.\d+\.\d+[^"\s]*)"?/);
-      if (m) return m[1];
+      if (m) {
+        versions.add(m[1]);
+        break;
+      }
     }
   }
-  return undefined;
+  return singleVersion(versions);
 }
 
 // bun.lock (text/JSONC): the `packages` map stores the resolved id as
 // `"vite-plus@0.2.1"`; the workspace specifier is `"vite-plus": "^0.2.0"` (no @).
+// Like yarn, a shared lockfile with more than one distinct version is ambiguous.
 function fromBunTextLock(content: string): string | undefined {
-  const m = content.match(/"vite-plus@(\d+\.\d+\.\d+[^"]*)"/);
-  return m?.[1];
+  const versions = new Set<string>();
+  const re = /"vite-plus@(\d+\.\d+\.\d+[^"]*)"/g;
+  for (let m = re.exec(content); m !== null; m = re.exec(content)) {
+    versions.add(m[1]);
+  }
+  return singleVersion(versions);
+}
+
+// The sole version in the set, or undefined when empty or ambiguous (>1).
+function singleVersion(versions: Set<string>): string | undefined {
+  return versions.size === 1 ? [...versions][0] : undefined;
 }

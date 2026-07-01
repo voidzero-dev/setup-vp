@@ -192,6 +192,20 @@ describe("parseVitePlusVersionFromLockfile", () => {
         parseVitePlusVersionFromLockfile(lock("yarn.lock", LockFileType.Yarn, content)),
       ).toBeUndefined();
     });
+
+    it("returns undefined when multiple distinct versions are present (ambiguous)", () => {
+      const content = [
+        "vite-plus@^0.2.0:",
+        '  version "0.2.0"',
+        "",
+        "vite-plus@^9.0.0:",
+        '  version "9.9.9"',
+        "",
+      ].join("\n");
+      expect(
+        parseVitePlusVersionFromLockfile(lock("yarn.lock", LockFileType.Yarn, content)),
+      ).toBeUndefined();
+    });
   });
 
   describe("bun.lock", () => {
@@ -208,6 +222,18 @@ describe("parseVitePlusVersionFromLockfile", () => {
       expect(parseVitePlusVersionFromLockfile(lock("bun.lock", LockFileType.Bun, content))).toBe(
         "0.2.0",
       );
+    });
+
+    it("returns undefined when multiple distinct versions are present (ambiguous)", () => {
+      const content = JSON.stringify({
+        packages: {
+          "vite-plus": ["vite-plus@0.2.0", "", {}, "sha512-a"],
+          "other/vite-plus": ["vite-plus@9.9.9", "", {}, "sha512-b"],
+        },
+      });
+      expect(
+        parseVitePlusVersionFromLockfile(lock("bun.lock", LockFileType.Bun, content)),
+      ).toBeUndefined();
     });
   });
 
