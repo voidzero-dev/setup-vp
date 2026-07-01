@@ -312,6 +312,36 @@ vp install
 - The `dist/index.mjs` must be committed (it's the compiled action entry point)
 - Pre-commit hooks (via husky + lint-staged) will automatically run `vp check --fix` on staged files via `vpx lint-staged`
 
+### Releasing
+
+Releases are published as git tags (there is no npm package, so `package.json` stays at `1.0.0`). Consumers reference the moving major tag `voidzero-dev/setup-vp@v1` (or pin a commit SHA), so every release also moves `v1` forward to the new commit.
+
+After the changes are merged to `main`:
+
+1. Update `main` and confirm `dist/index.mjs` is in sync (the working tree must stay clean after building):
+
+   ```bash
+   git checkout main && git pull --ff-only
+   vp run build
+   git status --short   # must be empty
+   ```
+
+2. Create the new annotated version tag (bump the minor from the latest `v1.x.0`) on the merged commit, then move the `v1` major tag to the same commit:
+
+   ```bash
+   git tag -a v1.13.0 -m "v1.13.0"
+   git tag -fa v1 -m "v1"
+   ```
+
+3. Push the new version tag, then force-push the moved `v1` tag:
+
+   ```bash
+   git push origin v1.13.0
+   git push origin v1 --force
+   ```
+
+Both are annotated tags whose message is the tag name. `v1` always points at the latest `v1.x.0` release, so `@v1` consumers pick it up automatically.
+
 ## Feedback
 
 If you have any feedback or issues, please [submit an issue](https://github.com/voidzero-dev/setup-vp/issues).
