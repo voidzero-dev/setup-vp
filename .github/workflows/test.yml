@@ -85,6 +85,85 @@ jobs:
             echo "$ACTUAL" | grep -q "^v${{ matrix.node-version }}\." || (echo "Expected Node.js v${{ matrix.node-version }}.x but got $ACTUAL" && exit 1)
           fi
 
+  test-default-version:
+    # End-to-end check of the default version-resolution logic: with no `version`
+    # or `version-file` input, the action auto-detects the vite-plus version from
+    # the project's package.json (direct pin or catalog), and falls back to
+    # `latest` when it can't be resolved to an exact version (e.g. a semver
+    # range). Pin VP_PR_VERSION to "" so a manual pr_version dispatch can't
+    # override the version we assert on (a pkg.pr.new build would ignore
+    # VP_VERSION entirely). Fixtures live under $RUNNER_TEMP, outside the repo,
+    # so the committed pnpm-workspace.yaml doesn't influence resolution.
+    env:
+      VP_PR_VERSION: ""
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Pins an exact version distinct from `latest` (0.2.1) so a match
+          # proves the pin was honored rather than a coincidental latest.
+          - scenario: exact
+            expected: "0.2.0"
+          - scenario: catalog
+            expected: "0.2.0"
+          # A range can't be resolved off the registry, so auto-detect must fall
+          # back to `latest` instead of failing the run.
+          - scenario: fallback-range
+            expected: latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create ${{ matrix.scenario }} fixture
+        shell: bash
+        run: |
+          DIR="${RUNNER_TEMP//\\//}/default-version-${{ matrix.scenario }}"
+          mkdir -p "$DIR"
+          case "${{ matrix.scenario }}" in
+            exact)
+              echo '{"name":"fixture","private":true,"devDependencies":{"vite-plus":"0.2.0"}}' > "$DIR/package.json"
+              ;;
+            catalog)
+              echo '{"name":"fixture","private":true,"devDependencies":{"vite-plus":"catalog:"}}' > "$DIR/package.json"
+              printf 'catalog:\n  vite-plus: 0.2.0\n' > "$DIR/pnpm-workspace.yaml"
+              ;;
+            fallback-range)
+              echo '{"name":"fixture","private":true,"devDependencies":{"vite-plus":"^0.2.0"}}' > "$DIR/package.json"
+              ;;
+          esac
+
+      - name: Setup Vite+ (auto-detect, no version input)
+        uses: ./
+        id: setup
+        with:
+          working-directory: ${{ runner.temp }}/default-version-${{ matrix.scenario }}
+          run-install: false
+          cache: false
+
+      - name: Assert resolved version
+        shell: bash
+        env:
+          EXPECTED: ${{ matrix.expected }}
+          ACTUAL: ${{ steps.setup.outputs.version }}
+        run: |
+          echo "scenario=${{ matrix.scenario }} expected=$EXPECTED actual=$ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" = "unknown" ]; then
+            echo "::error::action did not report an installed version (got '$ACTUAL')"
+            exit 1
+          fi
+          if [ "$EXPECTED" = "latest" ]; then
+            # `latest` moves, so require a concrete semver (the output is the
+            # resolved global version, never the tag) rather than a literal.
+            echo "$ACTUAL" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+' || {
+              echo "::error::fallback did not resolve to a semver version: '$ACTUAL'"
+              exit 1
+            }
+          elif [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::expected vite-plus $EXPECTED but the action installed $ACTUAL"
+            exit 1
+          fi
+          echo "OK: ${{ matrix.scenario }} resolved to $ACTUAL"
+
   test-cache-pnpm:
     runs-on: ubuntu-latest
     steps:
