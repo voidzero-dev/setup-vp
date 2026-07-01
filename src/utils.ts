@@ -12,6 +12,21 @@ export function getVitePlusHome(): string {
   return join(home || homedir(), ".vite-plus");
 }
 
+/**
+ * Extract the installed global Vite+ version from `vp --version` output.
+ *
+ * vp >= 0.2 prints the global version as `vp v0.2.0` on the first line; older
+ * builds printed `- Global: v0.2.0`. Support both so the reported `version`
+ * output stays correct across vp releases (a lone anchored regex silently broke
+ * when the format changed). Returns "unknown" when neither shape matches.
+ */
+export function parseInstalledVpVersion(versionOutput: string): string {
+  const match =
+    versionOutput.match(/^\s*vp\s+v?(\d[^\s]*)/im) ??
+    versionOutput.match(/Global:\s*v?(\d[^\s]*)/i);
+  return match?.[1] ?? "unknown";
+}
+
 export function getWorkspaceDir(): string {
   return process.env.GITHUB_WORKSPACE || process.cwd();
 }

@@ -14,7 +14,7 @@ import {
   tryResolveVitePlusVersionFromProject,
 } from "./version-file.js";
 import { configAuthentication, propagateProjectNpmrcAuth } from "./auth.js";
-import { getConfiguredProjectDir } from "./utils.js";
+import { getConfiguredProjectDir, parseInstalledVpVersion } from "./utils.js";
 
 async function runMain(inputs: Inputs): Promise<void> {
   // Mark that post action should run
@@ -85,9 +85,8 @@ async function printViteVersion(cwd: string): Promise<void> {
     const versionOutput = result.stdout.trim();
     info(versionOutput);
 
-    // Extract global version for output (e.g., "- Global: v0.0.0" -> "0.0.0")
-    const globalMatch = versionOutput.match(/Global:\s*v?([\d.]+[^\s]*)/i);
-    const version = globalMatch?.[1] || "unknown";
+    // Extract the installed global version for output (e.g. "vp v0.2.0" -> "0.2.0")
+    const version = parseInstalledVpVersion(versionOutput);
     saveState(State.InstalledVersion, version);
     setOutput(Outputs.Version, version);
   } catch (error) {
