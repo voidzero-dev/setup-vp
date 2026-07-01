@@ -46,9 +46,30 @@ export function resolveVitePlusVersion(inputs: Inputs, projectDir: string): stri
 
   return (
     tryResolveVitePlusVersionFromProject(projectDir) ??
-    tryResolveVitePlusVersionFromLockfile(projectDir, inputs.cacheDependencyPath) ??
+    // Only consult the lockfile when the project actually declares a direct
+    // vite-plus dependency, so a transitive or other-workspace vite-plus in a
+    // shared lockfile isn't mistaken for this project's pin.
+    (projectDeclaresVitePlus(projectDir)
+      ? tryResolveVitePlusVersionFromLockfile(projectDir, inputs.cacheDependencyPath)
+      : undefined) ??
     "latest"
   );
+}
+
+/**
+ * Does the project's package.json declare a direct `vite-plus` dependency
+ * (including a `catalog:` reference)? Gates the lockfile fallback.
+ */
+function projectDeclaresVitePlus(projectDir: string): boolean {
+  try {
+    const pkg = JSON.parse(readFileSync(join(projectDir, "package.json"), "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    return findDepSpec(pkg) !== undefined;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -96,6 +117,9 @@ export function resolveVitePlusVersionFile(filePath: string, baseDir?: string): 
     );
   }
 
+  // Trim first so a whitespace-only entry (e.g. a malformed catalog value) is
+  // reported as "not found" rather than a confusing `Cannot use ""` later.
+  version = version?.trim();
   if (!version) {
     throw new Error(`No ${PACKAGE_NAME} version found in ${filePath}`);
   }
@@ -103,7 +127,7 @@ export function resolveVitePlusVersionFile(filePath: string, baseDir?: string): 
   // Strip a leading lowercase 'v' prefix from a version (e.g. "v0.2.0" ->
   // "0.2.0"), but only before a digit so v-prefixed dist-tags like "vnext" (or a
   // capitalized "V2beta") are preserved.
-  version = version.trim().replace(/^v(?=\d)/, "");
+  version = version.replace(/^v(?=\d)/, "");
   assertInstallableVersion(version, filePath);
 
   info(`Resolved ${DISPLAY_NAME} version '${version}' from ${filePath}`);

@@ -308,6 +308,17 @@ describe("resolveVitePlusVersionFile", () => {
       expect(() => resolveVitePlusVersionFile("package.json")).toThrow(/Cannot use "1\.10"/);
     });
 
+    it("should report a whitespace-only catalog entry as not found", () => {
+      mockFiles({
+        "/workspace/package.json": JSON.stringify({ devDependencies: { "vite-plus": "catalog:" } }),
+        "/workspace/pnpm-workspace.yaml": 'catalog:\n  vite-plus: "  "\n',
+      });
+
+      expect(() => resolveVitePlusVersionFile("package.json")).toThrow(
+        "No vite-plus version found in package.json",
+      );
+    });
+
     it("should skip a malformed catalog entry and keep walking to a valid ancestor", () => {
       mockFiles({
         // Nearer catalog nests the entry as an object (malformed).
@@ -677,6 +688,22 @@ describe("resolveVitePlusVersion (precedence)", () => {
   it("falls back to latest when nothing pins a resolvable version", () => {
     mockFiles({
       "/workspace/package.json": JSON.stringify({ devDependencies: { vite: "^6.0.0" } }),
+    });
+
+    expect(resolveVitePlusVersion(baseInputs, "/workspace")).toBe("latest");
+  });
+
+  it("does not consult the lockfile when the project has no direct vite-plus dep", () => {
+    mockFiles({
+      // No direct vite-plus, but a shared lockfile records it (transitive /
+      // another workspace) — must not be mistaken for this project's pin.
+      "/workspace/package.json": JSON.stringify({ devDependencies: { vite: "^6.0.0" } }),
+      "/workspace/pnpm-lock.yaml": [
+        "packages:",
+        "  vite-plus@0.2.0:",
+        "    resolution: {}",
+        "",
+      ].join("\n"),
     });
 
     expect(resolveVitePlusVersion(baseInputs, "/workspace")).toBe("latest");
