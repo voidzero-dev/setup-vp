@@ -34,20 +34,14 @@ const baseInputs: Inputs = {
 describe("installVitePlus", () => {
   // installVitePlus spreads process.env into the child env, so a VP_PR_VERSION
   // inherited from the runner (setup-vp's own CI sets it) would make these tests
-  // non-hermetic. Clear it before each test and restore the original after.
-  const originalPrVersion = process.env.VP_PR_VERSION;
-
+  // non-hermetic. Clear it before each test; unstubAllEnvs restores the original.
   beforeEach(() => {
-    delete process.env.VP_PR_VERSION;
+    vi.stubEnv("VP_PR_VERSION", undefined);
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.resetAllMocks();
-    if (originalPrVersion === undefined) {
-      delete process.env.VP_PR_VERSION;
-    } else {
-      process.env.VP_PR_VERSION = originalPrVersion;
-    }
   });
 
   it("should succeed on first attempt without retrying", async () => {
@@ -128,31 +122,29 @@ describe("installVitePlus", () => {
     expect(script).toMatch(/\| bash$/);
   });
 
-  it("should route pkg.pr.new commit builds through VP_PR_VERSION", async () => {
+  const commitSha = "7d848b3da1987fa60b4cf18487fcc36a2a697e94";
+  it.each([
+    {
+      desc: "should route pkg.pr.new commit builds through VP_PR_VERSION",
+      version: `0.0.0-commit.${commitSha}`,
+      expected: commitSha,
+    },
+    {
+      desc: "should not set VP_PR_VERSION for regular published versions",
+      version: "0.2.1",
+      expected: undefined,
+    },
+    {
+      desc: "should not treat too-short commit suffixes as pkg.pr.new builds",
+      version: "0.0.0-commit.a",
+      expected: undefined,
+    },
+  ])("$desc", async ({ version, expected }) => {
     vi.mocked(exec).mockResolvedValueOnce(0);
 
-    const sha = "7d848b3da1987fa60b4cf18487fcc36a2a697e94";
-    await installVitePlus({ ...baseInputs, version: `0.0.0-commit.${sha}` });
+    await installVitePlus({ ...baseInputs, version });
 
     const options = vi.mocked(exec).mock.calls[0][2] as { env: { [key: string]: string } };
-    expect(options.env.VP_PR_VERSION).toBe(sha);
-  });
-
-  it("should not set VP_PR_VERSION for regular published versions", async () => {
-    vi.mocked(exec).mockResolvedValueOnce(0);
-
-    await installVitePlus({ ...baseInputs, version: "0.2.1" });
-
-    const options = vi.mocked(exec).mock.calls[0][2] as { env: { [key: string]: string } };
-    expect(options.env.VP_PR_VERSION).toBeUndefined();
-  });
-
-  it("should not treat too-short commit suffixes as pkg.pr.new builds", async () => {
-    vi.mocked(exec).mockResolvedValueOnce(0);
-
-    await installVitePlus({ ...baseInputs, version: "0.0.0-commit.a" });
-
-    const options = vi.mocked(exec).mock.calls[0][2] as { env: { [key: string]: string } };
-    expect(options.env.VP_PR_VERSION).toBeUndefined();
+    expect(options.env.VP_PR_VERSION).toBe(expected);
   });
 });
