@@ -140,4 +140,42 @@ describe("GitLab run-install execution", () => {
 
     expect(readFileSync(logFile, "utf8")).toBe("vp install\n");
   });
+
+  it("does not expose SETUP_VP_ENV_FILE to install subprocesses", () => {
+    const dir = tempDir();
+    const binDir = path.join(dir, "bin");
+    const logFile = path.join(dir, "env.log");
+    mkdirSync(binDir);
+    const vpBin = path.join(binDir, "vp");
+    writeFileSync(
+      vpBin,
+      [
+        "#!/usr/bin/env sh",
+        'if [ "${SETUP_VP_ENV_FILE+x}" = "x" ]; then',
+        `  printf 'present:%s\\n' "$SETUP_VP_ENV_FILE" > "${logFile}"`,
+        "else",
+        `  printf 'missing\\n' > "${logFile}"`,
+        "fi",
+      ].join("\n"),
+      "utf8",
+    );
+    chmodSync(vpBin, 0o755);
+
+    const previousPath = process.env.PATH;
+    const previousEnvFile = process.env.SETUP_VP_ENV_FILE;
+    try {
+      process.env.PATH = `${binDir}:${previousPath || ""}`;
+      process.env.SETUP_VP_ENV_FILE = path.join(dir, "setup-vp.env");
+      runInstall([{}], dir, "vp");
+    } finally {
+      process.env.PATH = previousPath;
+      if (previousEnvFile === undefined) {
+        delete process.env.SETUP_VP_ENV_FILE;
+      } else {
+        process.env.SETUP_VP_ENV_FILE = previousEnvFile;
+      }
+    }
+
+    expect(readFileSync(logFile, "utf8")).toBe("missing\n");
+  });
 });

@@ -266,11 +266,14 @@ export function runInstall(
   projectDir: string,
   installCommand: InstallCommand,
 ): void {
+  const installEnv = { ...process.env };
+  delete installEnv.SETUP_VP_ENV_FILE;
+
   for (const entry of entries) {
     const cwd = entry.cwd ? path.resolve(projectDir, entry.cwd) : projectDir;
     const installArgs = ["install", ...(entry.args || [])];
     const args = installCommand === "sfw" ? ["vp", ...installArgs] : installArgs;
     console.log(`setup-vp: running ${installCommand} ${args.join(" ")} in ${cwd}`);
-    run(installCommand, args, { cwd });
+    run(installCommand, args, { cwd, env: installEnv });
   }
 }
