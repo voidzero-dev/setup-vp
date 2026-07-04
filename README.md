@@ -395,7 +395,7 @@ test:
 
 ### With Existing GitLab `before_script`
 
-GitLab replaces array keywords such as `before_script` when a job uses `extends`; it does not append them. If the job already needs setup commands, reference `.setup-vp` explicitly before the job-specific commands:
+GitLab replaces array keywords such as `before_script` when a job uses `extends`; it does not append them. If the job already needs setup commands, reference `.setup-vp-bootstrap` explicitly before the job-specific commands and configure setup-vp with variables:
 
 ```yaml
 include:
@@ -403,15 +403,19 @@ include:
 
 test:
   image: node:24
+  variables:
+    SETUP_VP_VERSION: "latest"
+    SETUP_VP_RUN_INSTALL: "true"
+    SETUP_VP_SETUP_REF: "v1"
   before_script:
-    - !reference [.setup-vp, before_script]
+    - !reference [.setup-vp-bootstrap, before_script]
     - npm config set //registry.example.com/:_authToken "$NODE_AUTH_TOKEN"
     - corepack enable
   script:
     - vp run test
 ```
 
-Use the same pattern when the project has `default:before_script`; put the shared setup commands in each job that needs them instead of relying on `.setup-vp` to append to the default array.
+Use the same pattern when the project has `default:before_script`; put the shared setup commands in each job that needs them instead of relying on `.setup-vp` to append to the default array. The bootstrap variables match the GitLab inputs with `SETUP_VP_` prefixes, for example `SETUP_VP_WORKING_DIRECTORY`, `SETUP_VP_SFW`, `SETUP_VP_REGISTRY_URL`, and `SETUP_VP_SCOPE`.
 
 ### Advanced GitLab Run Install
 

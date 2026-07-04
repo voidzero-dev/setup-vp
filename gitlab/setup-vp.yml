@@ -23,10 +23,7 @@ spec:
       description: "setup-vp ref used to download the GitLab bootstrap and compiled runtime. Pin this to the same tag or commit as the remote template for strict reproducibility."
       default: "v1"
 ---
-.setup-vp:
-  # GitLab replaces, rather than appends, before_script arrays from `extends`.
-  # If a job also needs its own before_script commands, compose explicitly with
-  # `!reference [.setup-vp, before_script]` before the job-specific commands.
+.setup-vp-bootstrap:
   before_script:
     - |
       set -eu
@@ -45,6 +42,27 @@ spec:
         fi
       }
 
+      export SETUP_VP_VERSION="${SETUP_VP_VERSION:-latest}"
+      export SETUP_VP_WORKING_DIRECTORY="${SETUP_VP_WORKING_DIRECTORY:-.}"
+      export SETUP_VP_RUN_INSTALL="${SETUP_VP_RUN_INSTALL:-true}"
+      export SETUP_VP_SFW="${SETUP_VP_SFW:-false}"
+      export SETUP_VP_REGISTRY_URL="${SETUP_VP_REGISTRY_URL:-}"
+      export SETUP_VP_SCOPE="${SETUP_VP_SCOPE:-}"
+      export SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1}"
+
+      setup_vp_bootstrap_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-gitlab-bootstrap.XXXXXX")"
+      setup_vp_env_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-gitlab-env.XXXXXX")"
+      chmod 600 "$setup_vp_env_tmp"
+      export SETUP_VP_ENV_FILE="$setup_vp_env_tmp"
+      trap 'rm -f "$setup_vp_bootstrap_tmp" "$setup_vp_env_tmp"' EXIT
+      setup_vp_bootstrap_url="https://raw.githubusercontent.com/voidzero-dev/setup-vp/${SETUP_VP_SETUP_REF}/gitlab/bootstrap.sh"
+      setup_vp_download "$setup_vp_bootstrap_url" "$setup_vp_bootstrap_tmp"
+      bash "$setup_vp_bootstrap_tmp"
+      . "$setup_vp_env_tmp"
+
+.setup-vp:
+  before_script:
+    - |
       export SETUP_VP_VERSION="$[[ inputs.version ]]"
       export SETUP_VP_WORKING_DIRECTORY="$[[ inputs.working-directory ]]"
       SETUP_VP_RUN_INSTALL="$(cat <<'SETUP_VP_RUN_INSTALL_EOF'
@@ -56,13 +74,4 @@ spec:
       export SETUP_VP_REGISTRY_URL="$[[ inputs.registry-url ]]"
       export SETUP_VP_SCOPE="$[[ inputs.scope ]]"
       export SETUP_VP_SETUP_REF="$[[ inputs.setup-ref ]]"
-
-      setup_vp_bootstrap_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-gitlab-bootstrap.XXXXXX")"
-      setup_vp_env_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-gitlab-env.XXXXXX")"
-      chmod 600 "$setup_vp_env_tmp"
-      export SETUP_VP_ENV_FILE="$setup_vp_env_tmp"
-      trap 'rm -f "$setup_vp_bootstrap_tmp" "$setup_vp_env_tmp"' EXIT
-      setup_vp_bootstrap_url="https://raw.githubusercontent.com/voidzero-dev/setup-vp/${SETUP_VP_SETUP_REF}/gitlab/bootstrap.sh"
-      setup_vp_download "$setup_vp_bootstrap_url" "$setup_vp_bootstrap_tmp"
-      bash "$setup_vp_bootstrap_tmp"
-      . "$setup_vp_env_tmp"
+    - !reference [.setup-vp-bootstrap, before_script]

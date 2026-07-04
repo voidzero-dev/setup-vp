@@ -30,11 +30,7 @@ export function isMuslLinux(): boolean {
 /**
  * Mirrors src/install-sfw.ts asset naming for GitLab's supported Unix runners.
  */
-export function getSfwAssetName(
-  platform: NodeJS.Platform,
-  arch: string,
-  isMusl: boolean,
-): string | undefined {
+export function getSfwAssetName(platform: NodeJS.Platform, arch: string, isMusl: boolean): string {
   if (platform === "darwin") {
     if (arch === "x64") return "sfw-free-macos-x86_64";
     if (arch === "arm64") return "sfw-free-macos-arm64";
