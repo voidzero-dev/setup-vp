@@ -5,8 +5,8 @@ GitHub Action and GitLab CI/CD remote template to set up [Vite+](https://viteplu
 ## Features
 
 - Install Vite+ globally via official install scripts
-- Optionally set up a specific Node.js version via `vp env use`
-- Cache project dependencies with auto-detection of lock files
+- GitHub Action: optionally set up a specific Node.js version via `vp env use`
+- GitHub Action: cache project dependencies with auto-detection of lock files
 - Optionally run `vp install` after setup
 - Optionally wrap `vp install` with [Socket Firewall Free (`sfw`)](https://docs.socket.dev/docs/socket-firewall-free) to block malicious dependencies
 - Support for all major package managers (npm, pnpm, yarn, bun)
