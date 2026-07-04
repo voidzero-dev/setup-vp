@@ -39,7 +39,7 @@ setup_vp_export_env() {
 
 setup_vp_install_viteplus_from() {
   setup_vp_url="$1"
-  setup_vp_download "$setup_vp_url" "$setup_vp_install_tmp" || return $1
+  setup_vp_download "$setup_vp_url" "$setup_vp_install_tmp" || return 1
 
   if [ -n "$setup_vp_pr_version" ]; then
     VP_VERSION="$SETUP_VP_VERSION" \
