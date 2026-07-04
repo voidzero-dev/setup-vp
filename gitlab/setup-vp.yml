@@ -24,6 +24,9 @@ spec:
       default: "v1"
 ---
 .setup-vp:
+  # GitLab replaces, rather than appends, before_script arrays from `extends`.
+  # If a job also needs its own before_script commands, compose explicitly with
+  # `!reference [.setup-vp, before_script]` before the job-specific commands.
   before_script:
     - |
       set -eu

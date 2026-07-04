@@ -393,6 +393,26 @@ test:
     - vp run test
 ```
 
+### With Existing GitLab `before_script`
+
+GitLab replaces array keywords such as `before_script` when a job uses `extends`; it does not append them. If the job already needs setup commands, reference `.setup-vp` explicitly before the job-specific commands:
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+
+test:
+  image: node:24
+  before_script:
+    - !reference [.setup-vp, before_script]
+    - npm config set //registry.example.com/:_authToken "$NODE_AUTH_TOKEN"
+    - corepack enable
+  script:
+    - vp run test
+```
+
+Use the same pattern when the project has `default:before_script`; put the shared setup commands in each job that needs them instead of relying on `.setup-vp` to append to the default array.
+
 ### Advanced GitLab Run Install
 
 ```yaml
