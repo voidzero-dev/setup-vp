@@ -63,15 +63,39 @@ spec:
 .setup-vp:
   before_script:
     - |
-      export SETUP_VP_VERSION="$[[ inputs.version ]]"
-      export SETUP_VP_WORKING_DIRECTORY="$[[ inputs.working-directory ]]"
+      SETUP_VP_VERSION="$(cat <<'SETUP_VP_VERSION_EOF'
+      $[[ inputs.version ]]
+      SETUP_VP_VERSION_EOF
+      )"
+      export SETUP_VP_VERSION
+      SETUP_VP_WORKING_DIRECTORY="$(cat <<'SETUP_VP_WORKING_DIRECTORY_EOF'
+      $[[ inputs.working-directory ]]
+      SETUP_VP_WORKING_DIRECTORY_EOF
+      )"
+      export SETUP_VP_WORKING_DIRECTORY
       SETUP_VP_RUN_INSTALL="$(cat <<'SETUP_VP_RUN_INSTALL_EOF'
       $[[ inputs.run-install ]]
       SETUP_VP_RUN_INSTALL_EOF
       )"
       export SETUP_VP_RUN_INSTALL
-      export SETUP_VP_SFW="$[[ inputs.sfw ]]"
-      export SETUP_VP_REGISTRY_URL="$[[ inputs.registry-url ]]"
-      export SETUP_VP_SCOPE="$[[ inputs.scope ]]"
-      export SETUP_VP_SETUP_REF="$[[ inputs.setup-ref ]]"
+      SETUP_VP_SFW="$(cat <<'SETUP_VP_SFW_EOF'
+      $[[ inputs.sfw ]]
+      SETUP_VP_SFW_EOF
+      )"
+      export SETUP_VP_SFW
+      SETUP_VP_REGISTRY_URL="$(cat <<'SETUP_VP_REGISTRY_URL_EOF'
+      $[[ inputs.registry-url ]]
+      SETUP_VP_REGISTRY_URL_EOF
+      )"
+      export SETUP_VP_REGISTRY_URL
+      SETUP_VP_SCOPE="$(cat <<'SETUP_VP_SCOPE_EOF'
+      $[[ inputs.scope ]]
+      SETUP_VP_SCOPE_EOF
+      )"
+      export SETUP_VP_SCOPE
+      SETUP_VP_SETUP_REF="$(cat <<'SETUP_VP_SETUP_REF_EOF'
+      $[[ inputs.setup-ref ]]
+      SETUP_VP_SETUP_REF_EOF
+      )"
+      export SETUP_VP_SETUP_REF
     - !reference [.setup-vp-bootstrap, before_script]
