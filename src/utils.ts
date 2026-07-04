@@ -2,7 +2,7 @@ import { info, warning, debug } from "@actions/core";
 import { getExecOutput } from "@actions/exec";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, basename } from "node:path";
+import { isAbsolute, join, basename, relative, sep } from "node:path";
 import type { Inputs } from "./types.js";
 import { LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
@@ -10,6 +10,31 @@ import type { LockFileInfo } from "./types.js";
 export function getVitePlusHome(): string {
   const home = process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
   return join(home || homedir(), ".vite-plus");
+}
+
+// Is `child` at or below `parent`? Used to bound upward directory walks (catalog
+// sources, lockfiles) to the workspace root. A leading ".." *segment* means the
+// path escaped `parent`; guard the segment boundary so a child directory merely
+// named "..foo" is not misclassified as outside.
+export function isWithin(child: string, parent: string): boolean {
+  const rel = relative(parent, child);
+  if (isAbsolute(rel)) return false; // different root/drive
+  return rel !== ".." && !rel.startsWith(`..${sep}`);
+}
+
+/**
+ * Extract the installed global Vite+ version from `vp --version` output.
+ *
+ * vp >= 0.2 prints the global version as `vp v0.2.0` on the first line; older
+ * builds printed `- Global: v0.2.0`. Support both so the reported `version`
+ * output stays correct across vp releases (a lone anchored regex silently broke
+ * when the format changed). Returns "unknown" when neither shape matches.
+ */
+export function parseInstalledVpVersion(versionOutput: string): string {
+  const match =
+    versionOutput.match(/^\s*vp\s+v?(\d[^\s]*)/im) ??
+    versionOutput.match(/Global:\s*v?(\d[^\s]*)/i);
+  return match?.[1] ?? "unknown";
 }
 
 export function getWorkspaceDir(): string {
@@ -63,6 +88,7 @@ const LOCK_FILES: Array<{ filename: string; type: LockFileType }> = [
 export function detectLockFile(
   explicitPath?: string,
   workspace = getWorkspaceDir(),
+  silent = false,
 ): LockFileInfo | undefined {
   // If explicit path provided, use it
   if (explicitPath) {
@@ -90,7 +116,7 @@ export function detectLockFile(
   for (const lockInfo of LOCK_FILES) {
     if (workspaceContents.includes(lockInfo.filename)) {
       const fullPath = join(workspace, lockInfo.filename);
-      info(`Auto-detected lock file: ${lockInfo.filename}`);
+      if (!silent) info(`Auto-detected lock file: ${lockInfo.filename}`);
       return {
         type: lockInfo.type,
         path: fullPath,

@@ -2,6 +2,18 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>Boshen/renovate"],
   "ignoreDeps": ["@void-sdk/void"],
+  "packageRules": [
+    {
+      "description": "Runtime deps are bundled into dist/index.mjs; label so the rebuild-bundle workflow refreshes dist/.",
+      "matchDepTypes": ["dependencies"],
+      "addLabels": ["needs-bundle-rebuild"]
+    },
+    {
+      "description": "vite-plus is the bundler; its updates can change dist/ output.",
+      "matchPackageNames": ["vite-plus"],
+      "addLabels": ["needs-bundle-rebuild"]
+    }
+  ],
   "customManagers": [
     {
       "customType": "regex",

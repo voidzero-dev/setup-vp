@@ -7,6 +7,8 @@ import {
   getConfiguredProjectDir,
   getCacheDirectories,
   getInstallCwd,
+  isWithin,
+  parseInstalledVpVersion,
   resolvePath,
 } from "./utils.js";
 import { LockFileType } from "./types.js";
@@ -468,5 +470,55 @@ describe("getInstallCwd", () => {
 
   it("should keep absolute override cwd as-is", () => {
     expect(getInstallCwd(join(mockWorkspace, "web"), "/custom/path/app")).toBe("/custom/path/app");
+  });
+});
+
+describe("parseInstalledVpVersion", () => {
+  it("parses the current 'vp vX.Y.Z' format", () => {
+    const output = [
+      "vp v0.2.0",
+      "",
+      "Local vite-plus:",
+      "  vite-plus  Not found",
+      "",
+      "Environment:",
+      "  Node.js          v24.18.0",
+    ].join("\n");
+
+    expect(parseInstalledVpVersion(output)).toBe("0.2.0");
+  });
+
+  it("parses a prerelease version", () => {
+    expect(parseInstalledVpVersion("vp v0.2.0-beta.1\n")).toBe("0.2.0-beta.1");
+  });
+
+  it("does not mistake the Node.js line for the vp version", () => {
+    expect(parseInstalledVpVersion("vp v0.2.1\n  Node.js v24.18.0")).toBe("0.2.1");
+  });
+
+  it("parses the legacy 'Global: vX.Y.Z' format", () => {
+    expect(parseInstalledVpVersion("- Global: v0.1.20\n- Local: v0.1.20")).toBe("0.1.20");
+  });
+
+  it("returns 'unknown' when no version can be parsed", () => {
+    expect(parseInstalledVpVersion("no version here")).toBe("unknown");
+  });
+});
+
+describe("isWithin", () => {
+  it("treats a directory as within itself", () => {
+    expect(isWithin("/a/b", "/a/b")).toBe(true);
+  });
+
+  it("treats a nested child as within", () => {
+    expect(isWithin("/a/b/c/d", "/a/b")).toBe(true);
+  });
+
+  it("treats an escaping path as outside", () => {
+    expect(isWithin("/a/x", "/a/b")).toBe(false);
+  });
+
+  it("does not misclassify a child directory named '..foo'", () => {
+    expect(isWithin("/a/b/..foo", "/a/b")).toBe(true);
   });
 });
