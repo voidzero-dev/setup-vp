@@ -122,9 +122,10 @@ function assignValue(target: RunInstallEntry, key: string, value: string): boole
   throw new Error(`unsupported run-install key: ${key}`);
 }
 
-// Keep GitLab runtime validation local instead of using Zod. The bootstrap
-// downloads and runs one generated .mjs file from /tmp, so shared chunks such
-// as dist/schemas-*.mjs would break relative imports at runtime.
+// Validate run-install locally instead of reusing Zod + the `yaml` package.
+// The bootstrap fetches this runtime (dist/gitlab/index.mjs) from GitHub on
+// every job, so it is kept dependency-free and tiny (~9 KB); bundling zod and
+// yaml would inflate it toward the ~1 MB GitHub Action bundle.
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -164,20 +165,34 @@ function validateRunInstallInput(value: unknown): RunInstallInput {
   return validateRunInstallEntry(value);
 }
 
+// Parse one `key: value` line into `target`. When the value spans a following
+// block array, consume those lines and return the index of the last consumed
+// line; otherwise return `index` unchanged.
+function applyEntryLine(
+  target: RunInstallEntry,
+  text: string,
+  lines: string[],
+  index: number,
+  parentIndent: number,
+  rawLine: string,
+): number {
+  const entry = parseKeyValue(text);
+  if (!entry) throw new Error(`invalid run-install line: ${rawLine}`);
+  if (assignValue(target, entry[0], entry[1])) {
+    const parsed = parseBlockArray(lines, index + 1, parentIndent);
+    target.args = parsed.values;
+    return parsed.nextIndex - 1;
+  }
+  return index;
+}
+
 function parseObject(lines: string[]): RunInstallEntry {
   const item: RunInstallEntry = {};
   for (let index = 0; index < lines.length; index += 1) {
     const rawLine = lines[index];
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
-    const entry = parseKeyValue(line);
-    if (!entry) throw new Error(`invalid run-install line: ${rawLine}`);
-    const expectsBlockArray = assignValue(item, entry[0], entry[1]);
-    if (expectsBlockArray) {
-      const parsed = parseBlockArray(lines, index + 1, countIndent(rawLine));
-      item.args = parsed.values;
-      index = parsed.nextIndex - 1;
-    }
+    index = applyEntryLine(item, line, lines, index, countIndent(rawLine), rawLine);
   }
   return item;
 }
@@ -202,27 +217,13 @@ export function parseYamlSubset(value: string): RunInstallEntry[] {
       current = {};
       const rest = trimmedStart.slice(1).trim();
       if (rest) {
-        const entry = parseKeyValue(rest);
-        if (!entry) throw new Error(`invalid run-install line: ${rawLine}`);
-        const expectsBlockArray = assignValue(current, entry[0], entry[1]);
-        if (expectsBlockArray) {
-          const parsed = parseBlockArray(lines, index + 1, indent);
-          current.args = parsed.values;
-          index = parsed.nextIndex - 1;
-        }
+        index = applyEntryLine(current, rest, lines, index, indent, rawLine);
       }
       continue;
     }
 
     if (!current) throw new Error(`invalid run-install line: ${rawLine}`);
-    const entry = parseKeyValue(trimmedStart);
-    if (!entry) throw new Error(`invalid run-install line: ${rawLine}`);
-    const expectsBlockArray = assignValue(current, entry[0], entry[1]);
-    if (expectsBlockArray) {
-      const parsed = parseBlockArray(lines, index + 1, indent);
-      current.args = parsed.values;
-      index = parsed.nextIndex - 1;
-    }
+    index = applyEntryLine(current, trimmedStart, lines, index, indent, rawLine);
   }
   if (current) items.push(current);
   return items;

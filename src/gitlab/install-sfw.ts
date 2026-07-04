@@ -46,22 +46,6 @@ export function getSfwAssetName(platform: NodeJS.Platform, arch: string, isMusl:
   throw new Error(`Unsupported platform/arch for sfw: ${platform}/${arch}${libcSuffix}`);
 }
 
-export function sfwAssetName(): string | undefined {
-  try {
-    return getSfwAssetName(process.platform, process.arch, isMuslLinux());
-  } catch {
-    return undefined;
-  }
-}
-
-export function isSfwSupported(): boolean {
-  return !!sfwAssetName();
-}
-
-function sfwEnvironmentDescription(): string {
-  return `process.platform=${process.platform}, process.arch=${process.arch}, musl=${isMuslLinux()}`;
-}
-
 function downloadFileWithShell(url: string, outputPath: string, timeoutMs: number): void {
   const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
   const curl = commandPath("curl");
@@ -179,10 +163,16 @@ export async function setupSfw(
     return "sfw";
   }
 
-  const asset = sfwAssetName();
+  const musl = isMuslLinux();
+  let asset: string | undefined;
+  try {
+    asset = getSfwAssetName(process.platform, process.arch, musl);
+  } catch {
+    asset = undefined;
+  }
   if (!asset) {
     console.error(
-      `setup-vp: sfw has no published binary for this runner's platform/architecture (${sfwEnvironmentDescription()}) and none was found on PATH; falling back to plain vp install.`,
+      `setup-vp: sfw has no published binary for this runner's platform/architecture (process.platform=${process.platform}, process.arch=${process.arch}, musl=${musl}) and none was found on PATH; falling back to plain vp install.`,
     );
     return "vp";
   }
