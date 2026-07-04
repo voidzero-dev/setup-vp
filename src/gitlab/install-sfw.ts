@@ -1,5 +1,6 @@
 import { createWriteStream, existsSync } from "node:fs";
 import { chmod, mkdtemp } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { get as httpGet } from "node:http";
 import { get as httpsGet } from "node:https";
 import { tmpdir } from "node:os";
@@ -61,6 +62,42 @@ function sfwEnvironmentDescription(): string {
   return `process.platform=${process.platform}, process.arch=${process.arch}, musl=${isMuslLinux()}`;
 }
 
+function downloadFileWithShell(url: string, outputPath: string, timeoutMs: number): void {
+  const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+  const curl = commandPath("curl");
+  if (curl) {
+    const result = spawnSync(
+      curl,
+      [
+        "-fsSL",
+        "--connect-timeout",
+        "5",
+        "--max-time",
+        String(timeoutSeconds),
+        url,
+        "-o",
+        outputPath,
+      ],
+      { stdio: "ignore" },
+    );
+    if (result.status === 0) return;
+    throw result.error || new Error(`curl failed while downloading ${url}`);
+  }
+
+  const wget = commandPath("wget");
+  if (wget) {
+    const result = spawnSync(
+      wget,
+      ["-q", "-T", String(timeoutSeconds), "-t", "2", "-O", outputPath, url],
+      { stdio: "ignore" },
+    );
+    if (result.status === 0) return;
+    throw result.error || new Error(`wget failed while downloading ${url}`);
+  }
+
+  throw new Error("curl or wget is required to download sfw");
+}
+
 export function downloadFile(
   url: string,
   outputPath: string,
@@ -70,6 +107,11 @@ export function downloadFile(
 ): Promise<void> {
   if (redirects > 5) {
     return Promise.reject(new Error(`too many redirects while downloading ${url}`));
+  }
+
+  if (!clientOverride) {
+    downloadFileWithShell(url, outputPath, timeoutMs);
+    return Promise.resolve();
   }
 
   const client = clientOverride || (url.startsWith("https:") ? httpsGet : httpGet);

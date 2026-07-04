@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
@@ -12,6 +12,10 @@ function tempDir(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "setup-vp-test-"));
   tempDirs.push(dir);
   return dir;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 afterEach(() => {
@@ -51,6 +55,47 @@ describe("GitLab sfw setup", () => {
     } finally {
       process.env.PATH = previousPath;
     }
+  });
+
+  it("uses curl for default downloads", async () => {
+    const dir = tempDir();
+    const binDir = path.join(dir, "bin");
+    const outputPath = path.join(dir, "sfw");
+    const logFile = path.join(dir, "curl.log");
+    mkdirSync(binDir);
+
+    const curlBin = path.join(binDir, "curl");
+    writeFileSync(
+      curlBin,
+      [
+        "#!/usr/bin/env sh",
+        `printf '%s\\n' "$*" > ${shellQuote(logFile)}`,
+        'out=""',
+        'while [ "$#" -gt 0 ]; do',
+        '  if [ "$1" = "-o" ]; then',
+        "    shift",
+        '    out="$1"',
+        "    break",
+        "  fi",
+        "  shift",
+        "done",
+        'printf "sfw" > "$out"',
+      ].join("\n"),
+      "utf8",
+    );
+    chmodSync(curlBin, 0o755);
+
+    const previousPath = process.env.PATH;
+    try {
+      process.env.PATH = `${binDir}:${previousPath || ""}`;
+      await downloadFile("https://example.test/sfw", outputPath);
+    } finally {
+      process.env.PATH = previousPath;
+    }
+
+    expect(readFileSync(outputPath, "utf8")).toBe("sfw");
+    expect(readFileSync(logFile, "utf8")).toContain("https://example.test/sfw");
+    expect(readFileSync(logFile, "utf8")).toContain("--max-time 60");
   });
 
   it("times out stalled downloads", async () => {
