@@ -8,7 +8,10 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   pack: {
-    entry: ["./src/index.ts"],
+    entry: {
+      index: "./src/index.ts",
+      "gitlab/index": "./src/gitlab/index.ts",
+    },
     format: ["esm"],
     outDir: "dist",
     deps: {

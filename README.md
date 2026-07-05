@@ -1,15 +1,16 @@
 # setup-vp
 
-GitHub Action to set up [Vite+](https://viteplus.dev) (`vp`) with dependency caching support.
+GitHub Action and GitLab CI/CD remote template to set up [Vite+](https://viteplus.dev) (`vp`).
 
 ## Features
 
 - Install Vite+ globally via official install scripts
-- Optionally set up a specific Node.js version via `vp env use`
-- Cache project dependencies with auto-detection of lock files
+- GitHub Action: optionally set up a specific Node.js version via `vp env use`
+- GitHub Action: cache project dependencies with auto-detection of lock files
 - Optionally run `vp install` after setup
 - Optionally wrap `vp install` with [Socket Firewall Free (`sfw`)](https://docs.socket.dev/docs/socket-firewall-free) to block malicious dependencies
 - Support for all major package managers (npm, pnpm, yarn, bun)
+- GitLab CI/CD support through a reusable `include:remote` template
 
 ## Usage
 
@@ -339,6 +340,160 @@ When `working-directory` is set, lockfile auto-detection runs in that directory.
 
 When `cache-dependency-path` points to a lock file in a subdirectory, the action resolves the package-manager cache directory from that lock file's directory.
 
+## GitLab CI/CD
+
+setup-vp also provides a GitLab CI/CD remote template hosted from this GitHub repository. Because this repository is not a GitLab CI/CD component project, GitLab users should load it with `include:remote` instead of `include:component`.
+
+See [GitLab integration notes](rfcs/gitlab-integration.md) for the design background, constraints, and follow-up work.
+
+### Basic GitLab Usage
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+
+test:
+  extends: .setup-vp
+  image: node:24
+  script:
+    - vp run test
+```
+
+### With GitLab Inputs
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+    inputs:
+      version: "latest"
+      working-directory: "web"
+      run-install: "true"
+
+test:
+  extends: .setup-vp
+  image: node:24
+  script:
+    - vp run test
+```
+
+### With Pinned GitLab Runtime
+
+When using an immutable tag or commit SHA, pin `setup-ref` to the same ref so the bootstrap and compiled runtime are downloaded from the same version as the included template:
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.0.0/gitlab/setup-vp.yml"
+    inputs:
+      setup-ref: "v1.0.0"
+
+test:
+  extends: .setup-vp
+  image: node:24
+  script:
+    - vp run test
+```
+
+### With Existing GitLab `before_script`
+
+GitLab replaces array keywords such as `before_script` when a job uses `extends`; it does not append them. If the job already needs setup commands, reference `.setup-vp-bootstrap` explicitly before the job-specific commands and configure setup-vp with variables:
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+
+test:
+  image: node:24
+  variables:
+    SETUP_VP_VERSION: "latest"
+    SETUP_VP_RUN_INSTALL: "true"
+    SETUP_VP_SETUP_REF: "v1"
+  before_script:
+    - !reference [.setup-vp-bootstrap, before_script]
+    - npm config set //registry.example.com/:_authToken "$NODE_AUTH_TOKEN"
+    - corepack enable
+  script:
+    - vp run test
+```
+
+Use the same pattern when the project has `default:before_script`; put the shared setup commands in each job that needs them instead of relying on `.setup-vp` to append to the default array. The bootstrap variables match the GitLab inputs with `SETUP_VP_` prefixes, for example `SETUP_VP_WORKING_DIRECTORY`, `SETUP_VP_SFW`, `SETUP_VP_REGISTRY_URL`, and `SETUP_VP_SCOPE`.
+
+### Advanced GitLab Run Install
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+    inputs:
+      run-install: |
+        - cwd: ./packages/app
+          args: ['--frozen-lockfile']
+        - cwd: ./packages/lib
+
+test:
+  extends: .setup-vp
+  image: node:24
+  script:
+    - vp run test
+```
+
+### With GitLab Socket Firewall Free (sfw)
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+    inputs:
+      sfw: true
+      run-install: "true"
+
+test:
+  extends: .setup-vp
+  image: node:24
+  script:
+    - vp run test
+```
+
+### With Private Registry
+
+Pass `NODE_AUTH_TOKEN` as a GitLab CI/CD variable and set `registry-url` when the job needs an authenticated npm registry:
+
+```yaml
+include:
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+    inputs:
+      registry-url: "https://npm.pkg.github.com"
+      scope: "@myorg"
+
+test:
+  extends: .setup-vp
+  image: node:24
+  variables:
+    NODE_AUTH_TOKEN: "$NPM_TOKEN"
+  script:
+    - vp run test
+```
+
+### GitLab Inputs
+
+| Input               | Description                                                                                               | Default  |
+| ------------------- | --------------------------------------------------------------------------------------------------------- | -------- |
+| `version`           | Version of Vite+ to install                                                                               | `latest` |
+| `working-directory` | Project directory used for relative paths and default `vp install` execution                              | `.`      |
+| `run-install`       | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args` | `true`   |
+| `sfw`               | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)          | `false`  |
+| `registry-url`      | Optional registry URL to write to a temporary `.npmrc`                                                    |          |
+| `scope`             | Optional scope for authenticating against scoped registries                                               |          |
+| `setup-ref`         | setup-vp ref used to download the GitLab bootstrap and compiled runtime                                   | `v1`     |
+
+### GitLab Notes
+
+- Use a tag such as `v1` or `v1.0.0` in the remote URL instead of `main`.
+- Pin `setup-ref` to the same tag or commit SHA as the remote URL when strict reproducibility is required.
+- Quote GitLab string inputs such as `run-install: "false"`; unquoted booleans are rejected by GitLab before the setup runtime can parse them.
+- GitLab 17.9+ users can add `integrity` to pin the remote file hash.
+- The template expects a Unix-like runner image with Node.js, `bash`, and either `curl` or `wget`.
+- The GitLab runtime source is TypeScript under `src/gitlab/`, but the template downloads and runs the `vp pack` generated JavaScript bundle from `dist/gitlab/index.mjs`.
+- The GitLab template does not set up Node.js. Use a Node image such as `node:24`, or install Node.js before extending `.setup-vp`.
+- The GitLab template intentionally does not expose `cache` or `cache-dependency-path` inputs. GitLab restores job cache before `before_script`, so this template cannot compute cache paths during setup and restore them for the same job. Configure GitLab `cache:` directly on the job when needed.
+
 ## Example Workflow
 
 ```yaml
@@ -395,7 +550,7 @@ vp install
 ### Before Committing
 
 - Run `vp run check:fix` and `vp run build`
-- The `dist/index.mjs` must be committed (it's the compiled action entry point)
+- Generated files under `dist/` must be committed, including `dist/index.mjs` for the GitHub Action and `dist/gitlab/index.mjs` for the GitLab template
 - Pre-commit hooks (via husky + lint-staged) will automatically run `vp check --fix` on staged files via `vpx lint-staged`
 
 ### Releasing
