@@ -34,6 +34,10 @@ inputs:
     description: "Enable caching of project dependencies"
     required: false
     default: "false"
+  task-cache:
+    description: "Enable task caching via GitHub Actions"
+    required: false
+    default: "false"
   cache-dependency-path:
     description: "Path to lock file for cache key generation. Auto-detected if not specified."
     required: false
@@ -49,6 +53,8 @@ outputs:
     description: "The installed version of Vite+"
   cache-hit:
     description: "Boolean indicating if cache was restored"
+  task-cache-hit:
+    description: "Boolean indicating if task cache was restored"
 
 runs:
   using: node24
