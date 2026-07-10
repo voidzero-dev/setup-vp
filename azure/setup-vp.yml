@@ -50,11 +50,11 @@ steps:
           SETUP_VP_VERSION: ${{ parameters.version }}
           SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
           SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
-          SETUP_VP_SFW: ${{ parameters.sfw }}
+          SETUP_VP_SFW: ${{ iif(eq(parameters.sfw, true), 'true', 'false') }}
           SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
           SETUP_VP_SCOPE: ${{ parameters.scope }}
           SETUP_VP_SETUP_REF: ${{ parameters.setupRef }}
-          SETUP_VP_CACHE: ${{ parameters.cache }}
+          SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
           SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
           SETUP_VP_RUNTIME_OUT: $(Agent.TempDirectory)\setup-vp-azure\dist\azure\index.mjs
 
@@ -72,11 +72,11 @@ steps:
           SETUP_VP_VERSION: ${{ parameters.version }}
           SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
           SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
-          SETUP_VP_SFW: ${{ parameters.sfw }}
+          SETUP_VP_SFW: ${{ iif(eq(parameters.sfw, true), 'true', 'false') }}
           SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
           SETUP_VP_SCOPE: ${{ parameters.scope }}
           SETUP_VP_SETUP_REF: ${{ parameters.setupRef }}
-          SETUP_VP_CACHE: ${{ parameters.cache }}
+          SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
           SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
           SETUP_VP_RUNTIME_OUT: $(Agent.TempDirectory)/setup-vp-azure/dist/azure/index.mjs
 
@@ -101,10 +101,10 @@ steps:
           SETUP_VP_VERSION: ${{ parameters.version }}
           SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
           SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
-          SETUP_VP_SFW: ${{ parameters.sfw }}
+          SETUP_VP_SFW: ${{ iif(eq(parameters.sfw, true), 'true', 'false') }}
           SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
           SETUP_VP_SCOPE: ${{ parameters.scope }}
-          SETUP_VP_CACHE: ${{ parameters.cache }}
+          SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
           SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
 
   - ${{ if ne(variables['Agent.OS'], 'Windows_NT') }}:
@@ -116,8 +116,8 @@ steps:
           SETUP_VP_VERSION: ${{ parameters.version }}
           SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
           SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
-          SETUP_VP_SFW: ${{ parameters.sfw }}
+          SETUP_VP_SFW: ${{ iif(eq(parameters.sfw, true), 'true', 'false') }}
           SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
           SETUP_VP_SCOPE: ${{ parameters.scope }}
-          SETUP_VP_CACHE: ${{ parameters.cache }}
+          SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
           SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
