@@ -18,7 +18,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["^src/install-sfw\\.ts$", "^src/gitlab/install-sfw\\.ts$"],
+      "fileMatch": ["^src/install-sfw\\.ts$", "^src/ci/install-sfw\\.ts$"],
       "matchStrings": ["const SFW_VERSION = \"(?<currentValue>v[^\"]+)\";"],
       "depNameTemplate": "SocketDev/sfw-free",
       "datasourceTemplate": "github-releases"

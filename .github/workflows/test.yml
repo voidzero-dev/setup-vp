@@ -650,6 +650,40 @@ jobs:
           fi
           echo "OK: composed sfw blocked lodahs (exit $CODE, block-line found)"
 
+  test-azure-runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Setup Vite+
+        uses: ./
+        with:
+          run-install: false
+          cache: false
+
+      - name: Build portable bundles
+        run: vp run build
+
+      - name: Verify Azure runtime invalid phase smoke test
+        shell: bash
+        run: |
+          node dist/azure/index.mjs invalid-phase
+          test $? -ne 0
+
+      - name: Verify bootstrap syntax (Unix)
+        if: runner.os != 'Windows'
+        run: bash -n azure/bootstrap.sh gitlab/bootstrap.sh
+
+      - name: Verify bootstrap syntax (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          [scriptblock]::Create((Get-Content -Raw azure/bootstrap.ps1)) > $null
+
   build:
     runs-on: ubuntu-latest
     # This job verifies the action's own artifacts (dist/ committed and up to

@@ -1,0 +1,123 @@
+parameters:
+  - name: version
+    type: string
+    default: latest
+  - name: workingDirectory
+    type: string
+    default: .
+  - name: runInstall
+    type: object
+    default: true
+  - name: sfw
+    type: boolean
+    default: false
+  - name: registryUrl
+    type: string
+    default: ""
+  - name: scope
+    type: string
+    default: ""
+  - name: setupRef
+    type: string
+    default: v1
+  - name: nodeVersion
+    type: string
+    default: 24.x
+  - name: cache
+    type: boolean
+    default: false
+  - name: cacheDependencyPath
+    type: string
+    default: ""
+
+steps:
+  - ${{ if ne(parameters.nodeVersion, '') }}:
+      - task: UseNode@1
+        displayName: Use Node.js
+        inputs:
+          version: ${{ parameters.nodeVersion }}
+
+  - ${{ if eq(variables['Agent.OS'], 'Windows_NT') }}:
+      - powershell: |
+          $ErrorActionPreference = 'Stop'
+          $bootstrap = Join-Path $env:AGENT_TEMPDIRECTORY 'setup-vp-azure-bootstrap.ps1'
+          $runtime = Join-Path $env:AGENT_TEMPDIRECTORY 'setup-vp-azure-runtime.mjs'
+          $base = "https://raw.githubusercontent.com/voidzero-dev/setup-vp/${{ parameters.setupRef }}/azure"
+          Invoke-WebRequest -Uri "$base/bootstrap.ps1" -OutFile $bootstrap -TimeoutSec 60
+          & $bootstrap
+        displayName: setup-vp prepare (Windows)
+        env:
+          SETUP_VP_VERSION: ${{ parameters.version }}
+          SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
+          SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
+          SETUP_VP_SFW: ${{ parameters.sfw }}
+          SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
+          SETUP_VP_SCOPE: ${{ parameters.scope }}
+          SETUP_VP_SETUP_REF: ${{ parameters.setupRef }}
+          SETUP_VP_CACHE: ${{ parameters.cache }}
+          SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
+          SETUP_VP_RUNTIME_OUT: $(Agent.TempDirectory)\setup-vp-azure-runtime.mjs
+
+  - ${{ if ne(variables['Agent.OS'], 'Windows_NT') }}:
+      - bash: |
+          set -euo pipefail
+          bootstrap="$(Agent.TempDirectory)/setup-vp-azure-bootstrap.sh"
+          runtime="$(Agent.TempDirectory)/setup-vp-azure-runtime.mjs"
+          base="https://raw.githubusercontent.com/voidzero-dev/setup-vp/${{ parameters.setupRef }}/azure"
+          curl -fsSL --connect-timeout 5 --max-time 60 "$base/bootstrap.sh" -o "$bootstrap"
+          chmod +x "$bootstrap"
+          bash "$bootstrap"
+        displayName: setup-vp prepare (Unix)
+        env:
+          SETUP_VP_VERSION: ${{ parameters.version }}
+          SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
+          SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
+          SETUP_VP_SFW: ${{ parameters.sfw }}
+          SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
+          SETUP_VP_SCOPE: ${{ parameters.scope }}
+          SETUP_VP_SETUP_REF: ${{ parameters.setupRef }}
+          SETUP_VP_CACHE: ${{ parameters.cache }}
+          SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
+          SETUP_VP_RUNTIME_OUT: $(Agent.TempDirectory)/setup-vp-azure-runtime.mjs
+
+  - ${{ if eq(parameters.cache, true) }}:
+      - task: Cache@2
+        displayName: Cache Vite+ package-manager data
+        condition: and(succeeded(), eq(variables['SETUP_VP_CACHE_READY'], 'true'))
+        inputs:
+          key: '"vite-plus" | "$(Agent.OS)" | "$(Agent.OSArchitecture)" | "$(SETUP_VP_LOCK_TYPE)" | $(SETUP_VP_LOCK_FILE)'
+          restoreKeys: |
+            "vite-plus" | "$(Agent.OS)" | "$(Agent.OSArchitecture)" | "$(SETUP_VP_LOCK_TYPE)"
+            "vite-plus" | "$(Agent.OS)" | "$(Agent.OSArchitecture)"
+          path: $(SETUP_VP_CACHE_PATH)
+          cacheHitVar: SETUP_VP_CACHE_HIT
+
+  - ${{ if eq(variables['Agent.OS'], 'Windows_NT') }}:
+      - powershell: |
+          $ErrorActionPreference = 'Stop'
+          node "$(SETUP_VP_RUNTIME_PATH)" finalize
+        displayName: setup-vp finalize (Windows)
+        env:
+          SETUP_VP_VERSION: ${{ parameters.version }}
+          SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
+          SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
+          SETUP_VP_SFW: ${{ parameters.sfw }}
+          SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
+          SETUP_VP_SCOPE: ${{ parameters.scope }}
+          SETUP_VP_CACHE: ${{ parameters.cache }}
+          SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
+
+  - ${{ if ne(variables['Agent.OS'], 'Windows_NT') }}:
+      - bash: |
+          set -euo pipefail
+          node "$(SETUP_VP_RUNTIME_PATH)" finalize
+        displayName: setup-vp finalize (Unix)
+        env:
+          SETUP_VP_VERSION: ${{ parameters.version }}
+          SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
+          SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
+          SETUP_VP_SFW: ${{ parameters.sfw }}
+          SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
+          SETUP_VP_SCOPE: ${{ parameters.scope }}
+          SETUP_VP_CACHE: ${{ parameters.cache }}
+          SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}

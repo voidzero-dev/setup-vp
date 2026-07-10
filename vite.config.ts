@@ -11,6 +11,7 @@ export default defineConfig({
     entry: {
       index: "./src/index.ts",
       "gitlab/index": "./src/gitlab/index.ts",
+      "azure/index": "./src/azure/index.ts",
     },
     format: ["esm"],
     outDir: "dist",

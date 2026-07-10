@@ -30,9 +30,8 @@ describe("GitLab sfw setup", () => {
     expect(getSfwAssetName("linux", "x64", true)).toBe("sfw-free-musl-linux-x86_64");
     expect(getSfwAssetName("linux", "arm64", false)).toBe("sfw-free-linux-arm64");
     expect(getSfwAssetName("darwin", "arm64", false)).toBe("sfw-free-macos-arm64");
-    expect(() => getSfwAssetName("win32", "x64", false)).toThrow(
-      "Unsupported platform/arch for sfw",
-    );
+    expect(getSfwAssetName("win32", "x64", false)).toBe("sfw-free-windows-x86_64.exe");
+    expect(getSfwAssetName("win32", "arm64", false)).toBe("sfw-free-windows-arm64.exe");
   });
 
   it("does not set up sfw when disabled or run-install is disabled", async () => {

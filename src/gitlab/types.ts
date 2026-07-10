@@ -1,10 +1,10 @@
-export type RunInstallEntry = {
-  cwd?: string;
-  args?: string[];
-};
-
-export type RunInstallInput = null | boolean | RunInstallEntry | RunInstallEntry[];
-
-export type RuntimeEnv = Record<string, string | undefined>;
-
-export type InstallCommand = "vp" | "sfw";
+export type {
+  ExportVariable,
+  InstallCommand,
+  LockFileInfo,
+  LogFn,
+  RunInstallEntry,
+  RunInstallInput,
+  RuntimeEnv,
+} from "../ci/types.js";
+export { LockFileType } from "../ci/types.js";
