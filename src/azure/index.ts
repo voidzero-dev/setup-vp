@@ -54,8 +54,8 @@ export async function runPrepare(
   const inputs = parseAzureInputs(env);
   const projectDir = resolveProjectDirFromInputs(inputs);
 
-  ports.setVariable("SETUP_VP_CACHE_HIT", "false", { isOutput: true });
-  ports.setVariable("SETUP_VP_CACHE_READY", "false", { isOutput: true });
+  ports.setVariable("SETUP_VP_CACHE_HIT", "false");
+  ports.setVariable("SETUP_VP_CACHE_READY", "false");
 
   await ports.installVitePlus(inputs.version, {
     env,
@@ -64,7 +64,7 @@ export async function runPrepare(
   });
 
   const runtimePath = path.resolve(process.argv[1] || "");
-  ports.setVariable("SETUP_VP_RUNTIME_PATH", runtimePath, { isOutput: true });
+  ports.setVariable("SETUP_VP_RUNTIME_PATH", runtimePath);
 
   if (!inputs.cache) return;
 
@@ -75,19 +75,19 @@ export async function runPrepare(
   });
 
   if (!metadata.ready) {
-    ports.setVariable("SETUP_VP_CACHE_READY", "false", { isOutput: true });
+    ports.setVariable("SETUP_VP_CACHE_READY", "false");
     return;
   }
 
-  ports.setVariable("SETUP_VP_CACHE_READY", "true", { isOutput: true });
+  ports.setVariable("SETUP_VP_CACHE_READY", "true");
   if (metadata.cachePath) {
-    ports.setVariable("SETUP_VP_CACHE_PATH", metadata.cachePath, { isOutput: true });
+    ports.setVariable("SETUP_VP_CACHE_PATH", metadata.cachePath);
   }
   if (metadata.lockFile) {
-    ports.setVariable("SETUP_VP_LOCK_FILE", metadata.lockFile, { isOutput: true });
+    ports.setVariable("SETUP_VP_LOCK_FILE", metadata.lockFile);
   }
   if (metadata.lockType) {
-    ports.setVariable("SETUP_VP_LOCK_TYPE", metadata.lockType, { isOutput: true });
+    ports.setVariable("SETUP_VP_LOCK_TYPE", metadata.lockType);
   }
 }
 
@@ -100,7 +100,7 @@ export async function runFinalize(
 
   ports.configureAuth(inputs.registryUrl, inputs.scope, env, (name, value) => {
     if (name === "NODE_AUTH_TOKEN") return;
-    if (value !== undefined) ports.setVariable(name, value, { isOutput: true });
+    if (value !== undefined) ports.setVariable(name, value);
   });
 
   const runInstallEntries = ports.parseRunInstall(inputs.runInstall);
@@ -108,7 +108,7 @@ export async function runFinalize(
     env,
     sfwEnabled: inputs.sfw,
     exportVariable: (name, value) => {
-      if (value !== undefined) ports.setVariable(name, value, { isOutput: true });
+      if (value !== undefined) ports.setVariable(name, value);
     },
   });
   if (runInstallEntries.length > 0) {
@@ -118,7 +118,7 @@ export async function runFinalize(
   const versionOutput = ports.getCommandOutput("vp", ["--version"]) || "";
   ports.logInfo(versionOutput);
   const installedVersion = ports.parseInstalledVpVersion(versionOutput);
-  ports.setVariable("SETUP_VP_INSTALLED_VERSION", installedVersion, { isOutput: true });
+  ports.setVariable("SETUP_VP_INSTALLED_VERSION", installedVersion);
 }
 
 export async function main(phase: AzurePhase): Promise<void> {

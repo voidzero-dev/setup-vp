@@ -56,7 +56,7 @@ steps:
           SETUP_VP_SETUP_REF: ${{ parameters.setupRef }}
           SETUP_VP_CACHE: ${{ parameters.cache }}
           SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
-          SETUP_VP_RUNTIME_OUT: $(Agent.TempDirectory)\setup-vp-azure-runtime.mjs
+          SETUP_VP_RUNTIME_OUT: $(Agent.TempDirectory)\setup-vp-azure\dist\azure\index.mjs
 
   - ${{ if ne(variables['Agent.OS'], 'Windows_NT') }}:
       - bash: |
@@ -78,7 +78,7 @@ steps:
           SETUP_VP_SETUP_REF: ${{ parameters.setupRef }}
           SETUP_VP_CACHE: ${{ parameters.cache }}
           SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
-          SETUP_VP_RUNTIME_OUT: $(Agent.TempDirectory)/setup-vp-azure-runtime.mjs
+          SETUP_VP_RUNTIME_OUT: $(Agent.TempDirectory)/setup-vp-azure/dist/azure/index.mjs
 
   - ${{ if eq(parameters.cache, true) }}:
       - task: Cache@2
@@ -95,7 +95,7 @@ steps:
   - ${{ if eq(variables['Agent.OS'], 'Windows_NT') }}:
       - powershell: |
           $ErrorActionPreference = 'Stop'
-          node "$(SETUP_VP_RUNTIME_PATH)" finalize
+          node "$(Agent.TempDirectory)\setup-vp-azure\dist\azure\index.mjs" finalize
         displayName: setup-vp finalize (Windows)
         env:
           SETUP_VP_VERSION: ${{ parameters.version }}
@@ -110,7 +110,7 @@ steps:
   - ${{ if ne(variables['Agent.OS'], 'Windows_NT') }}:
       - bash: |
           set -euo pipefail
-          node "$(SETUP_VP_RUNTIME_PATH)" finalize
+          node "$(Agent.TempDirectory)/setup-vp-azure/dist/azure/index.mjs" finalize
         displayName: setup-vp finalize (Unix)
         env:
           SETUP_VP_VERSION: ${{ parameters.version }}
