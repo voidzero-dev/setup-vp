@@ -13,15 +13,19 @@ export interface AzureInputs {
   workspaceRoot: string;
 }
 
+function parseBoolean(value: string | undefined): boolean {
+  return value?.toLowerCase() === "true";
+}
+
 export function parseAzureInputs(env: RuntimeEnv): AzureInputs {
   return {
     version: env.SETUP_VP_VERSION || "latest",
     workingDirectory: env.SETUP_VP_WORKING_DIRECTORY || ".",
     runInstall: env.SETUP_VP_RUN_INSTALL ?? "true",
-    sfw: env.SETUP_VP_SFW === "true",
+    sfw: parseBoolean(env.SETUP_VP_SFW),
     registryUrl: env.SETUP_VP_REGISTRY_URL || "",
     scope: env.SETUP_VP_SCOPE || "",
-    cache: env.SETUP_VP_CACHE === "true",
+    cache: parseBoolean(env.SETUP_VP_CACHE),
     cacheDependencyPath: env.SETUP_VP_CACHE_DEPENDENCY_PATH || "",
     workspaceRoot: env.SYSTEM_DEFAULTWORKINGDIRECTORY || process.cwd(),
   };

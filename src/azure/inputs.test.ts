@@ -30,6 +30,16 @@ describe("parseAzureInputs", () => {
       workspaceRoot: "/workspace",
     });
   });
+
+  it("accepts Azure's title-cased boolean serialization", () => {
+    const inputs = parseAzureInputs({
+      SETUP_VP_SFW: "True",
+      SETUP_VP_CACHE: "True",
+    });
+
+    expect(inputs.sfw).toBe(true);
+    expect(inputs.cache).toBe(true);
+  });
 });
 
 describe("resolveProjectDirFromInputs", () => {
