@@ -9,8 +9,9 @@
       "addLabels": ["needs-bundle-rebuild"]
     },
     {
-      "description": "vite-plus is the bundler; its updates can change dist/ output.",
-      "matchPackageNames": ["vite-plus"],
+      "description": "Group all Vite+ packages into a single PR; they are published together at the same version. vite-plus is the bundler, so its updates can change dist/ output.",
+      "groupName": "vite-plus",
+      "matchPackageNames": ["vite-plus", "@voidzero-dev/vite-plus-*"],
       "addLabels": ["needs-bundle-rebuild"]
     }
   ],
