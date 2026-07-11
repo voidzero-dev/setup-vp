@@ -4,7 +4,7 @@
  */
 export function escapeLoggingCommandData(value: string): string {
   return value
-    .replaceAll("%", "%25")
+    .replaceAll("%", "%AZP25")
     .replaceAll("\r", "%0D")
     .replaceAll("\n", "%0A")
     .replaceAll(";", "%3B")

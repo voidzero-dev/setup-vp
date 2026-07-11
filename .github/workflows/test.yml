@@ -671,8 +671,10 @@ jobs:
       - name: Verify Azure runtime invalid phase smoke test
         shell: bash
         run: |
-          node dist/azure/index.mjs invalid-phase
-          test $? -ne 0
+          if node dist/azure/index.mjs invalid-phase; then
+            echo "::error::Azure runtime accepted an invalid phase"
+            exit 1
+          fi
 
       - name: Verify bootstrap syntax (Unix)
         if: runner.os != 'Windows'

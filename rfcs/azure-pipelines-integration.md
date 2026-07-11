@@ -67,9 +67,11 @@ The GitLab integration established the right pattern: a provider-native template
 Azure expands `azure/setup-vp.yml` from the external repository but does not check out bootstrap/runtime files onto the agent. Each prepare step downloads `azure/bootstrap.*` from `https://raw.githubusercontent.com/voidzero-dev/setup-vp/<setupRef>/azure/` into `Agent.TempDirectory`, then executes it. The bootstrap downloads `dist/azure/index.mjs` and runs `node <runtime> prepare`.
 
 The prepare and finalize steps use the same deterministic runtime path under
-`$(Agent.TempDirectory)/setup-vp-azure/dist/azure/index.mjs`. The bootstrap
-downloads the runtime and its generated sibling chunks into that directory, so
-finalize does not depend on cross-step macro expansion of a runtime path.
+`$(Agent.TempDirectory)/setup-vp-azure/dist/azure/index.mjs`. The runtime is
+built as a standalone entrypoint, so downloading that file is sufficient. The
+bootstrap also recognizes generated sibling chunks for compatibility with older
+refs, and places them beside the runtime when present; finalize therefore does
+not depend on cross-step macro expansion of a runtime path.
 
 Pin `ref` and `setupRef` to the same immutable tag or commit SHA for strict reproducibility.
 

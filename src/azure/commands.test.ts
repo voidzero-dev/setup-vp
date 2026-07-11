@@ -5,11 +5,12 @@ describe("escapeLoggingCommandData", () => {
   it("escapes characters that could terminate logging commands", () => {
     expect(escapeLoggingCommandData("plain/path")).toBe("plain/path");
     expect(escapeLoggingCommandData("C:\\Users\\dev")).toBe("C:\\Users\\dev");
-    expect(escapeLoggingCommandData("a%b")).toBe("a%25b");
+    expect(escapeLoggingCommandData("a%b")).toBe("a%AZP25b");
     expect(escapeLoggingCommandData("a;b")).toBe("a%3Bb");
     expect(escapeLoggingCommandData("a]b")).toBe("a%5Db");
     expect(escapeLoggingCommandData("a\nb")).toBe("a%0Ab");
     expect(escapeLoggingCommandData("a\rb")).toBe("a%0Db");
+    expect(escapeLoggingCommandData("a%;\n]b")).toBe("a%AZP25%3B%0A%5Db");
   });
 });
 

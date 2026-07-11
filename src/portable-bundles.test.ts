@@ -16,14 +16,18 @@ describe("portable CI bundles", () => {
     const gitlab = readFileSync(gitlabDist, "utf8");
     expect(azure).not.toContain("@actions/");
     expect(gitlab).not.toContain("@actions/");
+    expect(azure).not.toMatch(/\bfrom["']\.\.\//);
+    expect(gitlab).not.toMatch(/\bfrom["']\.\.\//);
     expect(readFileSync(actionDist, "utf8")).toContain("@actions/");
   });
 
   it("fails invalid azure phase with a controlled message", () => {
     const result = spawnSync(process.execPath, [azureDist, "invalid-phase"], {
       encoding: "utf8",
+      timeout: 10_000,
     });
+    expect(result.error).toBeUndefined();
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('invalid phase "invalid-phase"');
-  });
+  }, 15_000);
 });
