@@ -51,4 +51,15 @@ describe("azure/setup-vp.yml", () => {
     expect(template).toContain("bootstrap.sh");
     expect(template).toContain("bootstrap.ps1");
   });
+
+  it("selects the agent shell at runtime", () => {
+    expect(template).not.toContain("${{ if eq(variables['Agent.OS'], 'Windows_NT') }}");
+    expect(template).not.toContain("${{ if ne(variables['Agent.OS'], 'Windows_NT') }}");
+    expect(template).toContain(
+      "condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))",
+    );
+    expect(template).toContain(
+      "condition: and(succeeded(), ne(variables['Agent.OS'], 'Windows_NT'))",
+    );
+  });
 });
