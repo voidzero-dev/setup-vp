@@ -554,7 +554,7 @@ Pin `ref` and `setupRef` to the same tag or commit SHA for strict reproducibilit
 | `SETUP_VP_INSTALLED_VERSION` | Installed global Vite+ version (`unknown` when parsing fails).        |
 | `SETUP_VP_CACHE_HIT`         | `true`, `inexact`, or `false` from `Cache@2` when caching is enabled. |
 
-`vp`, `NPM_CONFIG_USERCONFIG`, and `PNPM_CONFIG_USERCONFIG` are available to later steps in the same job. Map `NODE_AUTH_TOKEN` into later steps when private registry auth is required.
+`vp`, `NPM_CONFIG_USERCONFIG`, and `PNPM_CONFIG_USERCONFIG` are available to later steps in the same job. Define `NODE_AUTH_TOKEN` as an Azure secret pipeline variable when private registry auth is required; the template maps it into both finalize tasks.
 
 ### Azure Notes
 

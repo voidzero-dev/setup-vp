@@ -108,6 +108,10 @@ Provider-visible variables:
 | `SETUP_VP_INSTALLED_VERSION` | Installed global Vite+ version               |
 | `SETUP_VP_CACHE_HIT`         | `true`, `inexact`, or `false` from `Cache@2` |
 
+For private registries, consumers define `NODE_AUTH_TOKEN` as an Azure secret
+pipeline variable. Both finalize branches explicitly map that secret into the
+runtime environment before configuring registry authentication.
+
 ## GitHub/GitLab/Azure Parity
 
 | Capability              | GitHub Action | GitLab template | Azure template    |

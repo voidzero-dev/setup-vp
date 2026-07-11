@@ -44,6 +44,7 @@ describe("azure/setup-vp.yml", () => {
     expect(template).not.toMatch(/setup-vp\/main\//);
     expect(template).toContain("$(SETUP_VP_LOCK_FILE)");
     expect(template).toContain("cacheHitVar: SETUP_VP_CACHE_HIT");
+    expect(template.match(/NODE_AUTH_TOKEN: \$\(NODE_AUTH_TOKEN\)/g) ?? []).toHaveLength(2);
   });
 
   it("includes Unix and Windows branches", () => {
