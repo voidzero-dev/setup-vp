@@ -144,6 +144,7 @@ function makeInputs(overrides: Partial<Inputs> = {}): Inputs {
     sfw: true,
     cache: false,
     cacheDependencyPath: undefined,
+    taskCache: false,
     registryUrl: undefined,
     scope: undefined,
     ...overrides,

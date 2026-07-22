@@ -1,72 +1,52 @@
 import { restoreCache as restoreCacheAction } from "@actions/cache";
-import { hashFiles } from "@actions/glob";
 import { warning, info, debug, saveState, setOutput } from "@actions/core";
 import { arch, platform } from "node:os";
-import { dirname } from "node:path";
+import { resolve } from "node:path";
 import type { Inputs } from "./types.js";
 import { State, Outputs } from "./types.js";
-import { detectLockFile, getCacheDirectories, getConfiguredProjectDir } from "./utils.js";
+import { getConfiguredProjectDir } from "./utils.js";
 
-export async function restoreCache(inputs: Inputs): Promise<void> {
+export async function restoreTaskCache(inputs: Inputs): Promise<void> {
   const projectDir = getConfiguredProjectDir(inputs);
 
-  // Detect lock file
-  const lockFile = detectLockFile(inputs.cacheDependencyPath, projectDir);
-  if (!lockFile) {
-    const message = inputs.cacheDependencyPath
-      ? `No lock file found for cache-dependency-path: ${inputs.cacheDependencyPath}. Skipping cache restore.`
-      : `No lock file found in project directory: ${projectDir}. Skipping cache restore.`;
-    warning(message);
-    setOutput(Outputs.CacheHit, false);
-    return;
-  }
+  // Task cache path is fixed: node_modules/.vite/task-cache
+  const taskCachePath = resolve(projectDir, "node_modules", ".vite", "task-cache");
+  const cachePaths = [taskCachePath];
 
-  info(`Using lock file: ${lockFile.path}`);
-  const cacheCwd = dirname(lockFile.path);
-  info(`Resolving dependency cache directory in: ${cacheCwd}`);
+  debug(`Task cache path: ${taskCachePath}`);
+  saveState(State.TaskCachePaths, JSON.stringify(cachePaths));
 
-  // Get cache directories based on lock file type
-  const cachePaths = await getCacheDirectories(lockFile.type, cacheCwd);
-  if (!cachePaths.length) {
-    warning(
-      `No cache directories found for ${lockFile.type} in ${cacheCwd}. Skipping cache restore.`,
-    );
-    setOutput(Outputs.CacheHit, false);
-    return;
-  }
-
-  debug(`Cache paths: ${cachePaths.join(", ")}`);
-  saveState(State.CachePaths, JSON.stringify(cachePaths));
-
-  // Generate cache key: vite-plus-{platform}-{arch}-{lockfile-type}-{hash}
+  // Generate cache key: vite-task-{runner.os}-{runner.arch}-{run_id}-{run_attempt}
   const runnerOS = process.env.RUNNER_OS || platform();
   const runnerArch = arch();
-  const fileHash = await hashFiles(lockFile.path);
+  const runId = process.env.GITHUB_RUN_ID;
+  const runAttempt = process.env.GITHUB_RUN_ATTEMPT;
 
-  if (!fileHash) {
-    throw new Error(`Failed to generate hash for lock file: ${lockFile.path}`);
+  if (!runId || !runAttempt) {
+    warning(
+      `GitHub run ID or attempt not found. Task cache requires GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT. Skipping task cache restore.`,
+    );
+    setOutput(Outputs.TaskCacheHit, false);
+    return;
   }
 
-  const primaryKey = `vite-plus-${runnerOS}-${runnerArch}-${lockFile.type}-${fileHash}`;
-  const restoreKeys = [
-    `vite-plus-${runnerOS}-${runnerArch}-${lockFile.type}-`,
-    `vite-plus-${runnerOS}-${runnerArch}-`,
-  ];
+  const primaryKey = `vite-task-${runnerOS}-${runnerArch}-${runId}-${runAttempt}`;
+  const restoreKeys = [`vite-task-${runnerOS}-${runnerArch}-`];
 
-  debug(`Primary key: ${primaryKey}`);
-  debug(`Restore keys: ${restoreKeys.join(", ")}`);
+  debug(`Task cache primary key: ${primaryKey}`);
+  debug(`Task cache restore keys: ${restoreKeys.join(", ")}`);
 
-  saveState(State.CachePrimaryKey, primaryKey);
+  saveState(State.TaskCachePrimaryKey, primaryKey);
 
   // Attempt to restore cache
   const matchedKey = await restoreCacheAction(cachePaths, primaryKey, restoreKeys);
 
   if (matchedKey) {
-    info(`Cache restored from key: ${matchedKey}`);
-    saveState(State.CacheMatchedKey, matchedKey);
-    setOutput(Outputs.CacheHit, true);
+    info(`Task cache restored from key: ${matchedKey}`);
+    saveState(State.TaskCacheMatchedKey, matchedKey);
+    setOutput(Outputs.TaskCacheHit, true);
   } else {
-    info("Cache not found");
-    setOutput(Outputs.CacheHit, false);
+    info("Task cache not found");
+    setOutput(Outputs.TaskCacheHit, false);
   }
 }
