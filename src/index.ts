@@ -30,9 +30,12 @@ async function runMain(inputs: Inputs): Promise<void> {
   await installVitePlus({ ...inputs, version });
 
   // Step 3: Set up Node.js version if specified
-  if (nodeVersion) {
+  if (nodeVersion && nodeVersion !== "off") {
     info(`Setting up Node.js ${nodeVersion} via vp env use...`);
     await exec("vp", ["env", "use", nodeVersion]);
+  } else if (nodeVersion === "off") {
+    info("Disabling Node.js version management with vp env off...");
+    await exec("vp", ["env", "off"]);
   }
 
   // Step 4: Configure registry authentication

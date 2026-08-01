@@ -22,7 +22,7 @@ inputs:
     required: false
     default: "false"
   node-version:
-    description: "Node.js version to install via `vp env use`. Defaults to Node.js latest LTS version."
+    description: "Node.js version to install via `vp env use`. Defaults to Node.js latest LTS version. Pass `off` to disable."
     required: false
   node-version-file:
     description: "Path to file containing the Node.js version spec (.nvmrc, .node-version, .tool-versions, package.json). Ignored when node-version is specified."
