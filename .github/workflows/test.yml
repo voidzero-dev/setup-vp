@@ -662,7 +662,7 @@ jobs:
       - name: Setup Vite+
         uses: ./
         with:
-          run-install: false
+          run-install: true
           cache: false
 
       - name: Build portable bundles

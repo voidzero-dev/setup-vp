@@ -1,5 +1,16 @@
 import { defineConfig } from "vite-plus";
 
+const minifyOptions = {
+  compress: true,
+  // Keep class/function names during minification. Bundled deps such as
+  // @actions/cache branch on `error.name === SomeError.name` (e.g.
+  // ReserveCacheError). Plain `minify: true` mangles the class binding, so
+  // `SomeError.name` becomes the mangled identifier and never matches the
+  // instance's preserved `this.name` literal — routing benign errors (like a
+  // cache reserve race in a build matrix) to core.warning instead of core.info.
+  mangle: { keepNames: { function: true, class: true } },
+};
+
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
@@ -17,10 +28,7 @@ export default defineConfig({
       outDir: "dist",
       deps: { alwaysBundle: [/.*/], onlyBundle: false },
       clean: true,
-      minify: {
-        compress: true,
-        mangle: { keepNames: { function: true, class: true } },
-      },
+      minify: minifyOptions,
     },
     {
       entry: { "gitlab/index": "./src/gitlab/index.ts" },
@@ -28,10 +36,7 @@ export default defineConfig({
       outDir: "dist",
       deps: { alwaysBundle: [/.*/], onlyBundle: false },
       clean: false,
-      minify: {
-        compress: true,
-        mangle: { keepNames: { function: true, class: true } },
-      },
+      minify: minifyOptions,
     },
     {
       entry: { "azure/index": "./src/azure/index.ts" },
@@ -39,18 +44,9 @@ export default defineConfig({
       outDir: "dist",
       deps: { alwaysBundle: [/.*/], onlyBundle: false },
       clean: false,
-      minify: {
-        compress: true,
-        mangle: { keepNames: { function: true, class: true } },
-      },
+      minify: minifyOptions,
     },
   ],
-  // Keep class/function names during minification. Bundled deps such as
-  // @actions/cache branch on `error.name === SomeError.name` (e.g.
-  // ReserveCacheError). Plain `minify: true` mangles the class binding, so
-  // `SomeError.name` becomes the mangled identifier and never matches the
-  // instance's preserved `this.name` literal — routing benign errors (like a
-  // cache reserve race in a build matrix) to core.warning instead of core.info.
   lint: {
     ignorePatterns: ["dist/**/*"],
     options: {

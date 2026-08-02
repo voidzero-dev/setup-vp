@@ -512,7 +512,7 @@ resources:
       type: github
       endpoint: github
       name: voidzero-dev/setup-vp
-      ref: refs/tags/v1.16.0
+      ref: refs/tags/v1
 
 pool:
   vmImage: ubuntu-latest
