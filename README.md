@@ -1,6 +1,6 @@
 # setup-vp
 
-GitHub Action and GitLab CI/CD remote template to set up [Vite+](https://viteplus.dev) (`vp`).
+GitHub Action, GitLab CI/CD remote template, and Azure Pipelines step template to set up [Vite+](https://viteplus.dev) (`vp`).
 
 ## Features
 
@@ -11,6 +11,7 @@ GitHub Action and GitLab CI/CD remote template to set up [Vite+](https://viteplu
 - Optionally wrap `vp install` with [Socket Firewall Free (`sfw`)](https://docs.socket.dev/docs/socket-firewall-free) to block malicious dependencies
 - Support for all major package managers (npm, pnpm, yarn, bun)
 - GitLab CI/CD support through a reusable `include:remote` template
+- Azure Pipelines support through a reusable step template and compiled runtime
 
 ## Usage
 
@@ -494,6 +495,74 @@ test:
 - The GitLab template does not set up Node.js. Use a Node image such as `node:24`, or install Node.js before extending `.setup-vp`.
 - The GitLab template intentionally does not expose `cache` or `cache-dependency-path` inputs. GitLab restores job cache before `before_script`, so this template cannot compute cache paths during setup and restore them for the same job. Configure GitLab `cache:` directly on the job when needed.
 
+## Azure Pipelines
+
+setup-vp also provides an Azure Pipelines step template hosted from this GitHub repository. Azure cannot execute the GitHub Action bundle directly, so the template downloads a compiled runtime (`dist/azure/index.mjs`) and runs it in `prepare` and `finalize` phases around Azure's native `Cache@2` task.
+
+See [Azure Pipelines integration notes](rfcs/azure-pipelines-integration.md) for the design background, parity table, and cache semantics.
+
+### Basic Azure Usage
+
+Create a GitHub service connection named `github`, then reference the template from this repository:
+
+```yaml
+resources:
+  repositories:
+    - repository: setupVp
+      type: github
+      endpoint: github
+      name: voidzero-dev/setup-vp
+      ref: refs/tags/v1
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - template: azure/setup-vp.yml@setupVp
+    parameters:
+      setupRef: v1.16.0
+      nodeVersion: 24.x
+      cache: true
+      runInstall: true
+
+  - script: vp run test
+```
+
+Pin `ref` and `setupRef` to the same tag or commit SHA for strict reproducibility. The moving `v1` tag is supported for convenience but is not immutable.
+
+### Azure Parameters
+
+| Parameter             | Default  | Description                                                               |
+| --------------------- | -------- | ------------------------------------------------------------------------- |
+| `version`             | `latest` | Vite+ version/dist-tag passed to the official installer.                  |
+| `workingDirectory`    | `.`      | Project directory for lock detection and default `vp install`.            |
+| `runInstall`          | `true`   | Run `vp install`; accepts boolean or object/list with `cwd` and `args`.   |
+| `sfw`                 | `false`  | Wrap `vp install` with Socket Firewall Free.                              |
+| `registryUrl`         |          | Optional registry URL for a temporary `.npmrc`.                           |
+| `scope`               |          | Optional npm registry scope.                                              |
+| `setupRef`            | `v1`     | Ref used to download bootstrap scripts and `dist/azure/index.mjs`.        |
+| `nodeVersion`         | `24.x`   | Passed to `UseNode@1`; an empty string skips Node setup.                  |
+| `cache`               | `false`  | Enable Azure `Cache@2` around the package-manager cache directory.        |
+| `cacheDependencyPath` |          | Explicit lock file relative to `workingDirectory`; otherwise auto-detect. |
+
+### Azure Job Variables
+
+| Variable                     | Purpose                                                               |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `SETUP_VP_INSTALLED_VERSION` | Installed global Vite+ version (`unknown` when parsing fails).        |
+| `SETUP_VP_CACHE_HIT`         | `true`, `inexact`, or `false` from `Cache@2` when caching is enabled. |
+
+`vp`, `NPM_CONFIG_USERCONFIG`, and `PNPM_CONFIG_USERCONFIG` are available to later steps in the same job. Define `NODE_AUTH_TOKEN` as an Azure secret pipeline variable when private registry auth is required; the template maps it into both finalize tasks.
+
+### Azure Notes
+
+- The template supports Microsoft-hosted Linux, macOS, and Windows agents.
+- `Cache@2` restores before `vp install` and saves automatically in a post-job step.
+- Missing lock files or cache paths degrade to a warning and `SETUP_VP_CACHE_READY=false` instead of failing setup.
+- For Azure Artifacts feeds, compose with Azure's `npmAuthenticate` task and/or pass `registryUrl` plus `NODE_AUTH_TOKEN`.
+
 ## Example Workflow
 
 ```yaml
@@ -550,7 +619,7 @@ vp install
 ### Before Committing
 
 - Run `vp run check:fix` and `vp run build`
-- Generated files under `dist/` must be committed, including `dist/index.mjs` for the GitHub Action and `dist/gitlab/index.mjs` for the GitLab template
+- Generated files under `dist/` must be committed, including `dist/index.mjs` for the GitHub Action, `dist/gitlab/index.mjs` for the GitLab template, and `dist/azure/index.mjs` for the Azure Pipelines runtime
 - Pre-commit hooks (via husky + lint-staged) will automatically run `vp check --fix` on staged files via `vpx lint-staged`
 
 ### Releasing

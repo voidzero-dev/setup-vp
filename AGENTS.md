@@ -5,11 +5,11 @@ This file provides guidance to coding agents working in this repository.
 ## Guidelines
 
 - Do not commit changes automatically. Wait for an explicit user request to commit.
-- Keep `dist/index.mjs` in sync with source changes by running `vp run build` before committing.
+- Keep `dist/index.mjs`, `dist/gitlab/index.mjs`, and `dist/azure/index.mjs` in sync with source changes by running `vp run build` before committing.
 
 ## Project Overview
 
-GitHub Action to set up [Vite+](https://viteplus.dev) (`vp`) with dependency caching support. The action installs Vite+ globally, can set up Node.js via `vp env use`, optionally configures registry auth, restores/saves dependency cache, and can run `vp install` with optional Socket Firewall Free (`sfw`) wrapping.
+GitHub Action to set up [Vite+](https://viteplus.dev) (`vp`) with dependency caching support. The action installs Vite+ globally, can set up Node.js via `vp env use`, optionally configures registry auth, restores/saves dependency cache, and can run `vp install` with optional Socket Firewall Free (`sfw`) wrapping. GitLab and Azure Pipelines entry points reuse a dependency-light portable runtime under `src/ci/`.
 
 ## Commands
 
@@ -60,6 +60,11 @@ The action has main and post execution phases. Both are served by `src/index.ts`
 - `src/run-install.ts` - Execute `vp install` entries with optional cwd/args.
 - `src/install-sfw.ts` - Install or reuse Socket Firewall Free for wrapped installs.
 - `src/utils.ts` - Lock file detection, package-manager cache paths, and shared helpers.
+- `src/ci/*` - Shared dependency-light primitives for GitLab and Azure runtimes.
+- `src/gitlab/*` - GitLab runtime adapters around `src/ci/*`.
+- `src/azure/*` - Azure Pipelines runtime and logging-command adapters.
+- `azure/setup-vp.yml` - Azure step template.
+- `gitlab/setup-vp.yml` - GitLab remote template.
 
 ### Lock File Detection
 
