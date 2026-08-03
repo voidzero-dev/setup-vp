@@ -8,7 +8,7 @@ import path from "node:path";
 import { commandPath } from "./process.js";
 import type { ExportVariable, InstallCommand, RunInstallEntry } from "./types.js";
 
-export const SFW_VERSION = "v1.12.0";
+export const SFW_VERSION = "v1.15.0";
 const SFW_RELEASE_BASE = `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}`;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 type DownloadClient = typeof httpGet;
