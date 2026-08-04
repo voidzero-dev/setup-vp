@@ -478,15 +478,15 @@ test:
 
 ### GitLab Inputs
 
-| Input               | Description                                                                                                                                                     | Default  |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `version`           | Version of Vite+ to install                                                                                                                                     | `latest` |
-| `working-directory` | Project directory used for relative paths and default `vp install` execution                                                                                    | `.`      |
-| `run-install`       | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args`                                                       | `true`   |
-| `sfw`               | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)                                                                | `false`  |
-| `registry-url`      | Optional registry URL to write to a temporary `.npmrc`                                                                                                          |          |
-| `scope`             | Optional scope for authenticating against scoped registries                                                                                                     |          |
-| `setup-ref`         | setup-vp ref used to download the GitLab bootstrap and compiled runtime. Always set it to the same tag as the remote URL; the default `v1` is frozen at v1.15.0 | `v1`     |
+| Input               | Description                                                                                                                                                                                 | Default   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `version`           | Version of Vite+ to install                                                                                                                                                                 | `latest`  |
+| `working-directory` | Project directory used for relative paths and default `vp install` execution                                                                                                                | `.`       |
+| `run-install`       | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args`                                                                                   | `true`    |
+| `sfw`               | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)                                                                                            | `false`   |
+| `registry-url`      | Optional registry URL to write to a temporary `.npmrc`                                                                                                                                      |           |
+| `scope`             | Optional scope for authenticating against scoped registries                                                                                                                                 |           |
+| `setup-ref`         | setup-vp ref used to download the GitLab bootstrap and compiled runtime. Always set it to the same tag as the remote URL; the default is the latest release when the template was published | `v1.16.0` |
 
 ### GitLab Notes
 
@@ -538,18 +538,18 @@ Pin `ref` and `setupRef` to the same exact tag or commit SHA. Do not use the `v1
 
 ### Azure Parameters
 
-| Parameter             | Default  | Description                                                                                                                                       |
-| --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`             | `latest` | Vite+ version/dist-tag passed to the official installer.                                                                                          |
-| `workingDirectory`    | `.`      | Project directory for lock detection and default `vp install`.                                                                                    |
-| `runInstall`          | `true`   | Run `vp install`; accepts boolean or object/list with `cwd` and `args`.                                                                           |
-| `sfw`                 | `false`  | Wrap `vp install` with Socket Firewall Free.                                                                                                      |
-| `registryUrl`         |          | Optional registry URL for a temporary `.npmrc`.                                                                                                   |
-| `scope`               |          | Optional npm registry scope.                                                                                                                      |
-| `setupRef`            | `v1`     | Ref used to download bootstrap scripts and `dist/azure/index.mjs`. Always set it to the same tag as `ref`; the default `v1` is frozen at v1.15.0. |
-| `nodeVersion`         | `24.x`   | Passed to `UseNode@1`; an empty string skips Node setup.                                                                                          |
-| `cache`               | `false`  | Enable Azure `Cache@2` around the package-manager cache directory.                                                                                |
-| `cacheDependencyPath` |          | Explicit lock file relative to `workingDirectory`; otherwise auto-detect.                                                                         |
+| Parameter             | Default   | Description                                                                                                                                                                   |
+| --------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`             | `latest`  | Vite+ version/dist-tag passed to the official installer.                                                                                                                      |
+| `workingDirectory`    | `.`       | Project directory for lock detection and default `vp install`.                                                                                                                |
+| `runInstall`          | `true`    | Run `vp install`; accepts boolean or object/list with `cwd` and `args`.                                                                                                       |
+| `sfw`                 | `false`   | Wrap `vp install` with Socket Firewall Free.                                                                                                                                  |
+| `registryUrl`         |           | Optional registry URL for a temporary `.npmrc`.                                                                                                                               |
+| `scope`               |           | Optional npm registry scope.                                                                                                                                                  |
+| `setupRef`            | `v1.16.0` | Ref used to download bootstrap scripts and `dist/azure/index.mjs`. Always set it to the same tag as `ref`; the default is the latest release when the template was published. |
+| `nodeVersion`         | `24.x`    | Passed to `UseNode@1`; an empty string skips Node setup.                                                                                                                      |
+| `cache`               | `false`   | Enable Azure `Cache@2` around the package-manager cache directory.                                                                                                            |
+| `cacheDependencyPath` |           | Explicit lock file relative to `workingDirectory`; otherwise auto-detect.                                                                                                     |
 
 ### Azure Job Variables
 
@@ -632,7 +632,7 @@ Releases are published as git tags; there is no npm package, but the `package.js
 
 To cut a release:
 
-1. Open and merge a PR that bumps the `version` in `package.json` and the version tag in the README examples to the upcoming release.
+1. Open and merge a PR that bumps the upcoming version in `package.json`, the README examples, and the `setup-ref` / `setupRef` defaults in `gitlab/setup-vp.yml` and `azure/setup-vp.yml` (with the matching assertion in `src/azure/template.test.ts`).
 
 2. Update `main` and confirm `dist/index.mjs` is in sync (the working tree must stay clean after building):
 
