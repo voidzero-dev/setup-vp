@@ -642,7 +642,7 @@ To cut a release:
    git status --short   # must be empty
    ```
 
-3. Create the new annotated version tag and push it. For example, with `v1.16.0` as the latest release, the next fix release is `v1.16.1`:
+3. Create the new annotated version tag and push it. For example:
 
    ```bash
    git tag -a v1.16.1 -m "v1.16.1"
