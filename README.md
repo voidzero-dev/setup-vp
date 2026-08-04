@@ -13,6 +13,19 @@ GitHub Action, GitLab CI/CD remote template, and Azure Pipelines step template t
 - GitLab CI/CD support through a reusable `include:remote` template
 - Azure Pipelines support through a reusable step template and compiled runtime
 
+## Versioning
+
+Reference this action with an exact release tag, or a commit SHA:
+
+```yaml
+- uses: voidzero-dev/setup-vp@v1.16.0
+```
+
+Releases are listed on the [tags page](https://github.com/voidzero-dev/setup-vp/tags). [Renovate](https://docs.renovatebot.com/) and Dependabot can keep a pinned tag up to date.
+
+> [!WARNING]
+> The moving major tag `v1` is frozen at `v1.15.0` and no longer updated. Workflows that use `voidzero-dev/setup-vp@v1` keep working but stay on v1.15.0 and will not receive new releases: switch them to an exact version tag. The same applies to the GitLab and Azure templates; use an exact tag in the `include:remote` URL / repository `ref` and in `setup-ref` / `setupRef`.
+
 ## Usage
 
 ### Basic Usage
@@ -20,7 +33,7 @@ GitHub Action, GitLab CI/CD remote template, and Azure Pipelines step template t
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
 ```
 
 ### With Node.js Version
@@ -28,7 +41,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       node-version: "lts"
 ```
@@ -38,7 +51,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       node-version-file: ".node-version"
 ```
@@ -48,7 +61,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       working-directory: web
       node-version-file: ".nvmrc"
@@ -61,7 +74,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       node-version: "lts"
       cache: true
@@ -73,7 +86,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       version: "1.2.3"
       node-version: "lts"
@@ -97,7 +110,7 @@ to `latest` only when nothing pins a resolvable version. So a project that pins
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       cache: true
 ```
@@ -110,7 +123,7 @@ worth watching for, since it means the pinned version was not applied:
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       version-file: package.json
       cache: true
@@ -170,7 +183,7 @@ action warns and falls back to `latest`. (Auto-detection instead resolves a
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       node-version: "lts"
       cache: true
@@ -195,7 +208,7 @@ minimal:
 
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       node-version: "lts"
     env:
@@ -212,7 +225,7 @@ read the repo `.npmrc` per its own config resolution):
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       node-version: "lts"
       registry-url: "https://npm.pkg.github.com"
@@ -230,7 +243,7 @@ Set `sfw: true` to wrap `vp install` with [Socket Firewall Free](https://docs.so
 ```yaml
 steps:
   - uses: actions/checkout@v6
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       sfw: true
       run-install: true
@@ -251,7 +264,7 @@ steps:
   - uses: socketdev/action@<sha>
     with:
       mode: firewall-free
-  - uses: voidzero-dev/setup-vp@v1
+  - uses: voidzero-dev/setup-vp@v1.16.0
     with:
       sfw: true
       run-install: true
@@ -275,7 +288,7 @@ jobs:
     steps:
       - run: apk add --no-cache bash curl gcompat libstdc++
       - uses: actions/checkout@v6
-      - uses: voidzero-dev/setup-vp@v1
+      - uses: voidzero-dev/setup-vp@v1.16.0
 ```
 
 ### Matrix Testing with Multiple Node.js Versions
@@ -289,7 +302,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: voidzero-dev/setup-vp@v1
+      - uses: voidzero-dev/setup-vp@v1.16.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: true
@@ -349,9 +362,13 @@ See [GitLab integration notes](rfcs/gitlab-integration.md) for the design backgr
 
 ### Basic GitLab Usage
 
+Use an exact release tag in the `include:remote` URL, and pin `setup-ref` to the same tag so the bootstrap and compiled runtime are downloaded from the same version as the included template:
+
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.16.0/gitlab/setup-vp.yml"
+    inputs:
+      setup-ref: "v1.16.0"
 
 test:
   extends: .setup-vp
@@ -364,28 +381,12 @@ test:
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.16.0/gitlab/setup-vp.yml"
     inputs:
+      setup-ref: "v1.16.0"
       version: "latest"
       working-directory: "web"
       run-install: "true"
-
-test:
-  extends: .setup-vp
-  image: node:24
-  script:
-    - vp run test
-```
-
-### With Pinned GitLab Runtime
-
-When using an immutable tag or commit SHA, pin `setup-ref` to the same ref so the bootstrap and compiled runtime are downloaded from the same version as the included template:
-
-```yaml
-include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.0.0/gitlab/setup-vp.yml"
-    inputs:
-      setup-ref: "v1.0.0"
 
 test:
   extends: .setup-vp
@@ -400,14 +401,14 @@ GitLab replaces array keywords such as `before_script` when a job uses `extends`
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.16.0/gitlab/setup-vp.yml"
 
 test:
   image: node:24
   variables:
     SETUP_VP_VERSION: "latest"
     SETUP_VP_RUN_INSTALL: "true"
-    SETUP_VP_SETUP_REF: "v1"
+    SETUP_VP_SETUP_REF: "v1.16.0"
   before_script:
     - !reference [.setup-vp-bootstrap, before_script]
     - npm config set //registry.example.com/:_authToken "$NODE_AUTH_TOKEN"
@@ -422,8 +423,9 @@ Use the same pattern when the project has `default:before_script`; put the share
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.16.0/gitlab/setup-vp.yml"
     inputs:
+      setup-ref: "v1.16.0"
       run-install: |
         - cwd: ./packages/app
           args: ['--frozen-lockfile']
@@ -440,8 +442,9 @@ test:
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.16.0/gitlab/setup-vp.yml"
     inputs:
+      setup-ref: "v1.16.0"
       sfw: true
       run-install: "true"
 
@@ -458,8 +461,9 @@ Pass `NODE_AUTH_TOKEN` as a GitLab CI/CD variable and set `registry-url` when th
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.16.0/gitlab/setup-vp.yml"
     inputs:
+      setup-ref: "v1.16.0"
       registry-url: "https://npm.pkg.github.com"
       scope: "@myorg"
 
@@ -474,20 +478,20 @@ test:
 
 ### GitLab Inputs
 
-| Input               | Description                                                                                               | Default  |
-| ------------------- | --------------------------------------------------------------------------------------------------------- | -------- |
-| `version`           | Version of Vite+ to install                                                                               | `latest` |
-| `working-directory` | Project directory used for relative paths and default `vp install` execution                              | `.`      |
-| `run-install`       | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args` | `true`   |
-| `sfw`               | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)          | `false`  |
-| `registry-url`      | Optional registry URL to write to a temporary `.npmrc`                                                    |          |
-| `scope`             | Optional scope for authenticating against scoped registries                                               |          |
-| `setup-ref`         | setup-vp ref used to download the GitLab bootstrap and compiled runtime                                   | `v1`     |
+| Input               | Description                                                                                                                                                     | Default  |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `version`           | Version of Vite+ to install                                                                                                                                     | `latest` |
+| `working-directory` | Project directory used for relative paths and default `vp install` execution                                                                                    | `.`      |
+| `run-install`       | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args`                                                       | `true`   |
+| `sfw`               | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)                                                                | `false`  |
+| `registry-url`      | Optional registry URL to write to a temporary `.npmrc`                                                                                                          |          |
+| `scope`             | Optional scope for authenticating against scoped registries                                                                                                     |          |
+| `setup-ref`         | setup-vp ref used to download the GitLab bootstrap and compiled runtime. Always set it to the same tag as the remote URL; the default `v1` is frozen at v1.15.0 | `v1`     |
 
 ### GitLab Notes
 
-- Use a tag such as `v1` or `v1.0.0` in the remote URL instead of `main`.
-- Pin `setup-ref` to the same tag or commit SHA as the remote URL when strict reproducibility is required.
+- Use an exact release tag such as `v1.16.0` in the remote URL. Do not use `main` (mutable) or `v1` (frozen at v1.15.0, no longer updated).
+- Always pin `setup-ref` to the same tag or commit SHA as the remote URL, so the compiled runtime matches the included template.
 - Quote GitLab string inputs such as `run-install: "false"`; unquoted booleans are rejected by GitLab before the setup runtime can parse them.
 - GitLab 17.9+ users can add `integrity` to pin the remote file hash.
 - The template expects a Unix-like runner image with Node.js, `bash`, and either `curl` or `wget`.
@@ -512,7 +516,7 @@ resources:
       type: github
       endpoint: github
       name: voidzero-dev/setup-vp
-      ref: refs/tags/v1
+      ref: refs/tags/v1.16.0
 
 pool:
   vmImage: ubuntu-latest
@@ -530,22 +534,22 @@ steps:
   - script: vp run test
 ```
 
-Pin `ref` and `setupRef` to the same tag or commit SHA for strict reproducibility. The moving `v1` tag is supported for convenience but is not immutable.
+Pin `ref` and `setupRef` to the same exact tag or commit SHA. Do not use the `v1` tag: it is frozen at v1.15.0 and no longer updated.
 
 ### Azure Parameters
 
-| Parameter             | Default  | Description                                                               |
-| --------------------- | -------- | ------------------------------------------------------------------------- |
-| `version`             | `latest` | Vite+ version/dist-tag passed to the official installer.                  |
-| `workingDirectory`    | `.`      | Project directory for lock detection and default `vp install`.            |
-| `runInstall`          | `true`   | Run `vp install`; accepts boolean or object/list with `cwd` and `args`.   |
-| `sfw`                 | `false`  | Wrap `vp install` with Socket Firewall Free.                              |
-| `registryUrl`         |          | Optional registry URL for a temporary `.npmrc`.                           |
-| `scope`               |          | Optional npm registry scope.                                              |
-| `setupRef`            | `v1`     | Ref used to download bootstrap scripts and `dist/azure/index.mjs`.        |
-| `nodeVersion`         | `24.x`   | Passed to `UseNode@1`; an empty string skips Node setup.                  |
-| `cache`               | `false`  | Enable Azure `Cache@2` around the package-manager cache directory.        |
-| `cacheDependencyPath` |          | Explicit lock file relative to `workingDirectory`; otherwise auto-detect. |
+| Parameter             | Default  | Description                                                                                                                                       |
+| --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`             | `latest` | Vite+ version/dist-tag passed to the official installer.                                                                                          |
+| `workingDirectory`    | `.`      | Project directory for lock detection and default `vp install`.                                                                                    |
+| `runInstall`          | `true`   | Run `vp install`; accepts boolean or object/list with `cwd` and `args`.                                                                           |
+| `sfw`                 | `false`  | Wrap `vp install` with Socket Firewall Free.                                                                                                      |
+| `registryUrl`         |          | Optional registry URL for a temporary `.npmrc`.                                                                                                   |
+| `scope`               |          | Optional npm registry scope.                                                                                                                      |
+| `setupRef`            | `v1`     | Ref used to download bootstrap scripts and `dist/azure/index.mjs`. Always set it to the same tag as `ref`; the default `v1` is frozen at v1.15.0. |
+| `nodeVersion`         | `24.x`   | Passed to `UseNode@1`; an empty string skips Node setup.                                                                                          |
+| `cache`               | `false`  | Enable Azure `Cache@2` around the package-manager cache directory.                                                                                |
+| `cacheDependencyPath` |          | Explicit lock file relative to `workingDirectory`; otherwise auto-detect.                                                                         |
 
 ### Azure Job Variables
 
@@ -580,7 +584,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: voidzero-dev/setup-vp@v1
+      - uses: voidzero-dev/setup-vp@v1.16.0
         with:
           node-version: "lts"
           cache: true
@@ -624,11 +628,13 @@ vp install
 
 ### Releasing
 
-Releases are published as git tags (there is no npm package, so `package.json` stays at `1.0.0`). Consumers reference the moving major tag `voidzero-dev/setup-vp@v1` (or pin a commit SHA), so every release also moves `v1` forward to the new commit.
+Releases are published as git tags (there is no npm package, so `package.json` stays at `1.0.0`). Consumers pin an exact version tag such as `voidzero-dev/setup-vp@v1.16.0` or a commit SHA. The `v1` major tag is frozen at v1.15.0 and is never moved (an org-level ruleset rejects tag force-pushes).
 
-After the changes are merged to `main`:
+To cut a release:
 
-1. Update `main` and confirm `dist/index.mjs` is in sync (the working tree must stay clean after building):
+1. Open and merge a PR that bumps the version tag in the README examples to the upcoming release.
+
+2. Update `main` and confirm `dist/index.mjs` is in sync (the working tree must stay clean after building):
 
    ```bash
    git checkout main && git pull --ff-only
@@ -636,21 +642,12 @@ After the changes are merged to `main`:
    git status --short   # must be empty
    ```
 
-2. Create the new annotated version tag (bump the minor from the latest `v1.x.0`) on the merged commit, then move the `v1` major tag to the same commit:
+3. Create the new annotated version tag (bump the minor from the latest `v1.x.0`) and push it:
 
    ```bash
-   git tag -a v1.13.0 -m "v1.13.0"
-   git tag -fa v1 -m "v1"
+   git tag -a v1.17.0 -m "v1.17.0"
+   git push origin v1.17.0
    ```
-
-3. Push the new version tag, then force-push the moved `v1` tag:
-
-   ```bash
-   git push origin v1.13.0
-   git push origin v1 --force
-   ```
-
-Both are annotated tags whose message is the tag name. `v1` always points at the latest `v1.x.0` release, so `@v1` consumers pick it up automatically.
 
 ## Feedback
 
