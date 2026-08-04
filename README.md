@@ -642,11 +642,11 @@ To cut a release:
    git status --short   # must be empty
    ```
 
-3. Create the new annotated version tag, bumping the minor from the latest release, and push it. For example, with `v1.16.0` as the latest release, the next tag is `v1.17.0`:
+3. Create the new annotated version tag, bumping the minor from the latest release, and push it. For example, with `v1.15.0` as the latest release, the next tag is `v1.16.0`:
 
    ```bash
-   git tag -a v1.17.0 -m "v1.17.0"
-   git push origin v1.17.0
+   git tag -a v1.16.0 -m "v1.16.0"
+   git push origin v1.16.0
    ```
 
 ## Feedback
