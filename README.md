@@ -628,11 +628,11 @@ vp install
 
 ### Releasing
 
-Releases are published as git tags (there is no npm package, so `package.json` stays at `1.0.0`). Consumers pin an exact version tag such as `voidzero-dev/setup-vp@v1.16.0` or a commit SHA. The `v1` major tag is frozen at v1.15.0 and is never moved (an org-level ruleset rejects tag force-pushes).
+Releases are published as git tags; there is no npm package, but the `package.json` version tracks the latest release. Consumers pin an exact version tag such as `voidzero-dev/setup-vp@v1.16.0` or a commit SHA. The `v1` major tag is frozen at v1.15.0 and is never moved (an org-level ruleset rejects tag force-pushes).
 
 To cut a release:
 
-1. Open and merge a PR that bumps the version tag in the README examples to the upcoming release.
+1. Open and merge a PR that bumps the `version` in `package.json` and the version tag in the README examples to the upcoming release.
 
 2. Update `main` and confirm `dist/index.mjs` is in sync (the working tree must stay clean after building):
 
