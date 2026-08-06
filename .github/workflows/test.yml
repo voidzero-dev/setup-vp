@@ -90,7 +90,10 @@ jobs:
   # must run `vp env off`, so vp commands resolve the Node.js already on the
   # runner instead of a managed one. Records the preinstalled Node.js binary,
   # runs a real `vp install`, then asserts the binary is unchanged, no shims
-  # exist, and no managed runtime was downloaded into $VP_HOME/js_runtime.
+  # exist, and `vp exec` resolves the system Node.js. $VP_HOME/js_runtime is
+  # NOT asserted empty: the installer always downloads a managed Node LTS
+  # there to install vp's own production deps with a deterministic runtime
+  # (vite_setup install_production_deps), independent of VP_NODE_MANAGER.
   test-node-manager-off:
     strategy:
       fail-fast: false
@@ -150,12 +153,13 @@ jobs:
             exit 1
           fi
 
-      - name: Verify no managed Node.js runtime was downloaded
+      - name: Verify vp commands use the system Node.js
         shell: bash
         run: |
-          if [ -d "$HOME/.vite-plus/js_runtime" ] && [ -n "$(ls -A "$HOME/.vite-plus/js_runtime")" ]; then
-            echo "::error::vp downloaded a managed Node.js runtime despite node-manager: false"
-            ls -R "$HOME/.vite-plus/js_runtime"
+          EXEC_VERSION=$(vp exec node --version | tr -d '\r')
+          echo "vp exec node --version: $EXEC_VERSION"
+          if [ "$EXEC_VERSION" != "${{ steps.before.outputs.version }}" ]; then
+            echo "::error::vp resolved Node.js $EXEC_VERSION; expected system ${{ steps.before.outputs.version }}"
             exit 1
           fi
 
