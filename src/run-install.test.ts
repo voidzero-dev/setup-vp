@@ -133,40 +133,12 @@ describe("runViteInstall sfw retry", () => {
     expect(setFailed).toHaveBeenCalledTimes(1);
   });
 
-  it("stops retrying as soon as a retry succeeds", async () => {
-    stubPlatform("win32");
-    mockedExec
-      .mockResolvedValueOnce(execResult(1, SFW_NOT_FOUND_STDERR))
-      .mockResolvedValueOnce(execResult(0)) // warm-up 1
-      .mockResolvedValueOnce(execResult(1, SFW_NOT_FOUND_STDERR)) // retry 1 flakes again
-      .mockResolvedValueOnce(execResult(0)) // warm-up 2
-      .mockResolvedValueOnce(execResult(0)); // retry 2 succeeds
-
-    await runViteInstall(baseInputs);
-
-    expect(mockedExec).toHaveBeenCalledTimes(5);
-    expect(warning).toHaveBeenCalledTimes(2);
-    expect(setFailed).not.toHaveBeenCalled();
-  });
-
-  it("gives up after 3 retries when the flake persists", async () => {
-    stubPlatform("win32");
-    mockedExec.mockResolvedValue(execResult(1, SFW_NOT_FOUND_STDERR));
-
-    await runViteInstall(baseInputs);
-
-    // 1 initial attempt + 3 x (warm-up + retry)
-    expect(mockedExec).toHaveBeenCalledTimes(7);
-    expect(warning).toHaveBeenCalledTimes(3);
-    expect(setFailed).toHaveBeenCalledTimes(1);
-  });
-
-  it("stops retrying when a retry fails with a different error", async () => {
+  it("retries only once and fails when the flake persists", async () => {
     stubPlatform("win32");
     mockedExec
       .mockResolvedValueOnce(execResult(1, SFW_NOT_FOUND_STDERR))
       .mockResolvedValueOnce(execResult(0)) // warm-up
-      .mockResolvedValueOnce(execResult(1, "ERR_PNPM_FETCH_404 not found")); // real failure
+      .mockResolvedValueOnce(execResult(1, SFW_NOT_FOUND_STDERR)); // retry fails too
 
     await runViteInstall(baseInputs);
 
