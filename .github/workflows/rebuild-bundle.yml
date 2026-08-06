@@ -3,10 +3,13 @@ name: Rebuild action bundle
 # The `needs-bundle-rebuild` label (Renovate adds it for bumps to deps compiled
 # into dist/index.mjs, or to the vite-plus bundler) triggers a rebuild of the
 # bundle and a push of the refreshed dist/, so the "Verify dist is up to date"
-# check passes without a manual `vp run build`.
+# check passes without a manual `vp run build`. `synchronize` re-runs the
+# rebuild when Renovate rebases or pushes to a labeled PR, so a failed or stale
+# rebuild gets retried; the run triggered by our own dist/ push finds no diff
+# and exits without pushing, so it cannot loop.
 on:
   pull_request:
-    types: [labeled]
+    types: [labeled, synchronize]
 
 permissions: {}
 
@@ -17,10 +20,11 @@ concurrency:
 jobs:
   rebuild:
     name: rebuild bundle
-    # Only for our label, and only same-repo branches we can push back to
+    # Only for labeled PRs (on the `labeled` event the just-added label is
+    # already in the array), and only same-repo branches we can push back to
     # (Renovate PRs are same-repo; fork PRs can't be pushed to).
     if: >-
-      github.event.label.name == 'needs-bundle-rebuild' &&
+      contains(github.event.pull_request.labels.*.name, 'needs-bundle-rebuild') &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
