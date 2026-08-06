@@ -22,7 +22,7 @@ describe("azure/setup-vp.yml", () => {
     expect(byName.sfw).toMatchObject({ type: "boolean", default: false });
     expect(byName.registryUrl).toMatchObject({ type: "string", default: "" });
     expect(byName.scope).toMatchObject({ type: "string", default: "" });
-    expect(byName.setupRef).toMatchObject({ type: "string", default: "v1.16.1" });
+    expect(byName.setupRef).toMatchObject({ type: "string", default: "v1.17.0" });
     expect(byName.nodeVersion).toMatchObject({ type: "string", default: "24.x" });
     expect(byName.nodeManager).toMatchObject({ type: "string", default: "" });
     expect(byName.cache).toMatchObject({ type: "boolean", default: false });

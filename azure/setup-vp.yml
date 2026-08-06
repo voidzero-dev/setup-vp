@@ -19,7 +19,7 @@ parameters:
     default: ""
   - name: setupRef
     type: string
-    default: v1.16.1
+    default: v1.17.0
   - name: nodeVersion
     type: string
     default: 24.x
