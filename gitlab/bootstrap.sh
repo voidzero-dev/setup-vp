@@ -78,6 +78,21 @@ setup_vp_install_viteplus() {
 
 SETUP_VP_VERSION="${SETUP_VP_VERSION:-latest}"
 SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1}"
+SETUP_VP_NODE_MANAGER="${SETUP_VP_NODE_MANAGER:-}"
+
+# Map the tri-state node-manager input onto the install script's
+# VP_NODE_MANAGER override (empty keeps the script's CI auto-detection).
+# The runtime completes the "false" opt-out with `vp env off` after install.
+case "$SETUP_VP_NODE_MANAGER" in
+  true | True | TRUE) export VP_NODE_MANAGER="yes" ;;
+  false | False | FALSE) export VP_NODE_MANAGER="no" ;;
+  "") ;;
+  *)
+    echo "setup-vp: invalid node-manager value \"${SETUP_VP_NODE_MANAGER}\"; expected \"true\", \"false\", or empty." >&2
+    return 1 2>/dev/null || exit 1
+    ;;
+esac
+
 setup_vp_pr_version=""
 if [[ "$SETUP_VP_VERSION" =~ ^0\.0\.0-commit\.([0-9a-fA-F]{40})$ ]]; then
   setup_vp_pr_version="${BASH_REMATCH[1]}"

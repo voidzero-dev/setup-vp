@@ -57,6 +57,7 @@ export async function installVitePlus(
   options: {
     platform?: NodeJS.Platform;
     env?: NodeJS.ProcessEnv;
+    nodeManager?: boolean;
     prependPath?: (binDir: string) => void;
     sleep?: (ms: number) => Promise<void>;
     runInstall?: typeof runInstallCommand;
@@ -83,6 +84,13 @@ export async function installVitePlus(
   const prVersion = pkgPrNewCommitSha(version);
   if (prVersion) {
     env.VP_PR_VERSION = prVersion;
+  }
+
+  // The install script auto-enables the Node.js manager on CI; VP_NODE_MANAGER
+  // overrides that (yes/no; "no" skips node/npm/npx shim creation). The runtime
+  // half of the opt-out (`vp env off`) runs after install in runPrepare.
+  if (options.nodeManager !== undefined) {
+    env.VP_NODE_MANAGER = options.nodeManager ? "yes" : "no";
   }
 
   const urls = platform === "win32" ? INSTALL_URLS_PS1 : INSTALL_URLS_SH;

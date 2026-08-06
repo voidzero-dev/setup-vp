@@ -29,13 +29,16 @@ async function runMain(inputs: Inputs): Promise<void> {
   const version = resolveVitePlusVersion(inputs, projectDir);
   await installVitePlus({ ...inputs, version });
 
-  // Step 3: Set up Node.js version if specified
-  if (nodeVersion && nodeVersion !== "off") {
+  // Step 3: Set up Node.js. With node-manager: false, VP_NODE_MANAGER=no at
+  // install time only skips shim creation; vp commands would still resolve
+  // their internal JS runtime to managed Node, so also flip the config to
+  // system-first. Inputs validation guarantees nodeVersion is unset here.
+  if (inputs.nodeManager === false) {
+    info("Disabling Vite+ Node.js version management via vp env off...");
+    await exec("vp", ["env", "off"]);
+  } else if (nodeVersion) {
     info(`Setting up Node.js ${nodeVersion} via vp env use...`);
     await exec("vp", ["env", "use", nodeVersion]);
-  } else if (nodeVersion === "off") {
-    info("Disabling Node.js version management with vp env off...");
-    await exec("vp", ["env", "off"]);
   }
 
   // Step 4: Configure registry authentication
