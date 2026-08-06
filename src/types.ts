@@ -22,6 +22,7 @@ export interface Inputs {
   readonly versionFile?: string;
   readonly nodeVersion?: string;
   readonly nodeVersionFile?: string;
+  readonly nodeManager?: boolean;
   readonly workingDirectory?: string;
   readonly runInstall: RunInstall[];
   readonly sfw: boolean;

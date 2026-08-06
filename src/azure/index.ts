@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { configureAuth } from "../ci/auth.js";
 import { prepareCacheMetadata } from "../ci/cache.js";
 import { setupSfw } from "../ci/install-sfw.js";
-import { getCommandOutput } from "../ci/process.js";
+import { getCommandOutput, run } from "../ci/process.js";
 import { parseRunInstall, runInstall } from "../ci/run-install.js";
 import { parseInstalledVpVersion } from "../ci/version.js";
 import { logInfo, logWarning, prependPath, setVariable } from "./commands.js";
@@ -20,6 +20,7 @@ export interface AzurePorts {
   parseRunInstall: typeof parseRunInstall;
   runInstall: typeof runInstall;
   getCommandOutput: typeof getCommandOutput;
+  run: typeof run;
   parseInstalledVpVersion: typeof parseInstalledVpVersion;
   prependPath: typeof prependPath;
   setVariable: typeof setVariable;
@@ -35,6 +36,7 @@ const defaultPorts: AzurePorts = {
   parseRunInstall,
   runInstall,
   getCommandOutput,
+  run,
   parseInstalledVpVersion,
   prependPath,
   setVariable,
@@ -59,9 +61,17 @@ export async function runPrepare(
 
   await ports.installVitePlus(inputs.version, {
     env,
+    nodeManager: inputs.nodeManager,
     prependPath: (binDir) => ports.prependPath(binDir),
     logWarningFn: ports.logWarning,
   });
+
+  // VP_NODE_MANAGER=no at install time only skips shim creation; vp commands
+  // would still resolve their internal JS runtime to managed Node, so also
+  // flip the config to system-first (e.g. the Node.js from UseNode@1).
+  if (inputs.nodeManager === false) {
+    ports.run("vp", ["env", "off"]);
+  }
 
   const runtimePath = path.resolve(process.argv[1] || "");
   ports.setVariable("SETUP_VP_RUNTIME_PATH", runtimePath);

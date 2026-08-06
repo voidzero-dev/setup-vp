@@ -27,6 +27,9 @@ inputs:
   node-version-file:
     description: "Path to file containing the Node.js version spec (.nvmrc, .node-version, .tool-versions, package.json). Ignored when node-version is specified."
     required: false
+  node-manager:
+    description: "Control Vite+'s Node.js version manager. When unset, the Vite+ installer decides (enabled on CI). Set to `false` to keep the Node.js already on the runner (e.g. from actions/setup-node or the runner image): shim creation is skipped and vp commands prefer the system Node.js. Set to `true` to force-enable the managed Node.js. Cannot be `false` together with node-version or node-version-file."
+    required: false
   working-directory:
     description: "Project directory to use for relative paths, lockfile auto-detection, environment checks, and default `vp install` execution."
     required: false

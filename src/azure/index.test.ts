@@ -23,6 +23,7 @@ describe("Azure lifecycle", () => {
         parseRunInstall: () => [],
         runInstall: () => undefined,
         getCommandOutput: () => "vp v0.2.2",
+        run: () => undefined,
         parseInstalledVpVersion: () => "0.2.2",
         prependPath: () => undefined,
         setVariable: () => undefined,
@@ -63,6 +64,7 @@ describe("Azure lifecycle", () => {
           calls.push("version");
           return "vp v0.2.2";
         },
+        run: () => undefined,
         parseInstalledVpVersion: () => "0.2.2",
         prependPath: () => undefined,
         setVariable: () => undefined,
@@ -72,6 +74,61 @@ describe("Azure lifecycle", () => {
     );
 
     expect(calls).toEqual(["auth", "parse", "sfw", "install", "version"]);
+  });
+
+  it("prepare disables the node manager via vp env off when nodeManager is false", async () => {
+    const run = vi.fn();
+    await runPrepare(
+      {
+        SETUP_VP_VERSION: "latest",
+        SETUP_VP_NODE_MANAGER: "false",
+        SYSTEM_DEFAULTWORKINGDIRECTORY: process.cwd(),
+      },
+      {
+        installVitePlus: async () => undefined,
+        prepareCacheMetadata: () => ({ ready: false }),
+        configureAuth: () => undefined,
+        setupSfw: async () => "vp",
+        parseRunInstall: () => [],
+        runInstall: () => undefined,
+        getCommandOutput: () => "vp v0.2.2",
+        run,
+        parseInstalledVpVersion: () => "0.2.2",
+        prependPath: () => undefined,
+        setVariable: () => undefined,
+        logWarning: () => undefined,
+        logInfo: () => undefined,
+      },
+    );
+
+    expect(run).toHaveBeenCalledWith("vp", ["env", "off"]);
+  });
+
+  it("prepare leaves the node manager alone when nodeManager is unset", async () => {
+    const run = vi.fn();
+    await runPrepare(
+      {
+        SETUP_VP_VERSION: "latest",
+        SYSTEM_DEFAULTWORKINGDIRECTORY: process.cwd(),
+      },
+      {
+        installVitePlus: async () => undefined,
+        prepareCacheMetadata: () => ({ ready: false }),
+        configureAuth: () => undefined,
+        setupSfw: async () => "vp",
+        parseRunInstall: () => [],
+        runInstall: () => undefined,
+        getCommandOutput: () => "vp v0.2.2",
+        run,
+        parseInstalledVpVersion: () => "0.2.2",
+        prependPath: () => undefined,
+        setVariable: () => undefined,
+        logWarning: () => undefined,
+        logInfo: () => undefined,
+      },
+    );
+
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("skips install when runInstall is false", async () => {
@@ -89,6 +146,7 @@ describe("Azure lifecycle", () => {
         parseRunInstall: () => [],
         runInstall,
         getCommandOutput: () => "vp v0.2.2",
+        run: () => undefined,
         parseInstalledVpVersion: () => "0.2.2",
         prependPath: () => undefined,
         setVariable: () => undefined,
