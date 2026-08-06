@@ -13,6 +13,10 @@ const MAX_ERROR_TAIL = 4000;
 // so this signature on a wrapped install is near-certainly the timeout flake.
 const SFW_VP_NOT_FOUND_RE = /Command 'vp' not found in PATH/;
 
+// One warmed retry almost always recovers, but a heavily loaded runner can
+// stay slow past a single warm-up, so allow a few attempts before failing.
+const SFW_FLAKE_MAX_RETRIES = 3;
+
 export function isSfwVpNotFoundFlake(stdout: string, stderr: string): boolean {
   return SFW_VP_NOT_FOUND_RE.test(stderr) || SFW_VP_NOT_FOUND_RE.test(stdout);
 }
@@ -67,16 +71,19 @@ export async function runViteInstall(inputs: Inputs): Promise<void> {
     try {
       let result = await attempt(cmdStr);
 
-      if (
+      for (
+        let retry = 1;
+        retry <= SFW_FLAKE_MAX_RETRIES &&
         result.exitCode !== 0 &&
         inputs.sfw &&
-        isSfwVpNotFoundFlake(result.stdout, result.stderr)
+        isSfwVpNotFoundFlake(result.stdout, result.stderr);
+        retry++
       ) {
         warning(
-          "sfw reported vp as not found even though it is on PATH. This is a known sfw flake on Windows: a cold PowerShell start exceeds sfw's 10s command-resolution timeout and the timeout is misreported as not-found. Warming the PowerShell command cache and retrying once.",
+          `sfw reported vp as not found even though it is on PATH. This is a known sfw flake on Windows: a cold PowerShell start exceeds sfw's 10s command-resolution timeout and the timeout is misreported as not-found. Warming the PowerShell command cache and retrying (${retry}/${SFW_FLAKE_MAX_RETRIES}).`,
         );
         await warmPowerShellCommandCache();
-        result = await attempt(`${cmdStr} (retry)`);
+        result = await attempt(`${cmdStr} (retry ${retry}/${SFW_FLAKE_MAX_RETRIES})`);
       }
 
       if (result.exitCode === 0) {
