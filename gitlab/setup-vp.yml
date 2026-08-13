@@ -13,6 +13,9 @@ spec:
       description: "Wrap `vp install` with Socket Firewall Free (`sfw`) to block malicious dependency fetches."
       type: boolean
       default: false
+    node-manager:
+      description: 'Control Vite+''s Node.js version manager. This is a string input: empty (default) lets the Vite+ installer decide (enabled on CI); "false" keeps the runner image''s Node.js (skips shim creation and makes vp commands prefer the system Node.js); "true" force-enables the managed Node.js.'
+      default: ""
     registry-url:
       description: "Optional registry URL to write to a temporary .npmrc. Auth token is read from NODE_AUTH_TOKEN."
       default: ""
@@ -20,8 +23,8 @@ spec:
       description: "Optional scope for authenticating against scoped registries."
       default: ""
     setup-ref:
-      description: "setup-vp ref used to download the GitLab bootstrap and compiled runtime. Pin this to the same tag or commit as the remote template for strict reproducibility."
-      default: "v1"
+      description: "setup-vp ref used to download the GitLab bootstrap and compiled runtime. Pin this to the same tag or commit as the remote template; the default is the latest release when this template was published."
+      default: "v1.17.0"
 ---
 .setup-vp-bootstrap:
   before_script:
@@ -46,9 +49,10 @@ spec:
       export SETUP_VP_WORKING_DIRECTORY="${SETUP_VP_WORKING_DIRECTORY:-.}"
       export SETUP_VP_RUN_INSTALL="${SETUP_VP_RUN_INSTALL:-true}"
       export SETUP_VP_SFW="${SETUP_VP_SFW:-false}"
+      export SETUP_VP_NODE_MANAGER="${SETUP_VP_NODE_MANAGER:-}"
       export SETUP_VP_REGISTRY_URL="${SETUP_VP_REGISTRY_URL:-}"
       export SETUP_VP_SCOPE="${SETUP_VP_SCOPE:-}"
-      export SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1}"
+      export SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1.17.0}"
 
       setup_vp_bootstrap_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-gitlab-bootstrap.XXXXXX")"
       setup_vp_env_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-gitlab-env.XXXXXX")"
@@ -83,6 +87,11 @@ spec:
       SETUP_VP_SFW_EOF
       )"
       export SETUP_VP_SFW
+      SETUP_VP_NODE_MANAGER="$(cat <<'SETUP_VP_NODE_MANAGER_EOF'
+      $[[ inputs.node-manager ]]
+      SETUP_VP_NODE_MANAGER_EOF
+      )"
+      export SETUP_VP_NODE_MANAGER
       SETUP_VP_REGISTRY_URL="$(cat <<'SETUP_VP_REGISTRY_URL_EOF'
       $[[ inputs.registry-url ]]
       SETUP_VP_REGISTRY_URL_EOF

@@ -38,6 +38,7 @@ describe("installVitePlus", () => {
   // non-hermetic. Clear it before each test; unstubAllEnvs restores the original.
   beforeEach(() => {
     vi.stubEnv("VP_PR_VERSION", undefined);
+    vi.stubEnv("VP_NODE_MANAGER", undefined);
   });
 
   afterEach(() => {
@@ -148,5 +149,30 @@ describe("installVitePlus", () => {
 
     const options = vi.mocked(exec).mock.calls[0][2] as { env: { [key: string]: string } };
     expect(options.env.VP_PR_VERSION).toBe(expected);
+  });
+
+  it.each([
+    {
+      desc: "should pass VP_NODE_MANAGER=no when node-manager is false",
+      nodeManager: false,
+      expected: "no",
+    },
+    {
+      desc: "should pass VP_NODE_MANAGER=yes when node-manager is true",
+      nodeManager: true,
+      expected: "yes",
+    },
+    {
+      desc: "should leave VP_NODE_MANAGER unset when node-manager is not specified",
+      nodeManager: undefined,
+      expected: undefined,
+    },
+  ])("$desc", async ({ nodeManager, expected }) => {
+    vi.mocked(exec).mockResolvedValueOnce(0);
+
+    await installVitePlus({ ...baseInputs, nodeManager });
+
+    const options = vi.mocked(exec).mock.calls[0][2] as { env: { [key: string]: string } };
+    expect(options.env.VP_NODE_MANAGER).toBe(expected);
   });
 });

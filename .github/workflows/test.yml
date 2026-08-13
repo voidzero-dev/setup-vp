@@ -85,6 +85,84 @@ jobs:
             echo "$ACTUAL" | grep -q "^v${{ matrix.node-version }}\." || (echo "Expected Node.js v${{ matrix.node-version }}.x but got $ACTUAL" && exit 1)
           fi
 
+  # End-to-end check of node-manager: false. The installer must skip
+  # node/npm/npx/corepack shim creation (VP_NODE_MANAGER=no) and the action
+  # must run `vp env off`, so vp commands resolve the Node.js already on the
+  # runner instead of a managed one. Records the preinstalled Node.js binary,
+  # runs a real `vp install`, then asserts the binary is unchanged, no shims
+  # exist, and `vp exec` resolves the system Node.js. $VP_HOME/js_runtime is
+  # NOT asserted empty: the installer always downloads a managed Node LTS
+  # there to install vp's own production deps with a deterministic runtime
+  # (vite_setup install_production_deps), independent of VP_NODE_MANAGER.
+  test-node-manager-off:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Record preinstalled Node.js
+        id: before
+        shell: bash
+        run: |
+          echo "path=$(command -v node)" >> "$GITHUB_OUTPUT"
+          echo "version=$(node --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Create test project
+        shell: bash
+        run: |
+          DIR="${RUNNER_TEMP//\\//}/test-project"
+          mkdir -p "$DIR"
+          echo '{"name":"test-project","private":true}' > "$DIR/package.json"
+
+      - name: Setup Vite+ without Node.js manager
+        uses: ./
+        with:
+          node-manager: false
+          run-install: |
+            - cwd: ${{ runner.temp }}/test-project
+          cache: false
+
+      - name: Verify installation
+        run: vp --version
+
+      - name: Verify system Node.js is untouched
+        shell: bash
+        run: |
+          ACTUAL_PATH=$(command -v node)
+          ACTUAL_VERSION=$(node --version)
+          echo "node before: ${{ steps.before.outputs.path }} (${{ steps.before.outputs.version }})"
+          echo "node after:  $ACTUAL_PATH ($ACTUAL_VERSION)"
+          if [ "$ACTUAL_PATH" != "${{ steps.before.outputs.path }}" ]; then
+            echo "::error::node resolves to $ACTUAL_PATH; expected ${{ steps.before.outputs.path }}"
+            exit 1
+          fi
+          if [ "$ACTUAL_VERSION" != "${{ steps.before.outputs.version }}" ]; then
+            echo "::error::node is $ACTUAL_VERSION; expected ${{ steps.before.outputs.version }}"
+            exit 1
+          fi
+
+      - name: Verify no Node.js shims were created
+        shell: bash
+        run: |
+          SHIMS=$(ls "$HOME/.vite-plus/bin" | grep -E '^(node|npm|npx|corepack)' || true)
+          if [ -n "$SHIMS" ]; then
+            echo "::error::unexpected Node.js shims in $HOME/.vite-plus/bin: $SHIMS"
+            exit 1
+          fi
+
+      - name: Verify vp commands use the system Node.js
+        shell: bash
+        run: |
+          EXEC_VERSION=$(vp exec node --version | tr -d '\r')
+          echo "vp exec node --version: $EXEC_VERSION"
+          if [ "$EXEC_VERSION" != "${{ steps.before.outputs.version }}" ]; then
+            echo "::error::vp resolved Node.js $EXEC_VERSION; expected system ${{ steps.before.outputs.version }}"
+            exit 1
+          fi
+
   test-default-version:
     # End-to-end check of the default version-resolution logic: with no `version`
     # or `version-file` input, the action auto-detects the vite-plus version from
@@ -649,6 +727,42 @@ jobs:
             exit 1
           fi
           echo "OK: composed sfw blocked lodahs (exit $CODE, block-line found)"
+
+  test-azure-runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Setup Vite+
+        uses: ./
+        with:
+          run-install: true
+          cache: false
+
+      - name: Build portable bundles
+        run: vp run build
+
+      - name: Verify Azure runtime invalid phase smoke test
+        shell: bash
+        run: |
+          if node dist/azure/index.mjs invalid-phase; then
+            echo "::error::Azure runtime accepted an invalid phase"
+            exit 1
+          fi
+
+      - name: Verify bootstrap syntax (Unix)
+        if: runner.os != 'Windows'
+        run: bash -n azure/bootstrap.sh gitlab/bootstrap.sh
+
+      - name: Verify bootstrap syntax (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          [scriptblock]::Create((Get-Content -Raw azure/bootstrap.ps1)) > $null
 
   build:
     runs-on: ubuntu-latest

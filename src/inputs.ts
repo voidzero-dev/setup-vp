@@ -1,17 +1,28 @@
 import { getInput, getBooleanInput } from "@actions/core";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod/mini";
+import { parseNodeManager } from "./ci/node-manager.js";
 import type { Inputs, RunInstall } from "./types.js";
 import { RunInstallInputSchema } from "./types.js";
 
 export function getInputs(): Inputs {
+  const nodeVersion = getInput("node-version") || undefined;
+  const nodeVersionFile = getInput("node-version-file") || undefined;
+  const nodeManager = parseNodeManager(getInput("node-manager"));
+  if (nodeManager === false && (nodeVersion || nodeVersionFile)) {
+    throw new Error(
+      "node-manager: false cannot be combined with node-version or node-version-file: installing a Node.js version requires the Vite+ Node.js manager.",
+    );
+  }
+
   return {
     // Keep raw here (may be empty); the effective version, including any
     // version-file resolution and the "latest" fallback, is computed in runMain.
     version: getInput("version"),
     versionFile: getInput("version-file") || undefined,
-    nodeVersion: getInput("node-version") || undefined,
-    nodeVersionFile: getInput("node-version-file") || undefined,
+    nodeVersion,
+    nodeVersionFile,
+    nodeManager,
     workingDirectory: getInput("working-directory") || undefined,
     runInstall: parseRunInstall(getInput("run-install")),
     sfw: getBooleanInput("sfw"),

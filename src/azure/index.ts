@@ -1,0 +1,158 @@
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { configureAuth } from "../ci/auth.js";
+import { prepareCacheMetadata } from "../ci/cache.js";
+import { setupSfw } from "../ci/install-sfw.js";
+import { getCommandOutput, run } from "../ci/process.js";
+import { parseRunInstall, runInstall } from "../ci/run-install.js";
+import { parseInstalledVpVersion } from "../ci/version.js";
+import { logInfo, logWarning, prependPath, setVariable } from "./commands.js";
+import { installVitePlus } from "./install-viteplus.js";
+import { parseAzureInputs, resolveProjectDirFromInputs } from "./inputs.js";
+
+export type AzurePhase = "prepare" | "finalize";
+
+export interface AzurePorts {
+  installVitePlus: typeof installVitePlus;
+  prepareCacheMetadata: typeof prepareCacheMetadata;
+  configureAuth: typeof configureAuth;
+  setupSfw: typeof setupSfw;
+  parseRunInstall: typeof parseRunInstall;
+  runInstall: typeof runInstall;
+  getCommandOutput: typeof getCommandOutput;
+  run: typeof run;
+  parseInstalledVpVersion: typeof parseInstalledVpVersion;
+  prependPath: typeof prependPath;
+  setVariable: typeof setVariable;
+  logWarning: typeof logWarning;
+  logInfo: typeof logInfo;
+}
+
+const defaultPorts: AzurePorts = {
+  installVitePlus,
+  prepareCacheMetadata,
+  configureAuth,
+  setupSfw,
+  parseRunInstall,
+  runInstall,
+  getCommandOutput,
+  run,
+  parseInstalledVpVersion,
+  prependPath,
+  setVariable,
+  logWarning,
+  logInfo,
+};
+
+function fail(message: string): never {
+  console.error(`setup-vp: ${message}`);
+  process.exit(1);
+}
+
+export async function runPrepare(
+  env: NodeJS.ProcessEnv = process.env,
+  ports: AzurePorts = defaultPorts,
+): Promise<void> {
+  const inputs = parseAzureInputs(env);
+  const projectDir = resolveProjectDirFromInputs(inputs);
+
+  ports.setVariable("SETUP_VP_CACHE_HIT", "false");
+  ports.setVariable("SETUP_VP_CACHE_READY", "false");
+
+  await ports.installVitePlus(inputs.version, {
+    env,
+    nodeManager: inputs.nodeManager,
+    prependPath: (binDir) => ports.prependPath(binDir),
+    logWarningFn: ports.logWarning,
+  });
+
+  // VP_NODE_MANAGER=no at install time only skips shim creation; vp commands
+  // would still resolve their internal JS runtime to managed Node, so also
+  // flip the config to system-first (e.g. the Node.js from UseNode@1).
+  if (inputs.nodeManager === false) {
+    ports.run("vp", ["env", "off"]);
+  }
+
+  const runtimePath = path.resolve(process.argv[1] || "");
+  ports.setVariable("SETUP_VP_RUNTIME_PATH", runtimePath);
+
+  if (!inputs.cache) return;
+
+  const metadata = ports.prepareCacheMetadata({
+    projectDir,
+    cacheDependencyPath: inputs.cacheDependencyPath || undefined,
+    logWarning: ports.logWarning,
+  });
+
+  if (!metadata.ready) {
+    ports.setVariable("SETUP_VP_CACHE_READY", "false");
+    return;
+  }
+
+  ports.setVariable("SETUP_VP_CACHE_READY", "true");
+  if (metadata.cachePath) {
+    ports.setVariable("SETUP_VP_CACHE_PATH", metadata.cachePath);
+  }
+  if (metadata.lockFile) {
+    ports.setVariable("SETUP_VP_LOCK_FILE", metadata.lockFile);
+  }
+  if (metadata.lockType) {
+    ports.setVariable("SETUP_VP_LOCK_TYPE", metadata.lockType);
+  }
+}
+
+export async function runFinalize(
+  env: NodeJS.ProcessEnv = process.env,
+  ports: AzurePorts = defaultPorts,
+): Promise<void> {
+  const inputs = parseAzureInputs(env);
+  const projectDir = resolveProjectDirFromInputs(inputs);
+
+  ports.configureAuth(inputs.registryUrl, inputs.scope, env, (name, value) => {
+    if (name === "NODE_AUTH_TOKEN") return;
+    if (value !== undefined) ports.setVariable(name, value);
+  });
+
+  const runInstallEntries = ports.parseRunInstall(inputs.runInstall);
+  const installCommand = await ports.setupSfw(runInstallEntries, {
+    env,
+    sfwEnabled: inputs.sfw,
+    exportVariable: (name, value) => {
+      if (value !== undefined) ports.setVariable(name, value);
+    },
+  });
+  if (runInstallEntries.length > 0) {
+    ports.runInstall(runInstallEntries, projectDir, installCommand, env);
+  }
+
+  const versionOutput = ports.getCommandOutput("vp", ["--version"]) || "";
+  ports.logInfo(versionOutput);
+  const installedVersion = ports.parseInstalledVpVersion(versionOutput);
+  ports.setVariable("SETUP_VP_INSTALLED_VERSION", installedVersion);
+}
+
+export async function main(phase: AzurePhase): Promise<void> {
+  if (phase === "prepare") {
+    await runPrepare();
+    return;
+  }
+  if (phase === "finalize") {
+    await runFinalize();
+    return;
+  }
+  fail(`invalid phase "${String(phase)}"; expected "prepare" or "finalize"`);
+}
+
+export function isEntrypoint(argvPath = process.argv[1], moduleUrl = import.meta.url): boolean {
+  return Boolean(argvPath && moduleUrl === pathToFileURL(path.resolve(argvPath)).href);
+}
+
+if (isEntrypoint()) {
+  const phase = process.argv[2];
+  if (!phase) fail('missing phase argument; expected "prepare" or "finalize"');
+  try {
+    await main(phase as AzurePhase);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+}

@@ -9,15 +9,18 @@
       "addLabels": ["needs-bundle-rebuild"]
     },
     {
-      "description": "vite-plus is the bundler; its updates can change dist/ output.",
-      "matchPackageNames": ["vite-plus"],
-      "addLabels": ["needs-bundle-rebuild"]
+      "description": "Group all Vite+ packages into a single PR; they are published together at the same version. vite-plus is the bundler, so its updates can change dist/ output. minimumReleaseAge and schedule keep @voidzero-dev/vite-plus-* (the vite catalog alias) on the same policy as vite-plus; the preset's generic npm rule would otherwise hold the alias behind a 3-day age gate and a Monday schedule.",
+      "groupName": "vite-plus",
+      "matchPackageNames": ["vite-plus", "@voidzero-dev/vite-plus-*"],
+      "addLabels": ["needs-bundle-rebuild"],
+      "minimumReleaseAge": "0 days",
+      "schedule": ["at any time"]
     }
   ],
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["^src/install-sfw\\.ts$", "^src/gitlab/install-sfw\\.ts$"],
+      "fileMatch": ["^src/install-sfw\\.ts$", "^src/ci/install-sfw\\.ts$"],
       "matchStrings": ["const SFW_VERSION = \"(?<currentValue>v[^\"]+)\";"],
       "depNameTemplate": "SocketDev/sfw-free",
       "datasourceTemplate": "github-releases"

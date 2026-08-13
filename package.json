@@ -1,6 +1,6 @@
 {
   "name": "setup-vp",
-  "version": "1.0.0",
+  "version": "1.17.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,9 +22,9 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^6.0.0",
+    "typescript": "^7.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@11.9.0"
+  "packageManager": "pnpm@11.18.0"
 }

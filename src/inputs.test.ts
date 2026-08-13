@@ -144,6 +144,85 @@ describe("getInputs", () => {
     expect(inputs.nodeVersionFile).toBe(".nvmrc");
   });
 
+  it("should parse node-manager as true", () => {
+    vi.mocked(getInput).mockImplementation((name) => {
+      if (name === "node-manager") return "true";
+      return "";
+    });
+    vi.mocked(getBooleanInput).mockReturnValue(false);
+
+    const inputs = getInputs();
+
+    expect(inputs.nodeManager).toBe(true);
+  });
+
+  it("should parse node-manager as false", () => {
+    vi.mocked(getInput).mockImplementation((name) => {
+      if (name === "node-manager") return "false";
+      return "";
+    });
+    vi.mocked(getBooleanInput).mockReturnValue(false);
+
+    const inputs = getInputs();
+
+    expect(inputs.nodeManager).toBe(false);
+  });
+
+  it("should leave node-manager undefined when unset", () => {
+    vi.mocked(getInput).mockReturnValue("");
+    vi.mocked(getBooleanInput).mockReturnValue(false);
+
+    const inputs = getInputs();
+
+    expect(inputs.nodeManager).toBeUndefined();
+  });
+
+  it("should reject invalid node-manager values", () => {
+    vi.mocked(getInput).mockImplementation((name) => {
+      if (name === "node-manager") return "off";
+      return "";
+    });
+    vi.mocked(getBooleanInput).mockReturnValue(false);
+
+    expect(() => getInputs()).toThrow('Invalid node-manager input: "off"');
+  });
+
+  it("should reject node-manager false combined with node-version", () => {
+    vi.mocked(getInput).mockImplementation((name) => {
+      if (name === "node-manager") return "false";
+      if (name === "node-version") return "22";
+      return "";
+    });
+    vi.mocked(getBooleanInput).mockReturnValue(false);
+
+    expect(() => getInputs()).toThrow("node-manager: false cannot be combined");
+  });
+
+  it("should reject node-manager false combined with node-version-file", () => {
+    vi.mocked(getInput).mockImplementation((name) => {
+      if (name === "node-manager") return "false";
+      if (name === "node-version-file") return ".nvmrc";
+      return "";
+    });
+    vi.mocked(getBooleanInput).mockReturnValue(false);
+
+    expect(() => getInputs()).toThrow("node-manager: false cannot be combined");
+  });
+
+  it("should allow node-manager true combined with node-version", () => {
+    vi.mocked(getInput).mockImplementation((name) => {
+      if (name === "node-manager") return "true";
+      if (name === "node-version") return "22";
+      return "";
+    });
+    vi.mocked(getBooleanInput).mockReturnValue(false);
+
+    const inputs = getInputs();
+
+    expect(inputs.nodeManager).toBe(true);
+    expect(inputs.nodeVersion).toBe("22");
+  });
+
   it("should parse cache-dependency-path input", () => {
     vi.mocked(getInput).mockImplementation((name) => {
       if (name === "cache-dependency-path") return "custom-lock.yaml";
