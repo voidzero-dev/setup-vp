@@ -33,6 +33,7 @@ const baseInputs: Inputs = {
   runInstall: [{}],
   sfw: true,
   cache: false,
+  taskCache: false,
 };
 
 const mockedExec = vi.mocked(getExecOutput);
