@@ -7,6 +7,7 @@ GitHub Action, GitLab CI/CD remote template, and Azure Pipelines step template t
 - Install Vite+ globally via official install scripts
 - GitHub Action: optionally set up a specific Node.js version via `vp env use`
 - GitHub Action: cache project dependencies with auto-detection of lock files
+- GitHub Action: save task caches to GitHub Actions Cache
 - Optionally run `vp install` after setup
 - Optionally wrap `vp install` with [Socket Firewall Free (`sfw`)](https://docs.socket.dev/docs/socket-firewall-free) to block malicious dependencies
 - Support for all major package managers (npm, pnpm, yarn, bun)
@@ -96,6 +97,21 @@ steps:
       node-version: "lts"
       cache: true
       run-install: true
+```
+
+### With Task Caching
+
+This will save the Vite+ task cache to GitHub Actions with a specific key. This only saves the task cache; other caches (from Vite builds, for example) that happen to be included in the `node_modules/.vite` folder is not included.
+
+At the end, the cache is written back to GitHub.
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  - uses: voidzero-dev/setup-vp@v1.17.0
+    with:
+      cache: true
+      task-cache: true
 ```
 
 ### Specific Version
