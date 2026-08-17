@@ -37,6 +37,29 @@ describe("installVitePlus", () => {
     expect(runInstall.mock.calls[1]?.[0]).toContain("install.sh");
   });
 
+  it("installs exact versions with the release-tag script before the latest script", async () => {
+    // Fail every attempt so the full URL order is observable.
+    const runInstall = vi.fn(() => 1);
+    const warnings: string[] = [];
+
+    await expect(
+      installVitePlus("0.2.9", {
+        platform: "linux",
+        env: { PATH: "" },
+        prependPath: () => undefined,
+        sleep: async () => undefined,
+        runInstall,
+        logWarningFn: (message) => warnings.push(message),
+      }),
+    ).rejects.toThrow(/after 8 attempts across 4 URL\(s\)/);
+
+    const urls = runInstall.mock.calls.map((call) => (call as unknown as [string])[0]);
+    expect(urls[0]).toContain("/v0.2.9/packages/cli/install.sh");
+    expect(urls[1]).toContain("jsdelivr");
+    expect(urls[4]).toBe("https://viteplus.dev/install.sh");
+    expect(warnings.some((message) => message.includes("falling back to the latest"))).toBe(true);
+  });
+
   it("routes pkg.pr.new commit builds through VP_PR_VERSION", async () => {
     const runInstall = vi.fn(() => 0);
     const sha = "a".repeat(40);

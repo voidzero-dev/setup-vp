@@ -53,13 +53,10 @@ setup_vp_install_viteplus_from() {
   fi
 }
 
-setup_vp_install_viteplus() {
+setup_vp_try_install_urls() {
   setup_vp_round=1
   while [ "$setup_vp_round" -le 2 ]; do
-    for setup_vp_url in \
-      "https://viteplus.dev/install.sh" \
-      "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.sh"
-    do
+    for setup_vp_url in "$@"; do
       echo "setup-vp: installing Vite+ ${SETUP_VP_VERSION} from ${setup_vp_url}"
       if setup_vp_install_viteplus_from "$setup_vp_url"; then
         return 0
@@ -71,6 +68,32 @@ setup_vp_install_viteplus() {
       sleep 2
     fi
   done
+
+  return 1
+}
+
+# Prefer the install script pinned to the requested version's git ref (release
+# tag, or the commit itself for pkg.pr.new preview builds): the latest script
+# tracks the latest CLI and can break older installs. Exhaust the pinned
+# sources before falling back to the latest script, so a missing tag or a full
+# mirror outage degrades to the previous behavior instead of blocking CI.
+setup_vp_install_viteplus() {
+  if [ -n "$setup_vp_pinned_ref" ]; then
+    if setup_vp_try_install_urls \
+      "https://raw.githubusercontent.com/voidzero-dev/vite-plus/${setup_vp_pinned_ref}/packages/cli/install.sh" \
+      "https://cdn.jsdelivr.net/gh/voidzero-dev/vite-plus@${setup_vp_pinned_ref}/packages/cli/install.sh"
+    then
+      return 0
+    fi
+    echo "setup-vp: could not fetch the install script pinned to Vite+ ${SETUP_VP_VERSION}; falling back to the latest install script, which may not be compatible with ${SETUP_VP_VERSION}." >&2
+  fi
+
+  if setup_vp_try_install_urls \
+    "https://viteplus.dev/install.sh" \
+    "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.sh"
+  then
+    return 0
+  fi
 
   echo "setup-vp: failed to install Vite+ after retrying all installer URLs." >&2
   return 1
@@ -96,6 +119,16 @@ esac
 setup_vp_pr_version=""
 if [[ "$SETUP_VP_VERSION" =~ ^0\.0\.0-commit\.([0-9a-fA-F]{40})$ ]]; then
   setup_vp_pr_version="${BASH_REMATCH[1]}"
+fi
+
+# Git ref serving the install script that matches the requested version: the
+# preview build's commit, or the `v<version>` release tag for an exact version
+# (dist-tags like "latest" cannot be mapped and keep the latest script).
+setup_vp_pinned_ref=""
+if [ -n "$setup_vp_pr_version" ]; then
+  setup_vp_pinned_ref="$(printf "%s" "$setup_vp_pr_version" | tr '[:upper:]' '[:lower:]')"
+elif [[ "$SETUP_VP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+  setup_vp_pinned_ref="v${SETUP_VP_VERSION}"
 fi
 setup_vp_install_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-install.XXXXXX")"
 setup_vp_runtime_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-gitlab-runtime.XXXXXX.mjs")"
