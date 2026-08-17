@@ -72,11 +72,12 @@ setup_vp_try_install_urls() {
   return 1
 }
 
-# Prefer the install script pinned to the requested version's git ref (release
-# tag, or the commit itself for pkg.pr.new preview builds): the latest script
-# tracks the latest CLI and can break older installs. Exhaust the pinned
-# sources before falling back to the latest script, so a missing tag or a full
-# mirror outage degrades to the previous behavior instead of blocking CI.
+# Prefer the install script pinned to the requested version's git ref (the
+# release tag, or the commit itself for a pkg.pr.new preview build): the
+# latest script tracks the latest CLI and can break installs of older
+# versions. Fall back to the latest script only after all pinned sources fail.
+# A missing tag or a full mirror outage then gives the previous behavior
+# instead of blocking CI.
 setup_vp_install_viteplus() {
   if [ -n "$setup_vp_pinned_ref" ]; then
     if setup_vp_try_install_urls \
@@ -85,7 +86,7 @@ setup_vp_install_viteplus() {
     then
       return 0
     fi
-    echo "setup-vp: could not fetch the install script pinned to Vite+ ${SETUP_VP_VERSION}; falling back to the latest install script, which may not be compatible with ${SETUP_VP_VERSION}." >&2
+    echo "setup-vp: could not fetch the install script pinned to Vite+ ${SETUP_VP_VERSION}. Falling back to the latest install script. The latest script may not be compatible with ${SETUP_VP_VERSION}." >&2
   fi
 
   if setup_vp_try_install_urls \
@@ -121,9 +122,10 @@ if [[ "$SETUP_VP_VERSION" =~ ^0\.0\.0-commit\.([0-9a-fA-F]{40})$ ]]; then
   setup_vp_pr_version="${BASH_REMATCH[1]}"
 fi
 
-# Git ref serving the install script that matches the requested version: the
-# preview build's commit, or the `v<version>` release tag for an exact version
-# (dist-tags like "latest" cannot be mapped and keep the latest script).
+# Git ref that serves the install script for the requested version: the
+# preview build's commit, or the `v<version>` release tag for an exact
+# version. Dist-tags like "latest" do not map to a ref and keep the latest
+# script.
 setup_vp_pinned_ref=""
 if [ -n "$setup_vp_pr_version" ]; then
   setup_vp_pinned_ref="$(printf "%s" "$setup_vp_pr_version" | tr '[:upper:]' '[:lower:]')"

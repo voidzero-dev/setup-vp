@@ -1,11 +1,11 @@
-// The install script evolves with the CLI: a script from main can install an
-// older CLI incorrectly (e.g. the XDG directory-layout switch in
-// voidzero-dev/vite-plus#2346 changes where fresh installs land). When the
-// requested version maps to a git ref in the vite-plus repo — the release tag
-// for an exact version, the commit itself for a pkg.pr.new preview build —
-// prefer the script from that ref so script and CLI always match. Dist-tags
-// ("latest", "next") keep using the latest script, which matches whatever they
-// resolve to.
+// The install script changes with the CLI: a script from main can install an
+// older CLI incorrectly. Example: the XDG directory-layout switch in
+// voidzero-dev/vite-plus#2346 changes where fresh installs land. When the
+// requested version maps to a git ref in the vite-plus repo (the release tag
+// for an exact version, the commit itself for a pkg.pr.new preview build),
+// prefer the script from that ref: script and CLI then always match.
+// Dist-tags ("latest", "next") keep the latest script, which matches whatever
+// they resolve to.
 const REPO_RAW_BASE = "https://raw.githubusercontent.com/voidzero-dev/vite-plus";
 // jsDelivr mirrors GitHub refs on independent infrastructure, so the pinned
 // script stays reachable through a raw.githubusercontent.com incident.
@@ -25,10 +25,10 @@ const SCRIPT_DIR = "packages/cli";
 const PKG_PR_NEW_COMMIT_RE = /^0\.0\.0-commit\.([0-9a-f]{40})$/i;
 
 // An exact published version (`major.minor.patch` with an optional prerelease
-// suffix, e.g. `0.1.21-alpha.7`) maps to its `v<version>` release tag. Build
-// metadata (`+meta`) is excluded: vite-plus never publishes it and `+` would
-// need URL-escaping. Anything else — dist-tags, ranges passed through the raw
-// `version` input — cannot be mapped to a ref.
+// suffix, e.g. `0.1.21-alpha.7`) maps to its `v<version>` release tag. The
+// regex rejects build metadata (`+meta`): vite-plus never publishes it, and
+// `+` would need URL-escaping. Nothing else maps to a ref (dist-tags, or
+// ranges passed through the raw `version` input).
 const EXACT_RELEASE_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 export function pkgPrNewCommitSha(version: string): string | undefined {
@@ -66,7 +66,7 @@ export function getInstallScriptUrls(
 }
 
 function installScriptRef(version: string): string | undefined {
-  // Git SHAs are lowercase; normalize so an uppercase-hex version still hits
+  // Git SHAs are lowercase, so lowercase the extracted SHA before it becomes
   // the ref. Check the commit shape first: it also matches the exact-version
   // regex but must resolve to the commit, not a `v0.0.0-commit.*` tag.
   const sha = pkgPrNewCommitSha(version);

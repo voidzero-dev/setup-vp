@@ -111,8 +111,8 @@ describe("installVitePlus", () => {
     expect(scripts[3]).toContain("raw.githubusercontent.com");
   });
 
-  // The URL strings themselves are unit-tested in ci/install-script-urls.test.ts;
-  // these verify the version reaches the URL selection.
+  // ci/install-script-urls.test.ts tests the exact URL strings. These tests
+  // verify that the version reaches the URL selection.
   it.each([
     { desc: "exact versions", version: "0.2.9", ref: "v0.2.9" },
     { desc: "pkg.pr.new commit builds", version: `0.0.0-commit.${commitSha}`, ref: commitSha },
@@ -139,8 +139,8 @@ describe("installVitePlus", () => {
     expect(fallbackScript).toContain(
       "https://cdn.jsdelivr.net/gh/voidzero-dev/vite-plus@v0.2.9/packages/cli/install.sh",
     );
-    // Both pinned attempts failing would then warn before using latest URLs;
-    // succeeding on the mirror must not trigger the compatibility fallback.
+    // If both pinned attempts fail, the code warns before it uses the latest
+    // URLs. Success on the mirror must not trigger the compatibility fallback.
     expect(warning).not.toHaveBeenCalledWith(expect.stringContaining("latest install script"));
   });
 
@@ -162,9 +162,7 @@ describe("installVitePlus", () => {
     expect(scripts[3]).toContain("jsdelivr");
     expect(scripts[4]).toContain("https://viteplus.dev/install.sh");
     expect(warning).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "falling back to the latest install script, which may not be compatible with 0.2.9",
-      ),
+      expect.stringContaining("The latest script may not be compatible with 0.2.9"),
     );
   });
 

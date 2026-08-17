@@ -7,7 +7,7 @@ import type { Inputs } from "./types.js";
 import { DISPLAY_NAME } from "./types.js";
 import { getVitePlusHome } from "./utils.js";
 
-// Alternate through each URL group's sources for up to N rounds (max attempts
+// Try each group's URLs in order, for up to N rounds per group (max attempts
 // per group = rounds * URLs). Two rounds × two URLs = 4 attempts, ~1 minute
 // worst case per group.
 const INSTALL_MAX_ROUNDS = 2;
@@ -44,9 +44,9 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     env.VP_PR_VERSION = prVersion;
   }
 
-  // Prefer the install script pinned to the requested version's git ref, and
-  // fall back to the latest script only after exhausting the pinned sources
-  // (see ci/install-script-urls.ts for the rationale).
+  // Prefer the install script pinned to the requested version's git ref. Fall
+  // back to the latest script only after all pinned sources fail (see
+  // ci/install-script-urls.ts for the rationale).
   const { pinned, latest } = getInstallScriptUrls(version);
   const totalUrls = pinned.length + latest.length;
   const maxAttempts = INSTALL_MAX_ROUNDS * totalUrls;
@@ -82,7 +82,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
       return;
     }
     warning(
-      `Could not fetch the install script pinned to ${DISPLAY_NAME}@${version}; falling back to the latest install script, which may not be compatible with ${version}.`,
+      `Could not fetch the install script pinned to ${DISPLAY_NAME}@${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
     );
   }
 

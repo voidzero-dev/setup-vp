@@ -57,7 +57,7 @@ describe("installVitePlus", () => {
     expect(urls[0]).toContain("/v0.2.9/packages/cli/install.sh");
     expect(urls[1]).toContain("jsdelivr");
     expect(urls[4]).toBe("https://viteplus.dev/install.sh");
-    expect(warnings.some((message) => message.includes("falling back to the latest"))).toBe(true);
+    expect(warnings.some((message) => message.includes("Falling back to the latest"))).toBe(true);
   });
 
   it("routes pkg.pr.new commit builds through VP_PR_VERSION", async () => {

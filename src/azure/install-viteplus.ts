@@ -81,9 +81,9 @@ export async function installVitePlus(
     env.VP_NODE_MANAGER = options.nodeManager ? "yes" : "no";
   }
 
-  // Prefer the install script pinned to the requested version's git ref, and
-  // fall back to the latest script only after exhausting the pinned sources
-  // (see ../ci/install-script-urls.ts for the rationale).
+  // Prefer the install script pinned to the requested version's git ref. Fall
+  // back to the latest script only after all pinned sources fail (see
+  // ../ci/install-script-urls.ts for the rationale).
   const { pinned, latest } = getInstallScriptUrls(version, platform);
   const totalUrls = pinned.length + latest.length;
   const maxAttempts = INSTALL_MAX_ROUNDS * totalUrls;
@@ -128,7 +128,7 @@ export async function installVitePlus(
       return;
     }
     warn(
-      `setup-vp: could not fetch the install script pinned to Vite+ ${version}; falling back to the latest install script, which may not be compatible with ${version}.`,
+      `setup-vp: could not fetch the install script pinned to Vite+ ${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
     );
   }
 
