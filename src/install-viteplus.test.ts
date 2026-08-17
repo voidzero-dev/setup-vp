@@ -31,6 +31,8 @@ const baseInputs: Inputs = {
   scope: undefined,
 };
 
+const commitSha = "7d848b3da1987fa60b4cf18487fcc36a2a697e94";
+
 describe("installVitePlus", () => {
   // installVitePlus spreads process.env into the child env, so a VP_PR_VERSION
   // inherited from the runner (setup-vp's own CI sets it) would make these tests
@@ -109,16 +111,24 @@ describe("installVitePlus", () => {
     expect(scripts[3]).toContain("raw.githubusercontent.com");
   });
 
-  it("should install exact versions with the release-tag install script", async () => {
-    vi.mocked(exec).mockResolvedValueOnce(0);
+  // The URL strings themselves are unit-tested in ci/install-script-urls.test.ts;
+  // these verify the version reaches the URL selection.
+  it.each([
+    { desc: "exact versions", version: "0.2.9", ref: "v0.2.9" },
+    { desc: "pkg.pr.new commit builds", version: `0.0.0-commit.${commitSha}`, ref: commitSha },
+  ])(
+    "should install $desc with the install script from their git ref",
+    async ({ version, ref }) => {
+      vi.mocked(exec).mockResolvedValueOnce(0);
 
-    await installVitePlus({ ...baseInputs, version: "0.2.9" });
+      await installVitePlus({ ...baseInputs, version });
 
-    const script = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
-    expect(script).toContain(
-      "https://raw.githubusercontent.com/voidzero-dev/vite-plus/v0.2.9/packages/cli/install.sh",
-    );
-  });
+      const script = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
+      expect(script).toContain(
+        `https://raw.githubusercontent.com/voidzero-dev/vite-plus/${ref}/packages/cli/install.sh`,
+      );
+    },
+  );
 
   it("should fall back to the jsDelivr mirror of the pinned script on failure", async () => {
     vi.mocked(exec).mockResolvedValueOnce(35).mockResolvedValueOnce(0);
@@ -168,18 +178,6 @@ describe("installVitePlus", () => {
     expect(exec).toHaveBeenCalledTimes(8);
   });
 
-  it("should install pkg.pr.new commit builds with the install script from that commit", async () => {
-    const sha = "7d848b3da1987fa60b4cf18487fcc36a2a697e94";
-    vi.mocked(exec).mockResolvedValueOnce(0);
-
-    await installVitePlus({ ...baseInputs, version: `0.0.0-commit.${sha}` });
-
-    const script = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
-    expect(script).toContain(
-      `https://raw.githubusercontent.com/voidzero-dev/vite-plus/${sha}/packages/cli/install.sh`,
-    );
-  });
-
   it("should run the bash install with pipefail and timeout flags so transient failures fail fast", async () => {
     vi.mocked(exec).mockResolvedValueOnce(0);
 
@@ -194,7 +192,6 @@ describe("installVitePlus", () => {
     expect(script).toMatch(/\| bash$/);
   });
 
-  const commitSha = "7d848b3da1987fa60b4cf18487fcc36a2a697e94";
   it.each([
     {
       desc: "should route pkg.pr.new commit builds through VP_PR_VERSION",

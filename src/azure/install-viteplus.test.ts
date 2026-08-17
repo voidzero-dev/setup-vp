@@ -39,7 +39,7 @@ describe("installVitePlus", () => {
 
   it("installs exact versions with the release-tag script before the latest script", async () => {
     // Fail every attempt so the full URL order is observable.
-    const runInstall = vi.fn(() => 1);
+    const runInstall = vi.fn((_url: string) => 1);
     const warnings: string[] = [];
 
     await expect(
@@ -53,7 +53,7 @@ describe("installVitePlus", () => {
       }),
     ).rejects.toThrow(/after 8 attempts across 4 URL\(s\)/);
 
-    const urls = runInstall.mock.calls.map((call) => (call as unknown as [string])[0]);
+    const urls = runInstall.mock.calls.map((call) => call[0]);
     expect(urls[0]).toContain("/v0.2.9/packages/cli/install.sh");
     expect(urls[1]).toContain("jsdelivr");
     expect(urls[4]).toBe("https://viteplus.dev/install.sh");

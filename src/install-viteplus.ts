@@ -44,31 +44,22 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     env.VP_PR_VERSION = prVersion;
   }
 
-  // Prefer the install script pinned to the requested version's git ref;
-  // exhaust its sources before falling back to the latest script, so a missing
-  // tag or a full mirror outage degrades to today's behavior instead of
-  // blocking CI.
+  // Prefer the install script pinned to the requested version's git ref, and
+  // fall back to the latest script only after exhausting the pinned sources
+  // (see ci/install-script-urls.ts for the rationale).
   const { pinned, latest } = getInstallScriptUrls(version);
-  const urlGroups = pinned.length > 0 ? [pinned, latest] : [latest];
-  const totalUrls = urlGroups.reduce((count, urls) => count + urls.length, 0);
+  const totalUrls = pinned.length + latest.length;
   const maxAttempts = INSTALL_MAX_ROUNDS * totalUrls;
   let failureReason = "";
   let attempt = 0;
-  for (const [groupIndex, urls] of urlGroups.entries()) {
-    if (groupIndex > 0) {
-      warning(
-        `Could not fetch the install script pinned to ${DISPLAY_NAME}@${version}; falling back to the latest install script, which may not be compatible with ${version}.`,
-      );
-    }
+
+  const tryUrls = async (urls: string[]): Promise<boolean> => {
     for (let round = 0; round < INSTALL_MAX_ROUNDS; round++) {
       for (const url of urls) {
         attempt++;
         try {
           const exitCode = await runInstallCommand(url, env);
-          if (exitCode === 0) {
-            ensureVitePlusBinInPath();
-            return;
-          }
+          if (exitCode === 0) return true;
           failureReason = `exit code ${exitCode}`;
         } catch (error) {
           failureReason = error instanceof Error ? error.message : String(error);
@@ -82,6 +73,22 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
         }
       }
     }
+    return false;
+  };
+
+  if (pinned.length > 0) {
+    if (await tryUrls(pinned)) {
+      ensureVitePlusBinInPath();
+      return;
+    }
+    warning(
+      `Could not fetch the install script pinned to ${DISPLAY_NAME}@${version}; falling back to the latest install script, which may not be compatible with ${version}.`,
+    );
+  }
+
+  if (await tryUrls(latest)) {
+    ensureVitePlusBinInPath();
+    return;
   }
 
   throw new Error(

@@ -81,37 +81,22 @@ export async function installVitePlus(
     env.VP_NODE_MANAGER = options.nodeManager ? "yes" : "no";
   }
 
-  // Prefer the install script pinned to the requested version's git ref;
-  // exhaust its sources before falling back to the latest script, so a missing
-  // tag or a full mirror outage degrades to today's behavior instead of
-  // blocking CI.
+  // Prefer the install script pinned to the requested version's git ref, and
+  // fall back to the latest script only after exhausting the pinned sources
+  // (see ../ci/install-script-urls.ts for the rationale).
   const { pinned, latest } = getInstallScriptUrls(version, platform);
-  const urlGroups = pinned.length > 0 ? [pinned, latest] : [latest];
-  const totalUrls = urlGroups.reduce((count, urls) => count + urls.length, 0);
+  const totalUrls = pinned.length + latest.length;
   const maxAttempts = INSTALL_MAX_ROUNDS * totalUrls;
   let failureReason = "";
   let attempt = 0;
 
-  for (const [groupIndex, urls] of urlGroups.entries()) {
-    if (groupIndex > 0) {
-      warn(
-        `setup-vp: could not fetch the install script pinned to Vite+ ${version}; falling back to the latest install script, which may not be compatible with ${version}.`,
-      );
-    }
+  const tryUrls = async (urls: string[]): Promise<boolean> => {
     for (let round = 0; round < INSTALL_MAX_ROUNDS; round += 1) {
       for (const url of urls) {
         attempt += 1;
         try {
           const exitCode = runInstall(url, env, platform);
-          if (exitCode === 0) {
-            const binDir = join(getVitePlusHome(platform), "bin");
-            if (!targetEnv.PATH?.includes(binDir)) {
-              const separator = platform === "win32" ? ";" : ":";
-              targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
-              prependPath?.(binDir);
-            }
-            return;
-          }
+          if (exitCode === 0) return true;
           failureReason = `exit code ${exitCode}`;
         } catch (error) {
           failureReason = error instanceof Error ? error.message : String(error);
@@ -125,6 +110,31 @@ export async function installVitePlus(
         }
       }
     }
+    return false;
+  };
+
+  const ensureBinInPath = (): void => {
+    const binDir = join(getVitePlusHome(platform), "bin");
+    if (!targetEnv.PATH?.includes(binDir)) {
+      const separator = platform === "win32" ? ";" : ":";
+      targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
+      prependPath?.(binDir);
+    }
+  };
+
+  if (pinned.length > 0) {
+    if (await tryUrls(pinned)) {
+      ensureBinInPath();
+      return;
+    }
+    warn(
+      `setup-vp: could not fetch the install script pinned to Vite+ ${version}; falling back to the latest install script, which may not be compatible with ${version}.`,
+    );
+  }
+
+  if (await tryUrls(latest)) {
+    ensureBinInPath();
+    return;
   }
 
   throw new Error(
