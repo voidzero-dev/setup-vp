@@ -364,6 +364,42 @@ jobs:
           echo "Installed version: ${{ steps.setup.outputs.version }}"
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
+  test-task-cache:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - bin: npm
+            lockfile: package-lock.json
+          - bin: yarn
+            lockfile: yarn.lock
+          - bin: pnpm
+            lockfile: pnpm-lock.yaml
+          - bin: bun
+            lockfile: bun.lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create test project
+        run: |
+          mkdir -p test-project
+          cd test-project
+          echo '{"name":"test-project","private":true}' > package.json
+          touch ${{ matrix.lockfile }}
+
+      - name: Setup Vite+ with ${{ matrix.bin }}
+        uses: ./
+        id: setup
+        with:
+          run-install: true
+          task-cache: true
+
+      - name: Verify cache & path existence
+        run: |
+          Task cache hit: "${{ steps.setup.outputs.task-cache-hit }}"
+          ls "./node_modules/.vite/task-cache"
+
   test-vp-exec:
     strategy:
       fail-fast: false

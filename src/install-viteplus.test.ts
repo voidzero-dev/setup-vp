@@ -27,6 +27,7 @@ const baseInputs: Inputs = {
   sfw: false,
   cache: false,
   cacheDependencyPath: undefined,
+  taskCache: false,
   registryUrl: undefined,
   scope: undefined,
 };

@@ -28,6 +28,7 @@ export interface Inputs {
   readonly sfw: boolean;
   readonly cache: boolean;
   readonly cacheDependencyPath?: string;
+  readonly taskCache: boolean;
   readonly registryUrl?: string;
   readonly scope?: string;
 }
@@ -51,7 +52,10 @@ export enum State {
   IsPost = "IS_POST",
   CachePrimaryKey = "CACHE_PRIMARY_KEY",
   CacheMatchedKey = "CACHE_MATCHED_KEY",
+  TaskCachePrimaryKey = "TASK_CACHE_PRIMARY_KEY",
+  TaskCacheMatchedKey = "TASK_CACHE_MATCH_KEY",
   CachePaths = "CACHE_PATHS",
+  TaskCachePaths = "TASK_CACHE_PATHS",
   InstalledVersion = "INSTALLED_VERSION",
 }
 
@@ -59,6 +63,7 @@ export enum State {
 export enum Outputs {
   Version = "version",
   CacheHit = "cache-hit",
+  TaskCacheHit = "task-cache-hit",
 }
 
 // Package constants

@@ -28,6 +28,7 @@ export function getInputs(): Inputs {
     sfw: getBooleanInput("sfw"),
     cache: getBooleanInput("cache"),
     cacheDependencyPath: getInput("cache-dependency-path") || undefined,
+    taskCache: getBooleanInput("task-cache"),
     registryUrl: getInput("registry-url") || undefined,
     scope: getInput("scope") || undefined,
   };
