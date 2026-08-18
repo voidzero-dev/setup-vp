@@ -31,6 +31,8 @@ const baseInputs: Inputs = {
   scope: undefined,
 };
 
+const commitSha = "7d848b3da1987fa60b4cf18487fcc36a2a697e94";
+
 describe("installVitePlus", () => {
   // installVitePlus spreads process.env into the child env, so a VP_PR_VERSION
   // inherited from the runner (setup-vp's own CI sets it) would make these tests
@@ -109,6 +111,71 @@ describe("installVitePlus", () => {
     expect(scripts[3]).toContain("raw.githubusercontent.com");
   });
 
+  // ci/install-script-urls.test.ts tests the exact URL strings. These tests
+  // verify that the version reaches the URL selection.
+  it.each([
+    { desc: "exact versions", version: "0.2.9", ref: "v0.2.9" },
+    { desc: "pkg.pr.new commit builds", version: `0.0.0-commit.${commitSha}`, ref: commitSha },
+  ])(
+    "should install $desc with the install script from their git ref",
+    async ({ version, ref }) => {
+      vi.mocked(exec).mockResolvedValueOnce(0);
+
+      await installVitePlus({ ...baseInputs, version });
+
+      const script = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
+      expect(script).toContain(
+        `https://raw.githubusercontent.com/voidzero-dev/vite-plus/${ref}/packages/cli/install.sh`,
+      );
+    },
+  );
+
+  it("should fall back to the jsDelivr mirror of the pinned script on failure", async () => {
+    vi.mocked(exec).mockResolvedValueOnce(35).mockResolvedValueOnce(0);
+
+    await installVitePlus({ ...baseInputs, version: "0.2.9" });
+
+    const fallbackScript = (vi.mocked(exec).mock.calls[1][1] as string[])[1];
+    expect(fallbackScript).toContain(
+      "https://cdn.jsdelivr.net/gh/voidzero-dev/vite-plus@v0.2.9/packages/cli/install.sh",
+    );
+    // If both pinned attempts fail, the code warns before it uses the latest
+    // URLs. Success on the mirror must not trigger the compatibility fallback.
+    expect(warning).not.toHaveBeenCalledWith(expect.stringContaining("latest install script"));
+  });
+
+  it("should fall back to the latest install script only after exhausting pinned URLs", async () => {
+    // 4 pinned attempts fail (2 rounds × 2 URLs), the 5th (latest CDN) succeeds.
+    vi.mocked(exec)
+      .mockResolvedValueOnce(22)
+      .mockResolvedValueOnce(22)
+      .mockResolvedValueOnce(22)
+      .mockResolvedValueOnce(22)
+      .mockResolvedValueOnce(0);
+
+    await installVitePlus({ ...baseInputs, version: "0.2.9" });
+
+    const scripts = vi.mocked(exec).mock.calls.map((call) => (call[1] as string[])[1]);
+    expect(scripts[0]).toContain("/v0.2.9/");
+    expect(scripts[1]).toContain("jsdelivr");
+    expect(scripts[2]).toContain("/v0.2.9/");
+    expect(scripts[3]).toContain("jsdelivr");
+    expect(scripts[4]).toContain("https://viteplus.dev/install.sh");
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining("The latest script may not be compatible with 0.2.9"),
+    );
+  });
+
+  it("should count pinned and latest URLs in the exhaustion error for exact versions", async () => {
+    vi.mocked(exec).mockResolvedValue(6);
+
+    await expect(installVitePlus({ ...baseInputs, version: "0.2.9" })).rejects.toThrow(
+      /after 8 attempts across 4 URL\(s\)/,
+    );
+    // 2 rounds × 2 pinned URLs + 2 rounds × 2 latest URLs.
+    expect(exec).toHaveBeenCalledTimes(8);
+  });
+
   it("should run the bash install with pipefail and timeout flags so transient failures fail fast", async () => {
     vi.mocked(exec).mockResolvedValueOnce(0);
 
@@ -123,7 +190,6 @@ describe("installVitePlus", () => {
     expect(script).toMatch(/\| bash$/);
   });
 
-  const commitSha = "7d848b3da1987fa60b4cf18487fcc36a2a697e94";
   it.each([
     {
       desc: "should route pkg.pr.new commit builds through VP_PR_VERSION",

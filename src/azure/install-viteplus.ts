@@ -2,30 +2,18 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { spawnSync } from "node:child_process";
+import { getInstallScriptUrls, pkgPrNewCommitSha } from "../ci/install-script-urls.js";
 import { logWarning } from "./commands.js";
 
-const INSTALL_URLS_SH = [
-  "https://viteplus.dev/install.sh",
-  "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.sh",
-];
-const INSTALL_URLS_PS1 = [
-  "https://viteplus.dev/install.ps1",
-  "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.ps1",
-];
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 15";
 const PWSH_TIMEOUT_SEC = 15;
-const PKG_PR_NEW_COMMIT_RE = /^0\.0\.0-commit\.([0-9a-f]{40})$/i;
 
 export function getVitePlusHome(platform: NodeJS.Platform = process.platform): string {
   const home =
     platform === "win32" ? process.env.USERPROFILE || homedir() : process.env.HOME || homedir();
   return join(home, ".vite-plus");
-}
-
-function pkgPrNewCommitSha(version: string): string | undefined {
-  return version.match(PKG_PR_NEW_COMMIT_RE)?.[1];
 }
 
 function runInstallCommand(
@@ -93,40 +81,63 @@ export async function installVitePlus(
     env.VP_NODE_MANAGER = options.nodeManager ? "yes" : "no";
   }
 
-  const urls = platform === "win32" ? INSTALL_URLS_PS1 : INSTALL_URLS_SH;
-  const maxAttempts = INSTALL_MAX_ROUNDS * urls.length;
+  // Prefer the install script pinned to the requested version's git ref. Fall
+  // back to the latest script only after all pinned sources fail (see
+  // ../ci/install-script-urls.ts for the rationale).
+  const { pinned, latest } = getInstallScriptUrls(version, platform);
+  const totalUrls = pinned.length + latest.length;
+  const maxAttempts = INSTALL_MAX_ROUNDS * totalUrls;
   let failureReason = "";
   let attempt = 0;
 
-  for (let round = 0; round < INSTALL_MAX_ROUNDS; round += 1) {
-    for (const url of urls) {
-      attempt += 1;
-      try {
-        const exitCode = runInstall(url, env, platform);
-        if (exitCode === 0) {
-          const binDir = join(getVitePlusHome(platform), "bin");
-          if (!targetEnv.PATH?.includes(binDir)) {
-            const separator = platform === "win32" ? ";" : ":";
-            targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
-            prependPath?.(binDir);
-          }
-          return;
+  const tryUrls = async (urls: string[]): Promise<boolean> => {
+    for (let round = 0; round < INSTALL_MAX_ROUNDS; round += 1) {
+      for (const url of urls) {
+        attempt += 1;
+        try {
+          const exitCode = runInstall(url, env, platform);
+          if (exitCode === 0) return true;
+          failureReason = `exit code ${exitCode}`;
+        } catch (error) {
+          failureReason = error instanceof Error ? error.message : String(error);
         }
-        failureReason = `exit code ${exitCode}`;
-      } catch (error) {
-        failureReason = error instanceof Error ? error.message : String(error);
-      }
 
-      if (attempt < maxAttempts) {
-        warn(
-          `setup-vp: failed to install Vite+ from ${url} (${failureReason}). Retrying in ${INSTALL_RETRY_DELAY_MS}ms... (attempt ${attempt + 1}/${maxAttempts})`,
-        );
-        await delay(INSTALL_RETRY_DELAY_MS);
+        if (attempt < maxAttempts) {
+          warn(
+            `setup-vp: failed to install Vite+ from ${url} (${failureReason}). Retrying in ${INSTALL_RETRY_DELAY_MS}ms... (attempt ${attempt + 1}/${maxAttempts})`,
+          );
+          await delay(INSTALL_RETRY_DELAY_MS);
+        }
       }
     }
+    return false;
+  };
+
+  const ensureBinInPath = (): void => {
+    const binDir = join(getVitePlusHome(platform), "bin");
+    if (!targetEnv.PATH?.includes(binDir)) {
+      const separator = platform === "win32" ? ";" : ":";
+      targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
+      prependPath?.(binDir);
+    }
+  };
+
+  if (pinned.length > 0) {
+    if (await tryUrls(pinned)) {
+      ensureBinInPath();
+      return;
+    }
+    warn(
+      `setup-vp: could not fetch the install script pinned to Vite+ ${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
+    );
+  }
+
+  if (await tryUrls(latest)) {
+    ensureBinInPath();
+    return;
   }
 
   throw new Error(
-    `Failed to install Vite+ after ${maxAttempts} attempts across ${urls.length} URL(s): ${failureReason}`,
+    `Failed to install Vite+ after ${maxAttempts} attempts across ${totalUrls} URL(s): ${failureReason}`,
   );
 }
