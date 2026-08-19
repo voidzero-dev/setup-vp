@@ -22,7 +22,7 @@ inputs:
     required: false
     default: "false"
   node-version:
-    description: "Node.js version to install via `vp env use`. Omit this input and node-version-file to let Vite+ resolve the version from the project, then its global default, then latest LTS."
+    description: "Node.js version to install via `vp env use`. Omit this input and node-version-file to let Vite+ resolve the version. `vp env default <version>` sets the user-level default. Vite+ checks the project, this default, and then the latest LTS release."
     required: false
   node-version-file:
     description: "Path to file containing the Node.js version spec (.nvmrc, .node-version, .tool-versions, package.json). Ignored when node-version is specified."

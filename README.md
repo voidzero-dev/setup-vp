@@ -345,7 +345,7 @@ jobs:
 
 When `working-directory` is set, relative `run-install.cwd`, `node-version-file`, `version-file`, and `cache-dependency-path` values are resolved from that directory.
 
-Omitting both `node-version` and `node-version-file` leaves the session without an override. With the Vite+ Node.js manager enabled, its shims search the current directory and its parents for `.node-version`, `package.json#devEngines.runtime`, `package.json#engines.node`, and `.nvmrc`, in that order. If the project does not declare a version, Vite+ uses its global default and then latest LTS.
+Omitting both `node-version` and `node-version-file` leaves the session without an override. With the Vite+ Node.js manager enabled, its shims search the current directory and its parents for `.node-version`, `package.json#devEngines.runtime`, `package.json#engines.node`, and `.nvmrc`, in that order. If the project does not declare a version, Vite+ uses the user-level default. Set this default with `vp env default <version>`. Vite+ stores this setting under `VP_HOME` (`~/.vite-plus` by default). If no user-level default exists, Vite+ uses the latest LTS release.
 
 `node-manager: false` skips Node.js shim creation and runs `vp env off`, so `vp` commands prefer the Node.js already on `PATH`. It cannot be combined with `node-version` or `node-version-file`.
 
