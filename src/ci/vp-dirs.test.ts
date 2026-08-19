@@ -29,7 +29,7 @@ describe("Vite+ directory resolution", () => {
 
   it.each([
     ["0.2.9", false],
-    ["0.3.0-alpha.1", false],
+    ["0.3.0-alpha.1", true],
     ["0.3.0", true],
     ["0.3.1-alpha.1", true],
     ["1.0.0", true],

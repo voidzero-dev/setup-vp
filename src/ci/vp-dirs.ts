@@ -18,7 +18,7 @@ export interface VitePlusDirs {
   state: string;
 }
 
-const EXACT_VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$/;
+const EXACT_VERSION_RE = /^v?(\d+)\.(\d+)\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 export function supportsVitePlusDirs(version: string): boolean {
   if (pkgPrNewCommitSha(version)) return true;
@@ -30,12 +30,7 @@ export function supportsVitePlusDirs(version: string): boolean {
 
   const major = Number(match[1]);
   const minor = Number(match[2]);
-  const patch = Number(match[3]);
-  if (major > 0 || minor > 3) return true;
-  if (major === 0 && minor === 3) {
-    return patch > 0 || (patch === 0 && match[4] === undefined);
-  }
-  return false;
+  return major > 0 || minor >= 3;
 }
 
 export function createVitePlusDirsFile(): string {

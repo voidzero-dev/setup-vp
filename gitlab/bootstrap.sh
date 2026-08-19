@@ -141,12 +141,7 @@ if [ -z "$setup_vp_pr_version" ] &&
 then
   setup_vp_major=$((10#${BASH_REMATCH[1]}))
   setup_vp_minor=$((10#${BASH_REMATCH[2]}))
-  setup_vp_patch=$((10#${BASH_REMATCH[3]}))
-  setup_vp_prerelease="${BASH_REMATCH[4]}"
-  if [ "$setup_vp_major" -eq 0 ] &&
-    { [ "$setup_vp_minor" -lt 3 ] ||
-      { [ "$setup_vp_minor" -eq 3 ] && [ "$setup_vp_patch" -eq 0 ] && [ -n "$setup_vp_prerelease" ]; }; }
-  then
+  if [ "$setup_vp_major" -eq 0 ] && [ "$setup_vp_minor" -lt 3 ]; then
     setup_vp_detect_dirs="false"
   fi
 fi
