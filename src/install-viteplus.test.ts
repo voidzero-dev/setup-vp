@@ -222,7 +222,7 @@ describe("installVitePlus", () => {
     const [cmd, args] = vi.mocked(exec).mock.calls[0];
     expect(cmd).toBe("bash");
     const script = (args as string[])[1];
-    expect(script).toMatch(/^set -eo pipefail;/);
+    expect(script).toMatch(/^set -eo pipefail\n/);
     expect(script).toContain("--connect-timeout");
     expect(script).toContain("--max-time");
     expect(script).toContain('-o "$installer_file"');

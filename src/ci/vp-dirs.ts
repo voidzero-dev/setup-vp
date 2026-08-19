@@ -87,36 +87,38 @@ export function getInstallScriptCommand(
       };
     }
 
-    const script = [
-      `$dirsFile = $env:${VP_DIRS_FILE_ENV}`,
-      `Set-Content -LiteralPath $dirsFile -Value '' -NoNewline`,
-      `. ([scriptblock]::Create((irm -TimeoutSec ${PWSH_TIMEOUT_SEC} ${url})))`,
-      `$vpPath = if ($script:ShimDir) { Join-Path $script:ShimDir 'vp.exe' } else { $null }`,
-      `if ($vpPath -and (Test-Path -LiteralPath $vpPath)) {`,
-      `  $env:VP_DUMP_DIRS = '1'`,
-      `  & $vpPath | Set-Content -LiteralPath $dirsFile`,
-      `  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`,
-      `}`,
-    ].join("\n");
+    const script = `
+$dirsFile = $env:${VP_DIRS_FILE_ENV}
+Set-Content -LiteralPath $dirsFile -Value '' -NoNewline
+. ([scriptblock]::Create((irm -TimeoutSec ${PWSH_TIMEOUT_SEC} ${url})))
+$vpPath = if ($script:ShimDir) { Join-Path $script:ShimDir 'vp.exe' } else { $null }
+if ($vpPath -and (Test-Path -LiteralPath $vpPath)) {
+  $env:VP_DUMP_DIRS = '1'
+  & $vpPath | Set-Content -LiteralPath $dirsFile
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+`.trim();
     return { command: "pwsh", args: ["-Command", script] };
   }
 
   if (!detectDirs) {
-    return {
-      command: "bash",
-      args: ["-c", `set -o pipefail; curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | bash`],
-    };
+    const script = `
+set -o pipefail
+curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | bash
+`.trim();
+    return { command: "bash", args: ["-c", script] };
   }
 
-  const script =
-    `set -eo pipefail; ` +
-    `installer_file="$(mktemp "\${TMPDIR:-/tmp}/setup-vp-install.XXXXXX")"; ` +
-    `trap 'rm -f "$installer_file"' EXIT; ` +
-    `: > "$${VP_DIRS_FILE_ENV}"; ` +
-    `curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} -o "$installer_file"; ` +
-    `source "$installer_file"; ` +
-    `if [ -n "\${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then ` +
-    `VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$${VP_DIRS_FILE_ENV}"; ` +
-    `fi`;
+  const script = `
+set -eo pipefail
+installer_file="$(mktemp "\${TMPDIR:-/tmp}/setup-vp-install.XXXXXX")"
+trap 'rm -f "$installer_file"' EXIT
+: > "$${VP_DIRS_FILE_ENV}"
+curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} -o "$installer_file"
+source "$installer_file"
+if [ -n "\${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then
+  VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$${VP_DIRS_FILE_ENV}"
+fi
+`.trim();
   return { command: "bash", args: ["-c", script] };
 }
