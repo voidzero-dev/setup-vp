@@ -347,6 +347,8 @@ When `working-directory` is set, relative `run-install.cwd`, `node-version-file`
 
 Omitting both `node-version` and `node-version-file` leaves the session without an override. With the Vite+ Node.js manager enabled, its shims search the current directory and its parents for `.node-version`, `package.json#devEngines.runtime`, `package.json#engines.node`, and `.nvmrc`, in that order. If the project does not declare a version, Vite+ uses the user-level default. Set this default with `vp env default <version>`. If no user-level default exists, Vite+ uses the latest LTS release.
 
+`working-directory` applies to the action. Each later workflow step keeps its own working directory. Vite+ searches for Node.js version sources from each command's current working directory. For a subproject, set `working-directory` on the step that runs `node` or `vp`.
+
 `node-manager: false` skips Node.js shim creation and runs `vp env off`, so `vp` commands prefer the Node.js already on `PATH`. It cannot be combined with `node-version` or `node-version-file`.
 
 ## Outputs
