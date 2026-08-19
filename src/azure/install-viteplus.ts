@@ -6,8 +6,8 @@ import { getInstallScriptUrls, pkgPrNewCommitSha } from "../ci/install-script-ur
 import {
   createVitePlusDirsFile,
   getInstallScriptCommand,
-  readVitePlusDirs,
   removeVitePlusDirsFile,
+  resolveVitePlusBinDir,
   supportsVitePlusDirs,
   VP_DIRS_FILE_ENV,
 } from "../ci/vp-dirs.js";
@@ -120,10 +120,7 @@ export async function installVitePlus(
   };
 
   const ensureBinInPath = (): void => {
-    // Pre-VpDirs releases cannot emit a dump and always use this legacy path.
-    const binDir =
-      (dirsFile ? readVitePlusDirs(dirsFile)?.bin : undefined) ??
-      join(getVitePlusHome(platform), "bin");
+    const binDir = resolveVitePlusBinDir(dirsFile, join(getVitePlusHome(platform), "bin"));
     const separator = platform === "win32" ? ";" : ":";
     if (!targetEnv.PATH?.split(separator).includes(binDir)) {
       targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;

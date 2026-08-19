@@ -6,8 +6,8 @@ import { getInstallScriptUrls, pkgPrNewCommitSha } from "./ci/install-script-url
 import {
   createVitePlusDirsFile,
   getInstallScriptCommand,
-  readVitePlusDirs,
   removeVitePlusDirsFile,
+  resolveVitePlusBinDir,
   supportsVitePlusDirs,
   VP_DIRS_FILE_ENV,
 } from "./ci/vp-dirs.js";
@@ -93,7 +93,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
   try {
     if (pinned.length > 0) {
       if (await tryUrls(pinned)) {
-        ensureVitePlusBinInPath(dirsFile ? readVitePlusDirs(dirsFile)?.bin : undefined);
+        ensureVitePlusBinInPath(dirsFile);
         return;
       }
       warning(
@@ -102,7 +102,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     }
 
     if (await tryUrls(latest)) {
-      ensureVitePlusBinInPath(dirsFile ? readVitePlusDirs(dirsFile)?.bin : undefined);
+      ensureVitePlusBinInPath(dirsFile);
       return;
     }
 
@@ -124,10 +124,8 @@ async function runInstallCommand(url: string, env: { [key: string]: string }): P
   return exec(command, args, options);
 }
 
-function ensureVitePlusBinInPath(resolvedBinDir?: string): void {
-  // Vite+ releases before VpDirs cannot emit a directory dump and always use
-  // the legacy monolithic layout.
-  const binDir = resolvedBinDir ?? join(getVitePlusHome(), "bin");
+function ensureVitePlusBinInPath(dirsFile: string | undefined): void {
+  const binDir = resolveVitePlusBinDir(dirsFile, join(getVitePlusHome(), "bin"));
   if (!process.env.PATH?.split(delimiter).includes(binDir)) {
     addPath(binDir);
   }

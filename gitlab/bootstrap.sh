@@ -37,6 +37,31 @@ setup_vp_export_env() {
   printf "\n" >> "$SETUP_VP_ENV_FILE"
 }
 
+setup_vp_read_bin_dir() {
+  awk '
+    {
+      separator = index($0, "\t")
+      if (separator == 0) next
+      key = substr($0, 1, separator - 1)
+      value = substr($0, separator + 1)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      if (key == "data") data = value
+      if (key == "bin") bin = value
+      if (key == "cache") cache = value
+      if (key == "config") config = value
+      if (key == "state") state = value
+    }
+    END {
+      if (data != "" && bin != "" && cache != "" && config != "" && state != "") {
+        print bin
+        exit 0
+      }
+      exit 1
+    }
+  ' "$1"
+}
+
 setup_vp_install_viteplus_from() {
   setup_vp_url="$1"
   setup_vp_download "$setup_vp_url" "$setup_vp_install_tmp" || return 1
@@ -163,12 +188,13 @@ setup_vp_runtime_tmp="${setup_vp_runtime_dir}/index.mjs"
 trap 'rm -f "$setup_vp_install_tmp" "$setup_vp_dirs_tmp" "$setup_vp_runtime_tmp"; rmdir "$setup_vp_runtime_dir" 2>/dev/null || true' EXIT
 
 setup_vp_install_viteplus
-setup_vp_bin_dir=""
 if [ "$setup_vp_detect_dirs" = "true" ]; then
-  setup_vp_bin_dir="$(awk -F '\t' '$1 == "bin" { print $2; exit }' "$setup_vp_dirs_tmp")"
-fi
-if [ -z "$setup_vp_bin_dir" ]; then
-  # Vite+ releases before VpDirs always use the monolithic layout.
+  if ! setup_vp_bin_dir="$(setup_vp_read_bin_dir "$setup_vp_dirs_tmp")"; then
+    echo "setup-vp: Vite+ was installed successfully, but setup-vp could not resolve its VpDirs." >&2
+    return 1 2>/dev/null || exit 1
+  fi
+else
+  # Vite+ releases before VpDirs use the monolithic layout.
   setup_vp_bin_dir="$HOME/.vite-plus/bin"
 fi
 export PATH="$setup_vp_bin_dir:$PATH"

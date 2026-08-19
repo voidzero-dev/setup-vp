@@ -17,8 +17,18 @@ describe("GitLab bootstrap", () => {
   it("uses the bin directory reported by the installed payload", () => {
     expect(bootstrap).toContain('export VP_VPDIRS_AWARE="1"');
     expect(bootstrap).toContain('VP_DUMP_DIRS=1 "$SHIM_DIR/vp"');
-    expect(bootstrap).toContain("setup_vp_bin_dir=\"$(awk -F '\\t'");
+    expect(bootstrap).toContain('setup_vp_bin_dir="$(setup_vp_read_bin_dir "$setup_vp_dirs_tmp")"');
     expect(bootstrap).toContain('export PATH="$setup_vp_bin_dir:$PATH"');
+  });
+
+  it("fails when a VpDirs-aware install does not report valid directories", () => {
+    for (const name of ["data", "bin", "cache", "config", "state"]) {
+      expect(bootstrap).toContain(`if (key == "${name}") ${name} = value`);
+    }
+    expect(bootstrap).toContain(
+      "Vite+ was installed successfully, but setup-vp could not resolve its VpDirs.",
+    );
+    expect(bootstrap).toContain("return 1 2>/dev/null || exit 1");
   });
 
   it("limits VpDirs detection to supported versions", () => {

@@ -50,6 +50,16 @@ export function readVitePlusDirs(filePath: string): VitePlusDirs | undefined {
   }
 }
 
+export function resolveVitePlusBinDir(dirsFile: string | undefined, legacyBinDir: string): string {
+  if (!dirsFile) return legacyBinDir;
+
+  const dirs = readVitePlusDirs(dirsFile);
+  if (!dirs) {
+    throw new Error("Vite+ was installed successfully, but setup-vp could not resolve its VpDirs.");
+  }
+  return dirs.bin;
+}
+
 export function parseVitePlusDirs(output: string): VitePlusDirs | undefined {
   const dirs = new Map<string, string>();
 

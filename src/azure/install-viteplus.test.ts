@@ -19,12 +19,9 @@ describe("installVitePlus", () => {
   it("uses PowerShell installers on Windows and bash installers on Unix", async () => {
     const calls: NodeJS.Platform[] = [];
     const runInstall = vi.fn(
-      (
-        _url: string,
-        _env: Record<string, string>,
-        platform: NodeJS.Platform = process.platform,
-      ) => {
+      (_url: string, env: Record<string, string>, platform: NodeJS.Platform = process.platform) => {
         calls.push(platform);
+        writeDirsFile(env, `/test/${platform}/bin`);
         return 0;
       },
     );
@@ -82,7 +79,10 @@ describe("installVitePlus", () => {
   });
 
   it("routes pkg.pr.new commit builds through VP_PR_VERSION", async () => {
-    const runInstall = vi.fn(() => 0);
+    const runInstall = vi.fn((_url: string, env: Record<string, string>) => {
+      writeDirsFile(env, "/test/data/bin");
+      return 0;
+    });
     const sha = "a".repeat(40);
 
     await installVitePlus(`0.0.0-commit.${sha}`, {
@@ -100,6 +100,34 @@ describe("installVitePlus", () => {
     expect(installCalls[0]?.[1]?.VP_PR_VERSION).toBe(sha);
     expect(installCalls[0]?.[1]?.VP_VPDIRS_AWARE).toBe("1");
     expect(installCalls[0]?.[1]?.SETUP_VP_DIRS_FILE).toMatch(/setup-vp-dirs-.*\.txt$/);
+  });
+
+  it.each([
+    { version: "0.3.0", output: undefined },
+    { version: `0.0.0-commit.${"a".repeat(40)}`, output: "bin\t/test/data/bin\n" },
+    { version: "latest", output: "" },
+  ])("fails when $version does not report valid VpDirs", async ({ version, output }) => {
+    const prependPath = vi.fn();
+    const runInstall = vi.fn((_url: string, env: Record<string, string>) => {
+      if (output !== undefined) writeFileSync(env.SETUP_VP_DIRS_FILE, output);
+      return 0;
+    });
+
+    await expect(
+      installVitePlus(version, {
+        platform: "linux",
+        env: { PATH: "/usr/bin" },
+        prependPath,
+        sleep: async () => undefined,
+        runInstall,
+        logWarningFn: () => undefined,
+      }),
+    ).rejects.toThrow(
+      "Vite+ was installed successfully, but setup-vp could not resolve its VpDirs.",
+    );
+
+    expect(runInstall).toHaveBeenCalledTimes(1);
+    expect(prependPath).not.toHaveBeenCalled();
   });
 
   it("prepends the bin directory reported by the installed payload", async () => {
