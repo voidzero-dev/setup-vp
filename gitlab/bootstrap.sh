@@ -53,7 +53,7 @@ setup_vp_install_viteplus_from() {
       export VP_VPDIRS_AWARE="1"
       # Source the official installer so its VpDirs-resolved shim remains
       # available long enough to ask the installed payload for its directories.
-      . "$setup_vp_install_tmp"
+      . "$setup_vp_install_tmp" || return $?
       if [ -n "${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then
         VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$setup_vp_dirs_tmp"
       fi

@@ -27,4 +27,8 @@ describe("GitLab bootstrap", () => {
     expect(bootstrap).toContain('if [ "$setup_vp_detect_dirs" = "true" ]; then');
     expect(bootstrap).toContain('bash "$setup_vp_install_tmp"');
   });
+
+  it("preserves a sourced installer's failure status", () => {
+    expect(bootstrap).toContain('. "$setup_vp_install_tmp" || return $?');
+  });
 });
