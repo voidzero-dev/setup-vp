@@ -84,6 +84,7 @@ jobs:
         shell: bash
         run: |
           vp env current
+          vp env doctor
           vp --version | grep -F "${{ steps.preview.outputs.version }}"
 
   test-node-version:
