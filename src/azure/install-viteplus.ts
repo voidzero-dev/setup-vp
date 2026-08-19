@@ -3,12 +3,17 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { spawnSync } from "node:child_process";
 import { getInstallScriptUrls, pkgPrNewCommitSha } from "../ci/install-script-urls.js";
+import {
+  createVitePlusDirsFile,
+  getInstallScriptCommand,
+  readVitePlusDirs,
+  removeVitePlusDirsFile,
+  VP_DIRS_FILE_ENV,
+} from "../ci/vp-dirs.js";
 import { logWarning } from "./commands.js";
 
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
-const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 15";
-const PWSH_TIMEOUT_SEC = 15;
 
 export function getVitePlusHome(platform: NodeJS.Platform = process.platform): string {
   const home =
@@ -21,21 +26,11 @@ function runInstallCommand(
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform,
 ): number {
-  if (platform === "win32") {
-    const result = spawnSync(
-      "pwsh",
-      ["-Command", `& ([scriptblock]::Create((irm -TimeoutSec ${PWSH_TIMEOUT_SEC} ${url})))`],
-      { env: { ...process.env, ...env }, stdio: "inherit" },
-    );
-    if (result.error) throw result.error;
-    return result.status ?? 1;
-  }
-
-  const result = spawnSync(
-    "bash",
-    ["-c", `set -o pipefail; curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | bash`],
-    { env: { ...process.env, ...env }, stdio: "inherit" },
-  );
+  const { command, args } = getInstallScriptCommand(url, platform);
+  const result = spawnSync(command, args, {
+    env: { ...process.env, ...env },
+    stdio: "inherit",
+  });
   if (result.error) throw result.error;
   return result.status ?? 1;
 }
@@ -66,8 +61,12 @@ export async function installVitePlus(
       ),
     ),
     VP_VERSION: version,
+    VP_VPDIRS_AWARE: "1",
     VITE_PLUS_VERSION: version,
   };
+
+  const dirsFile = createVitePlusDirsFile();
+  env[VP_DIRS_FILE_ENV] = dirsFile;
 
   const prVersion = pkgPrNewCommitSha(version);
   if (prVersion) {
@@ -114,30 +113,35 @@ export async function installVitePlus(
   };
 
   const ensureBinInPath = (): void => {
-    const binDir = join(getVitePlusHome(platform), "bin");
-    if (!targetEnv.PATH?.includes(binDir)) {
-      const separator = platform === "win32" ? ";" : ":";
+    // Pre-VpDirs releases cannot emit a dump and always use this legacy path.
+    const binDir = readVitePlusDirs(dirsFile)?.bin ?? join(getVitePlusHome(platform), "bin");
+    const separator = platform === "win32" ? ";" : ":";
+    if (!targetEnv.PATH?.split(separator).includes(binDir)) {
       targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
       prependPath?.(binDir);
     }
   };
 
-  if (pinned.length > 0) {
-    if (await tryUrls(pinned)) {
+  try {
+    if (pinned.length > 0) {
+      if (await tryUrls(pinned)) {
+        ensureBinInPath();
+        return;
+      }
+      warn(
+        `setup-vp: could not fetch the install script pinned to Vite+ ${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
+      );
+    }
+
+    if (await tryUrls(latest)) {
       ensureBinInPath();
       return;
     }
-    warn(
-      `setup-vp: could not fetch the install script pinned to Vite+ ${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
+
+    throw new Error(
+      `Failed to install Vite+ after ${maxAttempts} attempts across ${totalUrls} URL(s): ${failureReason}`,
     );
+  } finally {
+    removeVitePlusDirsFile(dirsFile);
   }
-
-  if (await tryUrls(latest)) {
-    ensureBinInPath();
-    return;
-  }
-
-  throw new Error(
-    `Failed to install Vite+ after ${maxAttempts} attempts across ${totalUrls} URL(s): ${failureReason}`,
-  );
 }

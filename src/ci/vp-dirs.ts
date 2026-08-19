@@ -1,0 +1,85 @@
+import { randomUUID } from "node:crypto";
+import { readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// Keep installer network calls bounded so a hung source fails over quickly.
+const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 15";
+const PWSH_TIMEOUT_SEC = 15;
+
+export const VP_DIRS_FILE_ENV = "SETUP_VP_DIRS_FILE";
+
+export interface VitePlusDirs {
+  data: string;
+  bin: string;
+  cache: string;
+  config: string;
+  state: string;
+}
+
+export function createVitePlusDirsFile(): string {
+  return join(tmpdir(), `setup-vp-dirs-${randomUUID()}.txt`);
+}
+
+export function removeVitePlusDirsFile(filePath: string): void {
+  rmSync(filePath, { force: true });
+}
+
+export function readVitePlusDirs(filePath: string): VitePlusDirs | undefined {
+  try {
+    return parseVitePlusDirs(readFileSync(filePath, "utf8"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+export function parseVitePlusDirs(output: string): VitePlusDirs | undefined {
+  const dirs = new Map<string, string>();
+
+  for (const line of output.split(/\r?\n/)) {
+    const separator = line.indexOf("\t");
+    if (separator < 1) continue;
+    const key = line.slice(0, separator).replace(/^\uFEFF/, "");
+    const value = line.slice(separator + 1).trim();
+    if (value) dirs.set(key, value);
+  }
+
+  const data = dirs.get("data");
+  const bin = dirs.get("bin");
+  const cache = dirs.get("cache");
+  const config = dirs.get("config");
+  const state = dirs.get("state");
+  if (!data || !bin || !cache || !config || !state) return undefined;
+
+  return { data, bin, cache, config, state };
+}
+
+export function getInstallScriptCommand(
+  url: string,
+  platform: NodeJS.Platform = process.platform,
+): { command: string; args: string[] } {
+  if (platform === "win32") {
+    const script = [
+      `$dirsFile = $env:${VP_DIRS_FILE_ENV}`,
+      `Set-Content -LiteralPath $dirsFile -Value '' -NoNewline`,
+      `. ([scriptblock]::Create((irm -TimeoutSec ${PWSH_TIMEOUT_SEC} ${url})))`,
+      `$vpPath = if ($script:ShimDir) { Join-Path $script:ShimDir 'vp.exe' } else { $null }`,
+      `if ($vpPath -and (Test-Path -LiteralPath $vpPath)) {`,
+      `  $env:VP_DUMP_DIRS = '1'`,
+      `  & $vpPath | Set-Content -LiteralPath $dirsFile`,
+      `  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`,
+      `}`,
+    ].join("\n");
+    return { command: "pwsh", args: ["-Command", script] };
+  }
+
+  const script =
+    `set -o pipefail; : > "$${VP_DIRS_FILE_ENV}"; ` +
+    `curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | { ` +
+    `source /dev/stdin; ` +
+    `if [ -n "\${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then ` +
+    `VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$${VP_DIRS_FILE_ENV}"; ` +
+    `fi; }`;
+  return { command: "bash", args: ["-c", script] };
+}

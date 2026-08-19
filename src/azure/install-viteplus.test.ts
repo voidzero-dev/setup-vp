@@ -1,5 +1,19 @@
 import { describe, expect, it, vi } from "vite-plus/test";
+import { writeFileSync } from "node:fs";
 import { installVitePlus } from "./install-viteplus.js";
+
+function writeDirsFile(env: Record<string, string>, bin: string): void {
+  writeFileSync(
+    env.SETUP_VP_DIRS_FILE,
+    [
+      "data\t/test/data",
+      `bin\t${bin}`,
+      "cache\t/test/cache",
+      "config\t/test/config",
+      "state\t/test/state",
+    ].join("\n"),
+  );
+}
 
 describe("installVitePlus", () => {
   it("uses PowerShell installers on Windows and bash installers on Unix", async () => {
@@ -77,5 +91,27 @@ describe("installVitePlus", () => {
       [string, Record<string, string>, NodeJS.Platform?]
     >;
     expect(installCalls[0]?.[1]?.VP_PR_VERSION).toBe(sha);
+    expect(installCalls[0]?.[1]?.VP_VPDIRS_AWARE).toBe("1");
+  });
+
+  it("prepends the bin directory reported by the installed payload", async () => {
+    const prependPath = vi.fn();
+    const env = { PATH: "/usr/bin" };
+    const runInstall = vi.fn((_url: string, installEnv: Record<string, string>) => {
+      writeDirsFile(installEnv, "/test/data/bin");
+      return 0;
+    });
+
+    await installVitePlus("latest", {
+      platform: "linux",
+      env,
+      prependPath,
+      sleep: async () => undefined,
+      runInstall,
+      logWarningFn: () => undefined,
+    });
+
+    expect(prependPath).toHaveBeenCalledWith("/test/data/bin");
+    expect(env.PATH).toBe("/test/data/bin:/usr/bin");
   });
 });

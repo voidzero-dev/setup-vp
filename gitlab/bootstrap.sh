@@ -41,16 +41,22 @@ setup_vp_install_viteplus_from() {
   setup_vp_url="$1"
   setup_vp_download "$setup_vp_url" "$setup_vp_install_tmp" || return 1
 
-  if [ -n "$setup_vp_pr_version" ]; then
-    VP_VERSION="$SETUP_VP_VERSION" \
-      VITE_PLUS_VERSION="$SETUP_VP_VERSION" \
-      VP_PR_VERSION="$setup_vp_pr_version" \
-      bash "$setup_vp_install_tmp"
-  else
-    VP_VERSION="$SETUP_VP_VERSION" \
-      VITE_PLUS_VERSION="$SETUP_VP_VERSION" \
-      bash "$setup_vp_install_tmp"
-  fi
+  : > "$setup_vp_dirs_tmp"
+  (
+    export VP_VERSION="$SETUP_VP_VERSION"
+    export VP_VPDIRS_AWARE="1"
+    export VITE_PLUS_VERSION="$SETUP_VP_VERSION"
+    if [ -n "$setup_vp_pr_version" ]; then
+      export VP_PR_VERSION="$setup_vp_pr_version"
+    fi
+
+    # Source the official installer so its VpDirs-resolved shim remains
+    # available long enough to ask the installed payload for its directories.
+    . "$setup_vp_install_tmp"
+    if [ -n "${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then
+      VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$setup_vp_dirs_tmp"
+    fi
+  )
 }
 
 setup_vp_try_install_urls() {
@@ -133,12 +139,18 @@ elif [[ "$SETUP_VP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; th
   setup_vp_pinned_ref="v${SETUP_VP_VERSION}"
 fi
 setup_vp_install_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-install.XXXXXX")"
+setup_vp_dirs_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-dirs.XXXXXX")"
 setup_vp_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/setup-vp-gitlab-runtime.XXXXXX")"
 setup_vp_runtime_tmp="${setup_vp_runtime_dir}/index.mjs"
-trap 'rm -f "$setup_vp_install_tmp" "$setup_vp_runtime_tmp"; rmdir "$setup_vp_runtime_dir" 2>/dev/null || true' EXIT
+trap 'rm -f "$setup_vp_install_tmp" "$setup_vp_dirs_tmp" "$setup_vp_runtime_tmp"; rmdir "$setup_vp_runtime_dir" 2>/dev/null || true' EXIT
 
 setup_vp_install_viteplus
-export PATH="$HOME/.vite-plus/bin:$PATH"
+setup_vp_bin_dir="$(awk -F '\t' '$1 == "bin" { print $2; exit }' "$setup_vp_dirs_tmp")"
+if [ -z "$setup_vp_bin_dir" ]; then
+  # Vite+ releases before VpDirs always use the monolithic layout.
+  setup_vp_bin_dir="$HOME/.vite-plus/bin"
+fi
+export PATH="$setup_vp_bin_dir:$PATH"
 setup_vp_export_env PATH "$PATH"
 
 if ! command -v node >/dev/null 2>&1; then
