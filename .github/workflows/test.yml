@@ -126,6 +126,39 @@ jobs:
             echo "$ACTUAL" | grep -q "^v${{ matrix.node-version }}\." || (echo "Expected Node.js v${{ matrix.node-version }}.x but got $ACTUAL" && exit 1)
           fi
 
+  # Reproduces https://github.com/voidzero-dev/setup-vp/issues/128: with no
+  # explicit Node.js input, the managed `node` shim should use Vite+'s normal
+  # project resolution and honor package.json#devEngines.runtime.
+  test-auto-node-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create project with devEngines.runtime
+        shell: bash
+        run: |
+          DIR="${RUNNER_TEMP//\\//}/test-project"
+          mkdir -p "$DIR"
+          echo '{"name":"test-project","private":true,"devEngines":{"runtime":{"name":"node","version":"22.18.0"}}}' > "$DIR/package.json"
+
+      - name: Setup Vite+ without a Node.js input
+        uses: ./
+        with:
+          working-directory: ${{ runner.temp }}/test-project
+          run-install: false
+          cache: false
+
+      - name: Verify project Node.js version
+        working-directory: ${{ runner.temp }}/test-project
+        shell: bash
+        run: |
+          ACTUAL=$(node --version)
+          echo "Node.js version: $ACTUAL"
+          if [ "$ACTUAL" != "v22.18.0" ]; then
+            echo "::error::expected Node.js v22.18.0 from devEngines.runtime, got $ACTUAL"
+            exit 1
+          fi
+
   # End-to-end check of node-manager: false. The installer must skip
   # node/npm/npx/corepack shim creation (VP_NODE_MANAGER=no) and the action
   # must run `vp env off`, so vp commands resolve the Node.js already on the
