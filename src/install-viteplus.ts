@@ -8,6 +8,7 @@ import {
   getInstallScriptCommand,
   readVitePlusDirs,
   removeVitePlusDirsFile,
+  supportsVitePlusDirs,
   VP_DIRS_FILE_ENV,
 } from "./ci/vp-dirs.js";
 import type { Inputs } from "./types.js";
@@ -30,12 +31,18 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
   const env = {
     ...process.env,
     VP_VERSION: version,
-    VP_VPDIRS_AWARE: "1",
     VITE_PLUS_VERSION: version,
   } as { [key: string]: string };
 
-  const dirsFile = createVitePlusDirsFile();
-  env[VP_DIRS_FILE_ENV] = dirsFile;
+  const detectDirs = supportsVitePlusDirs(version);
+  const dirsFile = detectDirs ? createVitePlusDirsFile() : undefined;
+  if (dirsFile) {
+    env.VP_VPDIRS_AWARE = "1";
+    env[VP_DIRS_FILE_ENV] = dirsFile;
+  } else {
+    delete env.VP_VPDIRS_AWARE;
+    delete env[VP_DIRS_FILE_ENV];
+  }
 
   // The install script auto-enables the Node.js manager on CI; VP_NODE_MANAGER
   // overrides that (yes/no; "no" skips node/npm/npx shim creation). The runtime
@@ -86,7 +93,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
   try {
     if (pinned.length > 0) {
       if (await tryUrls(pinned)) {
-        ensureVitePlusBinInPath(readVitePlusDirs(dirsFile)?.bin);
+        ensureVitePlusBinInPath(dirsFile ? readVitePlusDirs(dirsFile)?.bin : undefined);
         return;
       }
       warning(
@@ -95,7 +102,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     }
 
     if (await tryUrls(latest)) {
-      ensureVitePlusBinInPath(readVitePlusDirs(dirsFile)?.bin);
+      ensureVitePlusBinInPath(dirsFile ? readVitePlusDirs(dirsFile)?.bin : undefined);
       return;
     }
 
@@ -103,13 +110,17 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
       `Failed to install ${DISPLAY_NAME} after ${maxAttempts} attempts across ${totalUrls} URL(s): ${failureReason}`,
     );
   } finally {
-    removeVitePlusDirsFile(dirsFile);
+    if (dirsFile) removeVitePlusDirsFile(dirsFile);
   }
 }
 
 async function runInstallCommand(url: string, env: { [key: string]: string }): Promise<number> {
   const options = { env, ignoreReturnCode: true };
-  const { command, args } = getInstallScriptCommand(url);
+  const { command, args } = getInstallScriptCommand(
+    url,
+    process.platform,
+    env.VP_VPDIRS_AWARE === "1",
+  );
   return exec(command, args, options);
 }
 

@@ -20,4 +20,11 @@ describe("GitLab bootstrap", () => {
     expect(bootstrap).toContain("setup_vp_bin_dir=\"$(awk -F '\\t'");
     expect(bootstrap).toContain('export PATH="$setup_vp_bin_dir:$PATH"');
   });
+
+  it("limits VpDirs detection to supported versions", () => {
+    expect(bootstrap).toContain('setup_vp_detect_dirs="true"');
+    expect(bootstrap).toContain('[ "$setup_vp_minor" -lt 3 ]');
+    expect(bootstrap).toContain('if [ "$setup_vp_detect_dirs" = "true" ]; then');
+    expect(bootstrap).toContain('bash "$setup_vp_install_tmp"');
+  });
 });

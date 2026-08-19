@@ -53,13 +53,17 @@ describe("installVitePlus", () => {
 
   it("installs exact versions with the release-tag script before the latest script", async () => {
     // Fail every attempt so the full URL order is observable.
-    const runInstall = vi.fn((_url: string) => 1);
+    const runInstall = vi.fn((_url: string, _env: Record<string, string>) => 1);
     const warnings: string[] = [];
 
     await expect(
       installVitePlus("0.2.9", {
         platform: "linux",
-        env: { PATH: "" },
+        env: {
+          PATH: "",
+          VP_VPDIRS_AWARE: "1",
+          SETUP_VP_DIRS_FILE: "/tmp/stale-vp-dirs",
+        },
         prependPath: () => undefined,
         sleep: async () => undefined,
         runInstall,
@@ -72,6 +76,9 @@ describe("installVitePlus", () => {
     expect(urls[1]).toContain("jsdelivr");
     expect(urls[4]).toBe("https://viteplus.dev/install.sh");
     expect(warnings.some((message) => message.includes("Falling back to the latest"))).toBe(true);
+    const installEnv = runInstall.mock.calls[0]?.[1] as Record<string, string>;
+    expect(installEnv.VP_VPDIRS_AWARE).toBeUndefined();
+    expect(installEnv.SETUP_VP_DIRS_FILE).toBeUndefined();
   });
 
   it("routes pkg.pr.new commit builds through VP_PR_VERSION", async () => {
@@ -92,6 +99,7 @@ describe("installVitePlus", () => {
     >;
     expect(installCalls[0]?.[1]?.VP_PR_VERSION).toBe(sha);
     expect(installCalls[0]?.[1]?.VP_VPDIRS_AWARE).toBe("1");
+    expect(installCalls[0]?.[1]?.SETUP_VP_DIRS_FILE).toMatch(/setup-vp-dirs-.*\.txt$/);
   });
 
   it("prepends the bin directory reported by the installed payload", async () => {

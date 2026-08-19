@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pkgPrNewCommitSha } from "./install-script-urls.js";
 
 // Keep installer network calls bounded so a hung source fails over quickly.
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 15";
@@ -15,6 +16,26 @@ export interface VitePlusDirs {
   cache: string;
   config: string;
   state: string;
+}
+
+const EXACT_VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$/;
+
+export function supportsVitePlusDirs(version: string): boolean {
+  if (pkgPrNewCommitSha(version)) return true;
+
+  const match = version.match(EXACT_VERSION_RE);
+  // Dist-tags resolve during installation. They track current releases, so
+  // keep VpDirs detection enabled when an exact version is not available.
+  if (!match) return true;
+
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  if (major > 0 || minor > 3) return true;
+  if (major === 0 && minor === 3) {
+    return patch > 0 || (patch === 0 && match[4] === undefined);
+  }
+  return false;
 }
 
 export function createVitePlusDirsFile(): string {
@@ -58,8 +79,19 @@ export function parseVitePlusDirs(output: string): VitePlusDirs | undefined {
 export function getInstallScriptCommand(
   url: string,
   platform: NodeJS.Platform = process.platform,
+  detectDirs = true,
 ): { command: string; args: string[] } {
   if (platform === "win32") {
+    if (!detectDirs) {
+      return {
+        command: "pwsh",
+        args: [
+          "-Command",
+          `& ([scriptblock]::Create((irm -TimeoutSec ${PWSH_TIMEOUT_SEC} ${url})))`,
+        ],
+      };
+    }
+
     const script = [
       `$dirsFile = $env:${VP_DIRS_FILE_ENV}`,
       `Set-Content -LiteralPath $dirsFile -Value '' -NoNewline`,
@@ -72,6 +104,13 @@ export function getInstallScriptCommand(
       `}`,
     ].join("\n");
     return { command: "pwsh", args: ["-Command", script] };
+  }
+
+  if (!detectDirs) {
+    return {
+      command: "bash",
+      args: ["-c", `set -o pipefail; curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | bash`],
+    };
   }
 
   const script =

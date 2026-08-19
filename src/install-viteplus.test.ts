@@ -55,6 +55,8 @@ describe("installVitePlus", () => {
   beforeEach(() => {
     vi.stubEnv("VP_PR_VERSION", undefined);
     vi.stubEnv("VP_NODE_MANAGER", undefined);
+    vi.stubEnv("VP_VPDIRS_AWARE", undefined);
+    vi.stubEnv("SETUP_VP_DIRS_FILE", undefined);
   });
 
   afterEach(() => {
@@ -78,11 +80,18 @@ describe("installVitePlus", () => {
   it("should fall back to the legacy bin for Vite+ releases without VpDirs", async () => {
     vi.stubEnv("HOME", "/home/runner");
     vi.stubEnv("PATH", "/usr/bin");
+    vi.stubEnv("VP_VPDIRS_AWARE", "1");
+    vi.stubEnv("SETUP_VP_DIRS_FILE", "/tmp/stale-vp-dirs");
     vi.mocked(exec).mockResolvedValueOnce(0);
 
-    await installVitePlus(baseInputs);
+    await installVitePlus({ ...baseInputs, version: "0.2.9" });
 
     expect(addPath).toHaveBeenCalledWith("/home/runner/.vite-plus/bin");
+    const [_command, args, options] = vi.mocked(exec).mock.calls[0];
+    expect((args as string[])[1]).toContain("| bash");
+    expect((args as string[])[1]).not.toContain("VP_DUMP_DIRS");
+    expect((options as { env: Record<string, string> }).env.VP_VPDIRS_AWARE).toBeUndefined();
+    expect((options as { env: Record<string, string> }).env.SETUP_VP_DIRS_FILE).toBeUndefined();
   });
 
   it("should retry on transient failure and eventually succeed", async () => {

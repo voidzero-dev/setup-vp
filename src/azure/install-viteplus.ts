@@ -8,6 +8,7 @@ import {
   getInstallScriptCommand,
   readVitePlusDirs,
   removeVitePlusDirsFile,
+  supportsVitePlusDirs,
   VP_DIRS_FILE_ENV,
 } from "../ci/vp-dirs.js";
 import { logWarning } from "./commands.js";
@@ -26,7 +27,7 @@ function runInstallCommand(
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform,
 ): number {
-  const { command, args } = getInstallScriptCommand(url, platform);
+  const { command, args } = getInstallScriptCommand(url, platform, env.VP_VPDIRS_AWARE === "1");
   const result = spawnSync(command, args, {
     env: { ...process.env, ...env },
     stdio: "inherit",
@@ -61,12 +62,18 @@ export async function installVitePlus(
       ),
     ),
     VP_VERSION: version,
-    VP_VPDIRS_AWARE: "1",
     VITE_PLUS_VERSION: version,
   };
 
-  const dirsFile = createVitePlusDirsFile();
-  env[VP_DIRS_FILE_ENV] = dirsFile;
+  const detectDirs = supportsVitePlusDirs(version);
+  const dirsFile = detectDirs ? createVitePlusDirsFile() : undefined;
+  if (dirsFile) {
+    env.VP_VPDIRS_AWARE = "1";
+    env[VP_DIRS_FILE_ENV] = dirsFile;
+  } else {
+    delete env.VP_VPDIRS_AWARE;
+    delete env[VP_DIRS_FILE_ENV];
+  }
 
   const prVersion = pkgPrNewCommitSha(version);
   if (prVersion) {
@@ -114,7 +121,9 @@ export async function installVitePlus(
 
   const ensureBinInPath = (): void => {
     // Pre-VpDirs releases cannot emit a dump and always use this legacy path.
-    const binDir = readVitePlusDirs(dirsFile)?.bin ?? join(getVitePlusHome(platform), "bin");
+    const binDir =
+      (dirsFile ? readVitePlusDirs(dirsFile)?.bin : undefined) ??
+      join(getVitePlusHome(platform), "bin");
     const separator = platform === "win32" ? ";" : ":";
     if (!targetEnv.PATH?.split(separator).includes(binDir)) {
       targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
@@ -142,6 +151,6 @@ export async function installVitePlus(
       `Failed to install Vite+ after ${maxAttempts} attempts across ${totalUrls} URL(s): ${failureReason}`,
     );
   } finally {
-    removeVitePlusDirsFile(dirsFile);
+    if (dirsFile) removeVitePlusDirsFile(dirsFile);
   }
 }

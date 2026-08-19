@@ -41,20 +41,24 @@ setup_vp_install_viteplus_from() {
   setup_vp_url="$1"
   setup_vp_download "$setup_vp_url" "$setup_vp_install_tmp" || return 1
 
-  : > "$setup_vp_dirs_tmp"
   (
     export VP_VERSION="$SETUP_VP_VERSION"
-    export VP_VPDIRS_AWARE="1"
     export VITE_PLUS_VERSION="$SETUP_VP_VERSION"
     if [ -n "$setup_vp_pr_version" ]; then
       export VP_PR_VERSION="$setup_vp_pr_version"
     fi
 
-    # Source the official installer so its VpDirs-resolved shim remains
-    # available long enough to ask the installed payload for its directories.
-    . "$setup_vp_install_tmp"
-    if [ -n "${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then
-      VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$setup_vp_dirs_tmp"
+    if [ "$setup_vp_detect_dirs" = "true" ]; then
+      : > "$setup_vp_dirs_tmp"
+      export VP_VPDIRS_AWARE="1"
+      # Source the official installer so its VpDirs-resolved shim remains
+      # available long enough to ask the installed payload for its directories.
+      . "$setup_vp_install_tmp"
+      if [ -n "${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then
+        VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$setup_vp_dirs_tmp"
+      fi
+    else
+      bash "$setup_vp_install_tmp"
     fi
   )
 }
@@ -128,6 +132,25 @@ if [[ "$SETUP_VP_VERSION" =~ ^0\.0\.0-commit\.([0-9a-fA-F]{40})$ ]]; then
   setup_vp_pr_version="${BASH_REMATCH[1]}"
 fi
 
+# VpDirs was added in Vite+ 0.3.0. Preview builds also contain it. Dist-tags
+# resolve during installation and track current releases, so keep detection on
+# when an exact version is not available.
+setup_vp_detect_dirs="true"
+if [ -z "$setup_vp_pr_version" ] &&
+  [[ "$SETUP_VP_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]
+then
+  setup_vp_major=$((10#${BASH_REMATCH[1]}))
+  setup_vp_minor=$((10#${BASH_REMATCH[2]}))
+  setup_vp_patch=$((10#${BASH_REMATCH[3]}))
+  setup_vp_prerelease="${BASH_REMATCH[4]}"
+  if [ "$setup_vp_major" -eq 0 ] &&
+    { [ "$setup_vp_minor" -lt 3 ] ||
+      { [ "$setup_vp_minor" -eq 3 ] && [ "$setup_vp_patch" -eq 0 ] && [ -n "$setup_vp_prerelease" ]; }; }
+  then
+    setup_vp_detect_dirs="false"
+  fi
+fi
+
 # Git ref that serves the install script for the requested version: the
 # preview build's commit, or the `v<version>` release tag for an exact
 # version. Dist-tags like "latest" do not map to a ref and keep the latest
@@ -145,7 +168,10 @@ setup_vp_runtime_tmp="${setup_vp_runtime_dir}/index.mjs"
 trap 'rm -f "$setup_vp_install_tmp" "$setup_vp_dirs_tmp" "$setup_vp_runtime_tmp"; rmdir "$setup_vp_runtime_dir" 2>/dev/null || true' EXIT
 
 setup_vp_install_viteplus
-setup_vp_bin_dir="$(awk -F '\t' '$1 == "bin" { print $2; exit }' "$setup_vp_dirs_tmp")"
+setup_vp_bin_dir=""
+if [ "$setup_vp_detect_dirs" = "true" ]; then
+  setup_vp_bin_dir="$(awk -F '\t' '$1 == "bin" { print $2; exit }' "$setup_vp_dirs_tmp")"
+fi
 if [ -z "$setup_vp_bin_dir" ]; then
   # Vite+ releases before VpDirs always use the monolithic layout.
   setup_vp_bin_dir="$HOME/.vite-plus/bin"
