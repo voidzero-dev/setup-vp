@@ -109,11 +109,14 @@ export function getInstallScriptCommand(
   }
 
   const script =
-    `set -o pipefail; : > "$${VP_DIRS_FILE_ENV}"; ` +
-    `curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | { ` +
-    `source /dev/stdin; ` +
+    `set -eo pipefail; ` +
+    `installer_file="$(mktemp "\${TMPDIR:-/tmp}/setup-vp-install.XXXXXX")"; ` +
+    `trap 'rm -f "$installer_file"' EXIT; ` +
+    `: > "$${VP_DIRS_FILE_ENV}"; ` +
+    `curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} -o "$installer_file"; ` +
+    `source "$installer_file"; ` +
     `if [ -n "\${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then ` +
     `VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$${VP_DIRS_FILE_ENV}"; ` +
-    `fi; }`;
+    `fi`;
   return { command: "bash", args: ["-c", script] };
 }

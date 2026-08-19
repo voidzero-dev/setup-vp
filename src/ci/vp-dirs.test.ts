@@ -43,7 +43,10 @@ describe("Vite+ directory resolution", () => {
     const command = getInstallScriptCommand("https://example.com/install.sh", "linux");
 
     expect(command.command).toBe("bash");
-    expect(command.args[1]).toContain("source /dev/stdin");
+    expect(command.args[1]).toContain('mktemp "${TMPDIR:-/tmp}/setup-vp-install.XXXXXX"');
+    expect(command.args[1]).toContain('-o "$installer_file"');
+    expect(command.args[1]).toContain('source "$installer_file"');
+    expect(command.args[1]).not.toContain("source /dev/stdin");
     expect(command.args[1]).toContain('VP_DUMP_DIRS=1 "$SHIM_DIR/vp"');
     expect(command.args[1]).toContain('> "$SETUP_VP_DIRS_FILE"');
   });

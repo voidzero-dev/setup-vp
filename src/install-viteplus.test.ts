@@ -214,7 +214,7 @@ describe("installVitePlus", () => {
     expect(exec).toHaveBeenCalledTimes(8);
   });
 
-  it("should source the bash installer and dump its resolved directories", async () => {
+  it("should source the downloaded bash installer and dump its resolved directories", async () => {
     vi.mocked(exec).mockResolvedValueOnce(0);
 
     await installVitePlus(baseInputs);
@@ -222,10 +222,12 @@ describe("installVitePlus", () => {
     const [cmd, args] = vi.mocked(exec).mock.calls[0];
     expect(cmd).toBe("bash");
     const script = (args as string[])[1];
-    expect(script).toMatch(/^set -o pipefail;/);
+    expect(script).toMatch(/^set -eo pipefail;/);
     expect(script).toContain("--connect-timeout");
     expect(script).toContain("--max-time");
-    expect(script).toContain("source /dev/stdin");
+    expect(script).toContain('-o "$installer_file"');
+    expect(script).toContain('source "$installer_file"');
+    expect(script).not.toContain("source /dev/stdin");
     expect(script).toContain('VP_DUMP_DIRS=1 "$SHIM_DIR/vp"');
   });
 

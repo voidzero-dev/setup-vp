@@ -82,7 +82,9 @@ jobs:
 
       - name: Verify installation
         shell: bash
-        run: vp --version | grep -F "${{ steps.preview.outputs.version }}"
+        run: |
+          vp env current
+          vp --version | grep -F "${{ steps.preview.outputs.version }}"
 
   test-node-version:
     strategy:
