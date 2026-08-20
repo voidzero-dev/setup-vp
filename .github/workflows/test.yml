@@ -397,7 +397,7 @@ jobs:
 
       - name: Verify cache & path existence
         run: |
-          Task cache hit: "${{ steps.setup.outputs.task-cache-hit }}"
+          echo "Task cache hit: ${{ steps.setup.outputs.task-cache-hit }}"
           ls "./node_modules/.vite/task-cache"
 
   test-vp-exec:
