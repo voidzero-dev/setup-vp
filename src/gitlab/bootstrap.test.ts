@@ -16,7 +16,8 @@ describe("GitLab bootstrap", () => {
 
   it("uses the bin directory reported by the installed payload", () => {
     expect(bootstrap).toContain('export VP_VPDIRS_AWARE="1"');
-    expect(bootstrap).toContain('VP_DUMP_DIRS=1 "$SHIM_DIR/vp"');
+    expect(bootstrap).toContain('"$setup_vp_shim_dir/vp" --version');
+    expect(bootstrap).toContain('VP_DUMP_DIRS=1 "$setup_vp_shim_dir/vp"');
     expect(bootstrap).toContain('setup_vp_bin_dir="$(setup_vp_read_bin_dir "$setup_vp_dirs_tmp")"');
     expect(bootstrap).toContain('export PATH="$setup_vp_bin_dir:$PATH"');
   });
@@ -36,6 +37,14 @@ describe("GitLab bootstrap", () => {
     expect(bootstrap).toContain('[ "$setup_vp_minor" -lt 3 ]');
     expect(bootstrap).toContain('if [ "$setup_vp_detect_dirs" = "true" ]; then');
     expect(bootstrap).toContain('bash "$setup_vp_install_tmp"');
+  });
+
+  it("checks the installed version for dist-tags", () => {
+    expect(bootstrap).toContain('setup_vp_check_installed_version="true"');
+    expect(bootstrap).toContain(
+      'setup_vp_installed_version="$(setup_vp_read_installed_version "$setup_vp_dirs_tmp")"',
+    );
+    expect(bootstrap).toContain('[ "$setup_vp_minor" -lt 3 ]');
   });
 
   it("preserves a sourced installer's failure status", () => {

@@ -93,7 +93,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
   try {
     if (pinned.length > 0) {
       if (await tryUrls(pinned)) {
-        ensureVitePlusBinInPath(dirsFile);
+        ensureVitePlusBinInPath(version, dirsFile);
         return;
       }
       warning(
@@ -102,7 +102,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     }
 
     if (await tryUrls(latest)) {
-      ensureVitePlusBinInPath(dirsFile);
+      ensureVitePlusBinInPath(version, dirsFile);
       return;
     }
 
@@ -124,8 +124,8 @@ async function runInstallCommand(url: string, env: { [key: string]: string }): P
   return exec(command, args, options);
 }
 
-function ensureVitePlusBinInPath(dirsFile: string | undefined): void {
-  const binDir = resolveVitePlusBinDir(dirsFile, join(getVitePlusHome(), "bin"));
+function ensureVitePlusBinInPath(version: string, dirsFile: string | undefined): void {
+  const binDir = resolveVitePlusBinDir(version, dirsFile, join(getVitePlusHome(), "bin"));
   if (!process.env.PATH?.split(delimiter).includes(binDir)) {
     addPath(binDir);
   }

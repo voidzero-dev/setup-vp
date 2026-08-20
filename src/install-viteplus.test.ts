@@ -102,10 +102,24 @@ describe("installVitePlus", () => {
     expect((options as { env: Record<string, string> }).env.SETUP_VP_DIRS_FILE).toBeUndefined();
   });
 
+  it("should use the installed version to resolve the latest dist-tag", async () => {
+    vi.stubEnv("HOME", "/home/runner");
+    vi.stubEnv("PATH", "/usr/bin");
+    vi.mocked(exec).mockImplementationOnce(async (_command, _args, options) => {
+      const env = (options as { env: Record<string, string> }).env;
+      writeFileSync(env.SETUP_VP_DIRS_FILE, "vp v0.2.9\n");
+      return 0;
+    });
+
+    await installVitePlus(baseInputs);
+
+    expect(addPath).toHaveBeenCalledWith("/home/runner/.vite-plus/bin");
+  });
+
   it.each([
-    { version: "0.3.0", output: undefined },
+    { version: "0.3.0", output: "vp v0.2.9\n" },
     { version: `0.0.0-commit.${commitSha}`, output: "bin\t/test/data/bin\n" },
-    { version: "latest", output: "" },
+    { version: "latest", output: "vp v0.3.0\n" },
   ])("should fail when $version does not report valid VpDirs", async ({ version, output }) => {
     vi.mocked(exec).mockImplementationOnce(async (_command, _args, options) => {
       if (output !== undefined) {
@@ -261,7 +275,8 @@ describe("installVitePlus", () => {
     expect(script).toContain('-o "$installer_file"');
     expect(script).toContain('source "$installer_file"');
     expect(script).not.toContain("source /dev/stdin");
-    expect(script).toContain('VP_DUMP_DIRS=1 "$SHIM_DIR/vp"');
+    expect(script).toContain('"$vp_dir/vp" --version');
+    expect(script).toContain('VP_DUMP_DIRS=1 "$vp_dir/vp"');
   });
 
   it("should declare VpDirs support to the installer", async () => {

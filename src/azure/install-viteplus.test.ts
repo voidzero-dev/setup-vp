@@ -102,10 +102,31 @@ describe("installVitePlus", () => {
     expect(installCalls[0]?.[1]?.SETUP_VP_DIRS_FILE).toMatch(/setup-vp-dirs-.*\.txt$/);
   });
 
+  it("uses the installed version to resolve the latest dist-tag", async () => {
+    const prependPath = vi.fn();
+    const env = { HOME: "/home/runner", PATH: "/usr/bin" };
+    const runInstall = vi.fn((_url: string, installEnv: Record<string, string>) => {
+      writeFileSync(installEnv.SETUP_VP_DIRS_FILE, "vp v0.2.9\n");
+      return 0;
+    });
+
+    await installVitePlus("latest", {
+      platform: "linux",
+      env,
+      prependPath,
+      sleep: async () => undefined,
+      runInstall,
+      logWarningFn: () => undefined,
+    });
+
+    expect(prependPath).toHaveBeenCalledWith("/home/runner/.vite-plus/bin");
+    expect(env.PATH).toBe("/home/runner/.vite-plus/bin:/usr/bin");
+  });
+
   it.each([
-    { version: "0.3.0", output: undefined },
+    { version: "0.3.0", output: "vp v0.2.9\n" },
     { version: `0.0.0-commit.${"a".repeat(40)}`, output: "bin\t/test/data/bin\n" },
-    { version: "latest", output: "" },
+    { version: "latest", output: "vp v0.3.0\n" },
   ])("fails when $version does not report valid VpDirs", async ({ version, output }) => {
     const prependPath = vi.fn();
     const runInstall = vi.fn((_url: string, env: Record<string, string>) => {

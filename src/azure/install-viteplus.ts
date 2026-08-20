@@ -16,9 +16,11 @@ import { logWarning } from "./commands.js";
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
 
-export function getVitePlusHome(platform: NodeJS.Platform = process.platform): string {
-  const home =
-    platform === "win32" ? process.env.USERPROFILE || homedir() : process.env.HOME || homedir();
+export function getVitePlusHome(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const home = platform === "win32" ? env.USERPROFILE || homedir() : env.HOME || homedir();
   return join(home, ".vite-plus");
 }
 
@@ -120,7 +122,11 @@ export async function installVitePlus(
   };
 
   const ensureBinInPath = (): void => {
-    const binDir = resolveVitePlusBinDir(dirsFile, join(getVitePlusHome(platform), "bin"));
+    const binDir = resolveVitePlusBinDir(
+      version,
+      dirsFile,
+      join(getVitePlusHome(platform, targetEnv), "bin"),
+    );
     const separator = platform === "win32" ? ";" : ":";
     if (!targetEnv.PATH?.split(separator).includes(binDir)) {
       targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;

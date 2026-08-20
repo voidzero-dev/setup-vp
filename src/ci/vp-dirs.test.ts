@@ -6,6 +6,7 @@ describe("Vite+ directory resolution", () => {
     expect(
       parseVitePlusDirs(
         [
+          "vp v0.3.0",
           "data\t/home/runner/.local/share/vite-plus",
           "bin\t/home/runner/.local/share/vite-plus/bin",
           "cache\t/home/runner/.cache/vite-plus",
@@ -47,8 +48,9 @@ describe("Vite+ directory resolution", () => {
     expect(command.args[1]).toContain('-o "$installer_file"');
     expect(command.args[1]).toContain('source "$installer_file"');
     expect(command.args[1]).not.toContain("source /dev/stdin");
-    expect(command.args[1]).toContain('VP_DUMP_DIRS=1 "$SHIM_DIR/vp"');
-    expect(command.args[1]).toContain('> "$SETUP_VP_DIRS_FILE"');
+    expect(command.args[1]).toContain('"$vp_dir/vp" --version');
+    expect(command.args[1]).toContain('VP_DUMP_DIRS=1 "$vp_dir/vp"');
+    expect(command.args[1]).toContain('>> "$SETUP_VP_DIRS_FILE"');
   });
 
   it("dumps directories from the installer-resolved Windows shim", () => {
@@ -56,7 +58,8 @@ describe("Vite+ directory resolution", () => {
 
     expect(command.command).toBe("pwsh");
     expect(command.args[1]).toContain(". ([scriptblock]::Create");
-    expect(command.args[1]).toContain("Join-Path $script:ShimDir 'vp.exe'");
+    expect(command.args[1]).toContain("Join-Path $vpDir 'vp.exe'");
+    expect(command.args[1]).toContain("& $vpPath --version");
     expect(command.args[1]).toContain("$env:VP_DUMP_DIRS = '1'");
   });
 

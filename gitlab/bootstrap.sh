@@ -62,6 +62,27 @@ setup_vp_read_bin_dir() {
   ' "$1"
 }
 
+setup_vp_read_installed_version() {
+  awk '
+    $1 == "vp" && $2 ~ /^v?[0-9]/ {
+      version = $2
+      sub(/^v/, "", version)
+      print version
+      exit
+    }
+    {
+      for (index = 1; index < NF; index++) {
+        if ($index == "Global:" && $(index + 1) ~ /^v?[0-9]/) {
+          version = $(index + 1)
+          sub(/^v/, "", version)
+          print version
+          exit
+        }
+      }
+    }
+  ' "$1"
+}
+
 setup_vp_install_viteplus_from() {
   setup_vp_url="$1"
   setup_vp_download "$setup_vp_url" "$setup_vp_install_tmp" || return 1
@@ -79,8 +100,10 @@ setup_vp_install_viteplus_from() {
       # Source the official installer so its VpDirs-resolved shim remains
       # available long enough to ask the installed payload for its directories.
       . "$setup_vp_install_tmp" || return $?
-      if [ -n "${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then
-        VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$setup_vp_dirs_tmp"
+      setup_vp_shim_dir="${SHIM_DIR:-${INSTALL_DIR:-${VP_HOME:-$HOME/.vite-plus}}/bin}"
+      if [ -x "$setup_vp_shim_dir/vp" ]; then
+        "$setup_vp_shim_dir/vp" --version > "$setup_vp_dirs_tmp"
+        VP_DUMP_DIRS=1 "$setup_vp_shim_dir/vp" >> "$setup_vp_dirs_tmp"
       fi
     else
       bash "$setup_vp_install_tmp"
@@ -157,17 +180,20 @@ if [[ "$SETUP_VP_VERSION" =~ ^0\.0\.0-commit\.([0-9a-fA-F]{40})$ ]]; then
   setup_vp_pr_version="${BASH_REMATCH[1]}"
 fi
 
-# VpDirs was added in Vite+ 0.3.0. Preview builds also contain it. Dist-tags
-# resolve during installation and track current releases, so keep detection on
-# when an exact version is not available.
+# VpDirs was added in Vite+ 0.3.0. Preview builds also contain it. For a
+# dist-tag, probe the installed version before a missing VpDirs result selects
+# the legacy layout.
 setup_vp_detect_dirs="true"
-if [ -z "$setup_vp_pr_version" ] &&
-  [[ "$SETUP_VP_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]
-then
-  setup_vp_major=$((10#${BASH_REMATCH[1]}))
-  setup_vp_minor=$((10#${BASH_REMATCH[2]}))
-  if [ "$setup_vp_major" -eq 0 ] && [ "$setup_vp_minor" -lt 3 ]; then
-    setup_vp_detect_dirs="false"
+setup_vp_check_installed_version="false"
+if [ -z "$setup_vp_pr_version" ]; then
+  if [[ "$SETUP_VP_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+    setup_vp_major=$((10#${BASH_REMATCH[1]}))
+    setup_vp_minor=$((10#${BASH_REMATCH[2]}))
+    if [ "$setup_vp_major" -eq 0 ] && [ "$setup_vp_minor" -lt 3 ]; then
+      setup_vp_detect_dirs="false"
+    fi
+  else
+    setup_vp_check_installed_version="true"
   fi
 fi
 
@@ -190,8 +216,21 @@ trap 'rm -f "$setup_vp_install_tmp" "$setup_vp_dirs_tmp" "$setup_vp_runtime_tmp"
 setup_vp_install_viteplus
 if [ "$setup_vp_detect_dirs" = "true" ]; then
   if ! setup_vp_bin_dir="$(setup_vp_read_bin_dir "$setup_vp_dirs_tmp")"; then
-    echo "setup-vp: Vite+ was installed successfully, but setup-vp could not resolve its VpDirs." >&2
-    return 1 2>/dev/null || exit 1
+    setup_vp_bin_dir=""
+    if [ "$setup_vp_check_installed_version" = "true" ]; then
+      setup_vp_installed_version="$(setup_vp_read_installed_version "$setup_vp_dirs_tmp")"
+      if [[ "$setup_vp_installed_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+        setup_vp_major=$((10#${BASH_REMATCH[1]}))
+        setup_vp_minor=$((10#${BASH_REMATCH[2]}))
+        if [ "$setup_vp_major" -eq 0 ] && [ "$setup_vp_minor" -lt 3 ]; then
+          setup_vp_bin_dir="$HOME/.vite-plus/bin"
+        fi
+      fi
+    fi
+    if [ -z "$setup_vp_bin_dir" ]; then
+      echo "setup-vp: Vite+ was installed successfully, but setup-vp could not resolve its VpDirs." >&2
+      return 1 2>/dev/null || exit 1
+    fi
   fi
 else
   # Vite+ releases before VpDirs use the monolithic layout.

@@ -3,6 +3,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pkgPrNewCommitSha } from "./install-script-urls.js";
+import { parseInstalledVpVersion } from "./version.js";
 
 // Keep installer network calls bounded so a hung source fails over quickly.
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 15";
@@ -24,8 +25,8 @@ export function supportsVitePlusDirs(version: string): boolean {
   if (pkgPrNewCommitSha(version)) return true;
 
   const match = version.match(EXACT_VERSION_RE);
-  // Dist-tags resolve during installation. They track current releases, so
-  // keep VpDirs detection enabled when an exact version is not available.
+  // Dist-tags resolve during installation. Keep the probe enabled so the
+  // installed version can decide whether missing VpDirs output is valid.
   if (!match) return true;
 
   const major = Number(match[1]);
@@ -42,22 +43,43 @@ export function removeVitePlusDirsFile(filePath: string): void {
 }
 
 export function readVitePlusDirs(filePath: string): VitePlusDirs | undefined {
+  const output = readVitePlusProbe(filePath);
+  return output === undefined ? undefined : parseVitePlusDirs(output);
+}
+
+function readVitePlusProbe(filePath: string): string | undefined {
   try {
-    return parseVitePlusDirs(readFileSync(filePath, "utf8"));
+    return readFileSync(filePath, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
 }
 
-export function resolveVitePlusBinDir(dirsFile: string | undefined, legacyBinDir: string): string {
-  if (!dirsFile) return legacyBinDir;
-
-  const dirs = readVitePlusDirs(dirsFile);
-  if (!dirs) {
+export function resolveVitePlusBinDir(
+  requestedVersion: string,
+  dirsFile: string | undefined,
+  legacyBinDir: string,
+): string {
+  if (!dirsFile) {
+    if (!supportsVitePlusDirs(requestedVersion)) return legacyBinDir;
     throw new Error("Vite+ was installed successfully, but setup-vp could not resolve its VpDirs.");
   }
-  return dirs.bin;
+
+  const output = readVitePlusProbe(dirsFile);
+  const dirs = output === undefined ? undefined : parseVitePlusDirs(output);
+  if (dirs) return dirs.bin;
+
+  const hasKnownRequestedVersion =
+    pkgPrNewCommitSha(requestedVersion) !== undefined || EXACT_VERSION_RE.test(requestedVersion);
+  if (!hasKnownRequestedVersion && output !== undefined) {
+    const installedVersion = parseInstalledVpVersion(output);
+    if (installedVersion !== "unknown" && !supportsVitePlusDirs(installedVersion)) {
+      return legacyBinDir;
+    }
+  }
+
+  throw new Error("Vite+ was installed successfully, but setup-vp could not resolve its VpDirs.");
 }
 
 export function parseVitePlusDirs(output: string): VitePlusDirs | undefined {
@@ -101,10 +123,22 @@ export function getInstallScriptCommand(
 $dirsFile = $env:${VP_DIRS_FILE_ENV}
 Set-Content -LiteralPath $dirsFile -Value '' -NoNewline
 . ([scriptblock]::Create((irm -TimeoutSec ${PWSH_TIMEOUT_SEC} ${url})))
-$vpPath = if ($script:ShimDir) { Join-Path $script:ShimDir 'vp.exe' } else { $null }
-if ($vpPath -and (Test-Path -LiteralPath $vpPath)) {
+$vpDir = if ($script:ShimDir) {
+  $script:ShimDir
+} elseif ($InstallDir) {
+  Join-Path $InstallDir 'bin'
+} else {
+  Join-Path $env:USERPROFILE '.vite-plus\\bin'
+}
+$vpPath = Join-Path $vpDir 'vp.exe'
+if (-not (Test-Path -LiteralPath $vpPath)) {
+  $vpPath = Join-Path $vpDir 'vp.cmd'
+}
+if (Test-Path -LiteralPath $vpPath) {
+  & $vpPath --version | Set-Content -LiteralPath $dirsFile
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   $env:VP_DUMP_DIRS = '1'
-  & $vpPath | Set-Content -LiteralPath $dirsFile
+  & $vpPath | Add-Content -LiteralPath $dirsFile
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 `.trim();
@@ -126,8 +160,10 @@ trap 'rm -f "$installer_file"' EXIT
 : > "$${VP_DIRS_FILE_ENV}"
 curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} -o "$installer_file"
 source "$installer_file"
-if [ -n "\${SHIM_DIR:-}" ] && [ -x "$SHIM_DIR/vp" ]; then
-  VP_DUMP_DIRS=1 "$SHIM_DIR/vp" > "$${VP_DIRS_FILE_ENV}"
+vp_dir="\${SHIM_DIR:-\${INSTALL_DIR:-\${VP_HOME:-$HOME/.vite-plus}}/bin}"
+if [ -x "$vp_dir/vp" ]; then
+  "$vp_dir/vp" --version > "$${VP_DIRS_FILE_ENV}"
+  VP_DUMP_DIRS=1 "$vp_dir/vp" >> "$${VP_DIRS_FILE_ENV}"
 fi
 `.trim();
   return { command: "bash", args: ["-c", script] };
