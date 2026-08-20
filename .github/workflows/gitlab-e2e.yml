@@ -1,0 +1,197 @@
+name: GitLab E2E
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+    inputs:
+      setup_ref:
+        description: "Enter an exact setup-vp commit SHA or release tag. If empty, the workflow uses this commit."
+        required: false
+        default: ""
+      suite:
+        description: "Select the GitLab test suite."
+        type: choice
+        options: [full, required]
+        default: full
+      vite_plus_version:
+        description: "Vite+ version or dist-tag to install."
+        required: false
+        default: latest
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  gitlab-e2e:
+    name: GitLab E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Resolve test parameters
+        id: parameters
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REF_NAME: ${{ github.ref_name }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MANUAL_SETUP_REF: ${{ inputs.setup_ref }}
+          MANUAL_SUITE: ${{ inputs.suite }}
+          MANUAL_VITE_PLUS_VERSION: ${{ inputs.vite_plus_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          should_run=true
+          setup_vp_ref="$GITHUB_SHA"
+          suite=required
+          vite_plus_version=latest
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if [ "$PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+              should_run=false
+              echo "The workflow skips fork pull requests. The merge queue or a maintainer can test these changes."
+            else
+              setup_vp_ref="$PR_HEAD_SHA"
+              while IFS= read -r changed_path; do
+                case "$changed_path" in
+                  gitlab/* | src/gitlab/* | src/ci/* | dist/gitlab/* | .github/workflows/gitlab-e2e.yml | vite.config.ts | package.json | pnpm-lock.yaml | pnpm-workspace.yaml)
+                    suite=full
+                    break
+                    ;;
+                esac
+              done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
+            fi
+          elif [ "$EVENT_NAME" = "merge_group" ]; then
+            suite=full
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            setup_vp_ref="${MANUAL_SETUP_REF:-$GITHUB_SHA}"
+            suite="${MANUAL_SUITE:-full}"
+            vite_plus_version="${MANUAL_VITE_PLUS_VERSION:-latest}"
+          elif [ "$EVENT_NAME" = "push" ] && [[ "$EVENT_REF" == refs/tags/* ]]; then
+            setup_vp_ref="$EVENT_REF_NAME"
+            suite=full
+          elif [ "$EVENT_NAME" = "push" ]; then
+            suite=full
+          fi
+
+          {
+            echo "should_run=$should_run"
+            echo "setup_vp_ref=$setup_vp_ref"
+            echo "suite=$suite"
+            echo "vite_plus_version=$vite_plus_version"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$should_run" = "false" ]; then
+            {
+              echo "### GitLab E2E"
+              echo
+              echo "The workflow skipped this fork pull request. The merge queue tests the reviewed merge commit."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Trigger GitLab pipeline
+        if: steps.parameters.outputs.should_run == 'true'
+        id: trigger
+        env:
+          GITLAB_PROJECT_ID: "85578524"
+          GITLAB_TRIGGER_TOKEN: ${{ secrets.GITLAB_TRIGGER_TOKEN }}
+          SETUP_VP_REF: ${{ steps.parameters.outputs.setup_vp_ref }}
+          TEST_SUITE: ${{ steps.parameters.outputs.suite }}
+          VITE_PLUS_VERSION: ${{ steps.parameters.outputs.vite_plus_version }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GITLAB_TRIGGER_TOKEN" ]; then
+            echo "::error::This repository does not have the GITLAB_TRIGGER_TOKEN secret."
+            exit 1
+          fi
+
+          response="$(curl --silent --show-error --fail-with-body \
+            --request POST \
+            --form-string "token=$GITLAB_TRIGGER_TOKEN" \
+            --form-string "ref=main" \
+            --form-string "inputs[setup_vp_ref]=$SETUP_VP_REF" \
+            --form-string "inputs[suite]=$TEST_SUITE" \
+            --form-string "inputs[vite_plus_version]=$VITE_PLUS_VERSION" \
+            "https://gitlab.com/api/v4/projects/${GITLAB_PROJECT_ID}/trigger/pipeline")"
+
+          pipeline_id="$(jq -er '.id' <<< "$response")"
+          pipeline_url="$(jq -er '.web_url' <<< "$response")"
+          echo "Triggered GitLab pipeline: $pipeline_url"
+
+          {
+            echo "pipeline_id=$pipeline_id"
+            echo "pipeline_url=$pipeline_url"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### GitLab E2E"
+            echo
+            echo "- Pipeline: [$pipeline_id]($pipeline_url)"
+            echo "- setup-vp ref: \`$SETUP_VP_REF\`"
+            echo "- Suite: \`$TEST_SUITE\`"
+            echo "- Vite+ version: \`$VITE_PLUS_VERSION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for GitLab pipeline
+        if: steps.parameters.outputs.should_run == 'true'
+        env:
+          GITLAB_PROJECT_ID: "85578524"
+          GITLAB_PIPELINE_ID: ${{ steps.trigger.outputs.pipeline_id }}
+          GITLAB_PIPELINE_URL: ${{ steps.trigger.outputs.pipeline_url }}
+        run: |
+          set -euo pipefail
+
+          api_url="https://gitlab.com/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${GITLAB_PIPELINE_ID}"
+          deadline=$((SECONDS + 1800))
+          previous_status=""
+          final_status="timed_out"
+
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            if payload="$(curl --silent --show-error --fail --retry 3 --retry-delay 2 "$api_url")"; then
+              status="$(jq -er '.status' <<< "$payload")"
+              if [ "$status" != "$previous_status" ]; then
+                echo "GitLab pipeline status: $status"
+                previous_status="$status"
+              fi
+
+              case "$status" in
+                success)
+                  final_status=success
+                  break
+                  ;;
+                failed | canceled | skipped | manual)
+                  final_status="$status"
+                  break
+                  ;;
+              esac
+            else
+              echo "The workflow could not read the GitLab pipeline status. It will try again."
+            fi
+            sleep 10
+          done
+
+          {
+            echo "- Result: \`$final_status\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$final_status" = "success" ]; then
+            echo "GitLab pipeline passed: $GITLAB_PIPELINE_URL"
+            exit 0
+          fi
+
+          echo "GitLab pipeline did not pass: $GITLAB_PIPELINE_URL"
+          jobs_url="https://gitlab.com/api/v4/projects/${GITLAB_PROJECT_ID}/pipelines/${GITLAB_PIPELINE_ID}/jobs?per_page=100"
+          if jobs="$(curl --silent --show-error --fail --retry 3 --retry-delay 2 "$jobs_url")"; then
+            jq -r 'sort_by(.name)[] | "\(.status)\t\(.name)\t\(.web_url)"' <<< "$jobs"
+          fi
+          echo "::error::GitLab pipeline finished with status $final_status."
+          exit 1

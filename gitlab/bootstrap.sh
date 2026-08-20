@@ -133,8 +133,9 @@ elif [[ "$SETUP_VP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; th
   setup_vp_pinned_ref="v${SETUP_VP_VERSION}"
 fi
 setup_vp_install_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-install.XXXXXX")"
-setup_vp_runtime_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-gitlab-runtime.XXXXXX.mjs")"
-trap 'rm -f "$setup_vp_install_tmp" "$setup_vp_runtime_tmp"' EXIT
+setup_vp_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/setup-vp-gitlab-runtime.XXXXXX")"
+setup_vp_runtime_tmp="${setup_vp_runtime_dir}/index.mjs"
+trap 'rm -f "$setup_vp_install_tmp" "$setup_vp_runtime_tmp"; rmdir "$setup_vp_runtime_dir" 2>/dev/null || true' EXIT
 
 setup_vp_install_viteplus
 export PATH="$HOME/.vite-plus/bin:$PATH"
