@@ -384,7 +384,7 @@ setup-vp also provides a GitLab CI/CD remote template hosted from this GitHub re
 
 See [GitLab integration notes](rfcs/gitlab-integration.md) for the design background, constraints, and follow-up work.
 
-Every setup-vp pull request, merge, and release is exercised by the dedicated [GitLab end-to-end test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test). The test pipeline loads the template, bootstrap, and compiled runtime from the exact setup-vp commit or release tag under test.
+The dedicated [GitLab end-to-end test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) tests each setup-vp pull request, merge, and release. The pipeline loads the template, bootstrap script, and compiled runtime from the exact setup-vp commit or release tag that it tests.
 
 ### Basic GitLab Usage
 
@@ -670,7 +670,7 @@ To cut a release:
    git status --short   # must be empty
    ```
 
-3. Confirm that the full GitLab E2E workflow passed for the release commit on `main`.
+3. Confirm that the release commit on `main` passes the full GitLab E2E workflow.
 
 4. Create the new annotated version tag and push it. For example:
 

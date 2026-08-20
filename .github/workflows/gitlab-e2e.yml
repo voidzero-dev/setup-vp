@@ -7,16 +7,14 @@ on:
   pull_request:
     branches: [main]
   merge_group:
-  schedule:
-    - cron: "23 3 * * 0"
   workflow_dispatch:
     inputs:
       setup_ref:
-        description: "Exact setup-vp commit SHA or release tag. Defaults to this workflow commit."
+        description: "Enter an exact setup-vp commit SHA or release tag. If empty, the workflow uses this commit."
         required: false
         default: ""
       suite:
-        description: "GitLab test coverage to run."
+        description: "Select the GitLab test suite."
         type: choice
         options: [full, required]
         default: full
@@ -59,7 +57,7 @@ jobs:
           if [ "$EVENT_NAME" = "pull_request" ]; then
             if [ "$PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
               should_run=false
-              echo "Fork pull requests are tested after they enter the merge queue or through a maintainer-approved manual run."
+              echo "The workflow skips fork pull requests. The merge queue or a maintainer can test these changes."
             else
               setup_vp_ref="$PR_HEAD_SHA"
               while IFS= read -r changed_path; do
@@ -78,7 +76,7 @@ jobs:
           elif [ "$EVENT_NAME" = "push" ] && [[ "$EVENT_REF" == refs/tags/* ]]; then
             setup_vp_ref="$EVENT_REF_NAME"
             suite=full
-          elif [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "schedule" ]; then
+          elif [ "$EVENT_NAME" = "push" ]; then
             suite=full
           fi
 
@@ -93,7 +91,7 @@ jobs:
             {
               echo "### GitLab E2E"
               echo
-              echo "Skipped for an untrusted fork pull request. The merge queue tests the reviewed merge commit."
+              echo "The workflow skipped this fork pull request. The merge queue tests the reviewed merge commit."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -110,7 +108,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "$GITLAB_TRIGGER_TOKEN" ]; then
-            echo "::error::The GITLAB_TRIGGER_TOKEN repository secret is not configured."
+            echo "::error::This repository does not have the GITLAB_TRIGGER_TOKEN secret."
             exit 1
           fi
 
@@ -174,7 +172,7 @@ jobs:
                   ;;
               esac
             else
-              echo "Could not read the GitLab pipeline status; retrying."
+              echo "The workflow could not read the GitLab pipeline status. It will try again."
             fi
             sleep 10
           done
