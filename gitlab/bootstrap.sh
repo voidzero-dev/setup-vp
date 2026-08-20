@@ -83,26 +83,30 @@ setup_vp_read_installed_version() {
   ' "$1"
 }
 
-setup_vp_source_installer() {
-  local setup_vp_installer_path="$1"
-  local setup_vp_nounset_was_enabled="false"
-  local setup_vp_installer_status
-
-  case "$-" in
-    *u*) setup_vp_nounset_was_enabled="true" ;;
-  esac
-
-  set +u
-  . "$setup_vp_installer_path"
-  setup_vp_installer_status=$?
-
-  if [ "$setup_vp_nounset_was_enabled" = "true" ]; then
-    set -u
-  else
+setup_vp_install_and_dump_dirs() {
+  bash -c '
     set +u
-  fi
+    setup_vp_installer_path="$1"
+    setup_vp_dirs_path="$2"
+    set --
 
-  return "$setup_vp_installer_status"
+    # Run the sourced installer at the top level of this shell. The installer
+    # can then use its own errexit setting even when the caller checks the
+    # result in an if condition. Nounset is disabled only in this shell.
+    . "$setup_vp_installer_path"
+    setup_vp_installer_status=$?
+    if [ "$setup_vp_installer_status" -ne 0 ]; then
+      exit "$setup_vp_installer_status"
+    fi
+
+    setup_vp_shim_dir="${SHIM_DIR:-${INSTALL_DIR:-${VP_HOME:-$HOME/.vite-plus}}/bin}"
+    if [ ! -x "$setup_vp_shim_dir/vp" ]; then
+      exit 1
+    fi
+
+    "$setup_vp_shim_dir/vp" --version > "$setup_vp_dirs_path"
+    VP_DUMP_DIRS=1 "$setup_vp_shim_dir/vp" >> "$setup_vp_dirs_path"
+  ' setup-vp-installer "$1" "$2"
 }
 
 setup_vp_install_viteplus_from() {
@@ -121,12 +125,7 @@ setup_vp_install_viteplus_from() {
       export VP_VPDIRS_AWARE="1"
       # Source the official installer so its VpDirs-resolved shim remains
       # available long enough to ask the installed payload for its directories.
-      setup_vp_source_installer "$setup_vp_install_tmp" || return $?
-      setup_vp_shim_dir="${SHIM_DIR:-${INSTALL_DIR:-${VP_HOME:-$HOME/.vite-plus}}/bin}"
-      if [ -x "$setup_vp_shim_dir/vp" ]; then
-        "$setup_vp_shim_dir/vp" --version > "$setup_vp_dirs_tmp"
-        VP_DUMP_DIRS=1 "$setup_vp_shim_dir/vp" >> "$setup_vp_dirs_tmp"
-      fi
+      setup_vp_install_and_dump_dirs "$setup_vp_install_tmp" "$setup_vp_dirs_tmp"
     else
       bash "$setup_vp_install_tmp"
     fi
