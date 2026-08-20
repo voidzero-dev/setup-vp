@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     # The version assertion below must see the bridge-resolved build. Pin
     # VP_PR_VERSION to "" so a manual pr_version dispatch can't override it.
