@@ -37,20 +37,99 @@ setup_vp_export_env() {
   printf "\n" >> "$SETUP_VP_ENV_FILE"
 }
 
+setup_vp_read_bin_dir() {
+  awk '
+    {
+      separator = index($0, "\t")
+      if (separator == 0) next
+      key = substr($0, 1, separator - 1)
+      value = substr($0, separator + 1)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      if (key == "data") data = value
+      if (key == "bin") bin = value
+      if (key == "cache") cache = value
+      if (key == "config") config = value
+      if (key == "state") state = value
+    }
+    END {
+      if (data != "" && bin != "" && cache != "" && config != "" && state != "") {
+        print bin
+        exit 0
+      }
+      exit 1
+    }
+  ' "$1"
+}
+
+setup_vp_read_installed_version() {
+  awk '
+    $1 == "vp" && $2 ~ /^v?[0-9]/ {
+      version = $2
+      sub(/^v/, "", version)
+      print version
+      exit
+    }
+    {
+      for (field = 1; field < NF; field++) {
+        if ($field == "Global:" && $(field + 1) ~ /^v?[0-9]/) {
+          version = $(field + 1)
+          sub(/^v/, "", version)
+          print version
+          exit
+        }
+      }
+    }
+  ' "$1"
+}
+
+setup_vp_install_and_dump_dirs() {
+  bash -c '
+    set +u
+    setup_vp_installer_path="$1"
+    setup_vp_dirs_path="$2"
+    set --
+
+    # Run the sourced installer at the top level of this shell. The installer
+    # can then use its own errexit setting even when the caller checks the
+    # result in an if condition. Nounset is disabled only in this shell.
+    . "$setup_vp_installer_path"
+    setup_vp_installer_status=$?
+    if [ "$setup_vp_installer_status" -ne 0 ]; then
+      exit "$setup_vp_installer_status"
+    fi
+
+    setup_vp_shim_dir="${SHIM_DIR:-${INSTALL_DIR:-${VP_HOME:-$HOME/.vite-plus}}/bin}"
+    if [ ! -x "$setup_vp_shim_dir/vp" ]; then
+      exit 1
+    fi
+
+    "$setup_vp_shim_dir/vp" --version > "$setup_vp_dirs_path"
+    VP_DUMP_DIRS=1 "$setup_vp_shim_dir/vp" >> "$setup_vp_dirs_path"
+  ' setup-vp-installer "$1" "$2"
+}
+
 setup_vp_install_viteplus_from() {
   setup_vp_url="$1"
   setup_vp_download "$setup_vp_url" "$setup_vp_install_tmp" || return 1
 
-  if [ -n "$setup_vp_pr_version" ]; then
-    VP_VERSION="$SETUP_VP_VERSION" \
-      VITE_PLUS_VERSION="$SETUP_VP_VERSION" \
-      VP_PR_VERSION="$setup_vp_pr_version" \
+  (
+    export VP_VERSION="$SETUP_VP_VERSION"
+    export VITE_PLUS_VERSION="$SETUP_VP_VERSION"
+    if [ -n "$setup_vp_pr_version" ]; then
+      export VP_PR_VERSION="$setup_vp_pr_version"
+    fi
+
+    if [ "$setup_vp_detect_dirs" = "true" ]; then
+      : > "$setup_vp_dirs_tmp"
+      export VP_VPDIRS_AWARE="1"
+      # Source the official installer so its VpDirs-resolved shim remains
+      # available long enough to ask the installed payload for its directories.
+      setup_vp_install_and_dump_dirs "$setup_vp_install_tmp" "$setup_vp_dirs_tmp"
+    else
       bash "$setup_vp_install_tmp"
-  else
-    VP_VERSION="$SETUP_VP_VERSION" \
-      VITE_PLUS_VERSION="$SETUP_VP_VERSION" \
-      bash "$setup_vp_install_tmp"
-  fi
+    fi
+  )
 }
 
 setup_vp_try_install_urls() {
@@ -122,6 +201,23 @@ if [[ "$SETUP_VP_VERSION" =~ ^0\.0\.0-commit\.([0-9a-fA-F]{40})$ ]]; then
   setup_vp_pr_version="${BASH_REMATCH[1]}"
 fi
 
+# VpDirs was added in Vite+ 0.3.0. Preview builds also contain it. For a
+# dist-tag, probe the installed version before a missing VpDirs result selects
+# the legacy layout.
+setup_vp_detect_dirs="true"
+setup_vp_check_installed_version="false"
+if [ -z "$setup_vp_pr_version" ]; then
+  if [[ "$SETUP_VP_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+    setup_vp_major=$((10#${BASH_REMATCH[1]}))
+    setup_vp_minor=$((10#${BASH_REMATCH[2]}))
+    if [ "$setup_vp_major" -eq 0 ] && [ "$setup_vp_minor" -lt 3 ]; then
+      setup_vp_detect_dirs="false"
+    fi
+  else
+    setup_vp_check_installed_version="true"
+  fi
+fi
+
 # Git ref that serves the install script for the requested version: the
 # preview build's commit, or the `v<version>` release tag for an exact
 # version. Dist-tags like "latest" do not map to a ref and keep the latest
@@ -133,12 +229,35 @@ elif [[ "$SETUP_VP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; th
   setup_vp_pinned_ref="v${SETUP_VP_VERSION}"
 fi
 setup_vp_install_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-install.XXXXXX")"
+setup_vp_dirs_tmp="$(mktemp "${TMPDIR:-/tmp}/setup-vp-dirs.XXXXXX")"
 setup_vp_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/setup-vp-gitlab-runtime.XXXXXX")"
 setup_vp_runtime_tmp="${setup_vp_runtime_dir}/index.mjs"
-trap 'rm -f "$setup_vp_install_tmp" "$setup_vp_runtime_tmp"; rmdir "$setup_vp_runtime_dir" 2>/dev/null || true' EXIT
+trap 'rm -f "$setup_vp_install_tmp" "$setup_vp_dirs_tmp" "$setup_vp_runtime_tmp"; rmdir "$setup_vp_runtime_dir" 2>/dev/null || true' EXIT
 
 setup_vp_install_viteplus
-export PATH="$HOME/.vite-plus/bin:$PATH"
+if [ "$setup_vp_detect_dirs" = "true" ]; then
+  if ! setup_vp_bin_dir="$(setup_vp_read_bin_dir "$setup_vp_dirs_tmp")"; then
+    setup_vp_bin_dir=""
+    if [ "$setup_vp_check_installed_version" = "true" ]; then
+      setup_vp_installed_version="$(setup_vp_read_installed_version "$setup_vp_dirs_tmp")"
+      if [[ "$setup_vp_installed_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+        setup_vp_major=$((10#${BASH_REMATCH[1]}))
+        setup_vp_minor=$((10#${BASH_REMATCH[2]}))
+        if [ "$setup_vp_major" -eq 0 ] && [ "$setup_vp_minor" -lt 3 ]; then
+          setup_vp_bin_dir="$HOME/.vite-plus/bin"
+        fi
+      fi
+    fi
+    if [ -z "$setup_vp_bin_dir" ]; then
+      echo "setup-vp: Vite+ was installed successfully, but setup-vp could not resolve its VpDirs." >&2
+      return 1 2>/dev/null || exit 1
+    fi
+  fi
+else
+  # Vite+ releases before VpDirs use the monolithic layout.
+  setup_vp_bin_dir="$HOME/.vite-plus/bin"
+fi
+export PATH="$setup_vp_bin_dir:$PATH"
 setup_vp_export_env PATH "$PATH"
 
 if ! command -v node >/dev/null 2>&1; then

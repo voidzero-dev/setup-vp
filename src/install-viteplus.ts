@@ -1,8 +1,16 @@
 import { info, warning, addPath } from "@actions/core";
 import { exec } from "@actions/exec";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { getInstallScriptUrls, pkgPrNewCommitSha } from "./ci/install-script-urls.js";
+import {
+  createVitePlusDirsFile,
+  getInstallScriptCommand,
+  removeVitePlusDirsFile,
+  resolveVitePlusBinDir,
+  supportsVitePlusDirs,
+  VP_DIRS_FILE_ENV,
+} from "./ci/vp-dirs.js";
 import type { Inputs } from "./types.js";
 import { DISPLAY_NAME } from "./types.js";
 import { getVitePlusHome } from "./utils.js";
@@ -12,10 +20,6 @@ import { getVitePlusHome } from "./utils.js";
 // worst case per group.
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
-// Cap each network call so a hung connection fails fast (failing runs showed
-// ~30s default hangs); the outer loop then immediately tries the next URL.
-const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 15";
-const PWSH_TIMEOUT_SEC = 15;
 
 export async function installVitePlus(inputs: Inputs): Promise<void> {
   const { version } = inputs;
@@ -29,6 +33,16 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     VP_VERSION: version,
     VITE_PLUS_VERSION: version,
   } as { [key: string]: string };
+
+  const detectDirs = supportsVitePlusDirs(version);
+  const dirsFile = detectDirs ? createVitePlusDirsFile() : undefined;
+  if (dirsFile) {
+    env.VP_VPDIRS_AWARE = "1";
+    env[VP_DIRS_FILE_ENV] = dirsFile;
+  } else {
+    delete env.VP_VPDIRS_AWARE;
+    delete env[VP_DIRS_FILE_ENV];
+  }
 
   // The install script auto-enables the Node.js manager on CI; VP_NODE_MANAGER
   // overrides that (yes/no; "no" skips node/npm/npx shim creation). The runtime
@@ -76,45 +90,43 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     return false;
   };
 
-  if (pinned.length > 0) {
-    if (await tryUrls(pinned)) {
-      ensureVitePlusBinInPath();
+  try {
+    if (pinned.length > 0) {
+      if (await tryUrls(pinned)) {
+        ensureVitePlusBinInPath(version, dirsFile);
+        return;
+      }
+      warning(
+        `Could not fetch the install script pinned to ${DISPLAY_NAME}@${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
+      );
+    }
+
+    if (await tryUrls(latest)) {
+      ensureVitePlusBinInPath(version, dirsFile);
       return;
     }
-    warning(
-      `Could not fetch the install script pinned to ${DISPLAY_NAME}@${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
+
+    throw new Error(
+      `Failed to install ${DISPLAY_NAME} after ${maxAttempts} attempts across ${totalUrls} URL(s): ${failureReason}`,
     );
+  } finally {
+    if (dirsFile) removeVitePlusDirsFile(dirsFile);
   }
-
-  if (await tryUrls(latest)) {
-    ensureVitePlusBinInPath();
-    return;
-  }
-
-  throw new Error(
-    `Failed to install ${DISPLAY_NAME} after ${maxAttempts} attempts across ${totalUrls} URL(s): ${failureReason}`,
-  );
 }
 
 async function runInstallCommand(url: string, env: { [key: string]: string }): Promise<number> {
   const options = { env, ignoreReturnCode: true };
-  if (process.platform === "win32") {
-    return exec(
-      "pwsh",
-      ["-Command", `& ([scriptblock]::Create((irm -TimeoutSec ${PWSH_TIMEOUT_SEC} ${url})))`],
-      options,
-    );
-  }
-  return exec(
-    "bash",
-    ["-c", `set -o pipefail; curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | bash`],
-    options,
+  const { command, args } = getInstallScriptCommand(
+    url,
+    process.platform,
+    env.VP_VPDIRS_AWARE === "1",
   );
+  return exec(command, args, options);
 }
 
-function ensureVitePlusBinInPath(): void {
-  const binDir = join(getVitePlusHome(), "bin");
-  if (!process.env.PATH?.includes(binDir)) {
+function ensureVitePlusBinInPath(version: string, dirsFile: string | undefined): void {
+  const binDir = resolveVitePlusBinDir(version, dirsFile, join(getVitePlusHome(), "bin"));
+  if (!process.env.PATH?.split(delimiter).includes(binDir)) {
     addPath(binDir);
   }
 }

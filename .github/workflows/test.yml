@@ -82,7 +82,11 @@ jobs:
 
       - name: Verify installation
         shell: bash
-        run: vp --version | grep -F "${{ steps.preview.outputs.version }}"
+        run: |
+          vp env current
+          vp i -g cowsay@1.6.0
+          vp env doctor
+          vp --version | grep -F "${{ steps.preview.outputs.version }}"
 
   test-node-version:
     strategy:

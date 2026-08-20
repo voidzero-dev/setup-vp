@@ -1,16 +1,27 @@
 import { describe, expect, it, vi } from "vite-plus/test";
+import { writeFileSync } from "node:fs";
 import { installVitePlus } from "./install-viteplus.js";
+
+function writeDirsFile(env: Record<string, string>, bin: string): void {
+  writeFileSync(
+    env.SETUP_VP_DIRS_FILE,
+    [
+      "data\t/test/data",
+      `bin\t${bin}`,
+      "cache\t/test/cache",
+      "config\t/test/config",
+      "state\t/test/state",
+    ].join("\n"),
+  );
+}
 
 describe("installVitePlus", () => {
   it("uses PowerShell installers on Windows and bash installers on Unix", async () => {
     const calls: NodeJS.Platform[] = [];
     const runInstall = vi.fn(
-      (
-        _url: string,
-        _env: Record<string, string>,
-        platform: NodeJS.Platform = process.platform,
-      ) => {
+      (_url: string, env: Record<string, string>, platform: NodeJS.Platform = process.platform) => {
         calls.push(platform);
+        writeDirsFile(env, `/test/${platform}/bin`);
         return 0;
       },
     );
@@ -39,13 +50,17 @@ describe("installVitePlus", () => {
 
   it("installs exact versions with the release-tag script before the latest script", async () => {
     // Fail every attempt so the full URL order is observable.
-    const runInstall = vi.fn((_url: string) => 1);
+    const runInstall = vi.fn((_url: string, _env: Record<string, string>) => 1);
     const warnings: string[] = [];
 
     await expect(
       installVitePlus("0.2.9", {
         platform: "linux",
-        env: { PATH: "" },
+        env: {
+          PATH: "",
+          VP_VPDIRS_AWARE: "1",
+          SETUP_VP_DIRS_FILE: "/tmp/stale-vp-dirs",
+        },
         prependPath: () => undefined,
         sleep: async () => undefined,
         runInstall,
@@ -58,10 +73,16 @@ describe("installVitePlus", () => {
     expect(urls[1]).toContain("jsdelivr");
     expect(urls[4]).toBe("https://viteplus.dev/install.sh");
     expect(warnings.some((message) => message.includes("Falling back to the latest"))).toBe(true);
+    const installEnv = runInstall.mock.calls[0]?.[1] as Record<string, string>;
+    expect(installEnv.VP_VPDIRS_AWARE).toBeUndefined();
+    expect(installEnv.SETUP_VP_DIRS_FILE).toBeUndefined();
   });
 
   it("routes pkg.pr.new commit builds through VP_PR_VERSION", async () => {
-    const runInstall = vi.fn(() => 0);
+    const runInstall = vi.fn((_url: string, env: Record<string, string>) => {
+      writeDirsFile(env, "/test/data/bin");
+      return 0;
+    });
     const sha = "a".repeat(40);
 
     await installVitePlus(`0.0.0-commit.${sha}`, {
@@ -77,5 +98,77 @@ describe("installVitePlus", () => {
       [string, Record<string, string>, NodeJS.Platform?]
     >;
     expect(installCalls[0]?.[1]?.VP_PR_VERSION).toBe(sha);
+    expect(installCalls[0]?.[1]?.VP_VPDIRS_AWARE).toBe("1");
+    expect(installCalls[0]?.[1]?.SETUP_VP_DIRS_FILE).toMatch(/setup-vp-dirs-.*\.txt$/);
+  });
+
+  it("uses the installed version to resolve the latest dist-tag", async () => {
+    const prependPath = vi.fn();
+    const env = { HOME: "/home/runner", PATH: "/usr/bin" };
+    const runInstall = vi.fn((_url: string, installEnv: Record<string, string>) => {
+      writeFileSync(installEnv.SETUP_VP_DIRS_FILE, "vp v0.2.9\n");
+      return 0;
+    });
+
+    await installVitePlus("latest", {
+      platform: "linux",
+      env,
+      prependPath,
+      sleep: async () => undefined,
+      runInstall,
+      logWarningFn: () => undefined,
+    });
+
+    expect(prependPath).toHaveBeenCalledWith("/home/runner/.vite-plus/bin");
+    expect(env.PATH).toBe("/home/runner/.vite-plus/bin:/usr/bin");
+  });
+
+  it.each([
+    { version: "0.3.0", output: "vp v0.2.9\n" },
+    { version: `0.0.0-commit.${"a".repeat(40)}`, output: "bin\t/test/data/bin\n" },
+    { version: "latest", output: "vp v0.3.0\n" },
+  ])("fails when $version does not report valid VpDirs", async ({ version, output }) => {
+    const prependPath = vi.fn();
+    const runInstall = vi.fn((_url: string, env: Record<string, string>) => {
+      if (output !== undefined) writeFileSync(env.SETUP_VP_DIRS_FILE, output);
+      return 0;
+    });
+
+    await expect(
+      installVitePlus(version, {
+        platform: "linux",
+        env: { PATH: "/usr/bin" },
+        prependPath,
+        sleep: async () => undefined,
+        runInstall,
+        logWarningFn: () => undefined,
+      }),
+    ).rejects.toThrow(
+      "Vite+ was installed successfully, but setup-vp could not resolve its VpDirs.",
+    );
+
+    expect(runInstall).toHaveBeenCalledTimes(1);
+    expect(prependPath).not.toHaveBeenCalled();
+  });
+
+  it("prepends the bin directory reported by the installed payload", async () => {
+    const prependPath = vi.fn();
+    const env = { PATH: "/usr/bin" };
+    const runInstall = vi.fn((_url: string, installEnv: Record<string, string>) => {
+      writeDirsFile(installEnv, "/test/data/bin");
+      return 0;
+    });
+
+    await installVitePlus("latest", {
+      platform: "linux",
+      env,
+      prependPath,
+      sleep: async () => undefined,
+      runInstall,
+      logWarningFn: () => undefined,
+    });
+
+    expect(prependPath).toHaveBeenCalledWith("/test/data/bin");
+    expect(env.PATH).toBe("/test/data/bin:/usr/bin");
   });
 });
