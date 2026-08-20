@@ -69,6 +69,8 @@ jobs:
                 esac
               done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
             fi
+          elif [ "$EVENT_NAME" = "merge_group" ]; then
+            suite=full
           elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             setup_vp_ref="${MANUAL_SETUP_REF:-$GITHUB_SHA}"
             suite="${MANUAL_SUITE:-full}"
