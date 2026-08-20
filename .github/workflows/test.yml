@@ -71,8 +71,10 @@ jobs:
           echo "Resolved preview build: ${version}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
+      # The self-repository reference gives the action its repository identity.
+      # The preview installer uses that identity for legacy path compatibility.
       - name: Setup Vite+
-        uses: ./
+        uses: $/.
         with:
           version: ${{ steps.preview.outputs.version }}
           run-install: false
