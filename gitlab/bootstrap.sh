@@ -71,9 +71,9 @@ setup_vp_read_installed_version() {
       exit
     }
     {
-      for (index = 1; index < NF; index++) {
-        if ($index == "Global:" && $(index + 1) ~ /^v?[0-9]/) {
-          version = $(index + 1)
+      for (field = 1; field < NF; field++) {
+        if ($field == "Global:" && $(field + 1) ~ /^v?[0-9]/) {
+          version = $(field + 1)
           sub(/^v/, "", version)
           print version
           exit

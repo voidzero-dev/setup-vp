@@ -56,6 +56,21 @@ describe("GitLab bootstrap", () => {
     expect(bootstrap).toContain('[ "$setup_vp_minor" -lt 3 ]');
   });
 
+  it.each([
+    ["current", "vp v0.2.9\n", "0.2.9"],
+    ["legacy", "- Global: v0.1.20\n- Local: v0.1.20\n", "0.1.20"],
+  ])("parses the %s installed version format with portable awk", (_format, input, expected) => {
+    const script = `
+${readShellFunction("setup_vp_read_installed_version")}
+setup_vp_read_installed_version /dev/stdin
+`;
+    const result = spawnSync("bash", ["-c", script], { encoding: "utf8", input });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe(expected);
+    expect(result.stderr).toBe("");
+  });
+
   it("disables and restores nounset while it preserves the installer status", () => {
     const fixtureDir = mkdtempSync(join(tmpdir(), "setup-vp-source-installer-"));
     const successInstaller = join(fixtureDir, "success.sh");
