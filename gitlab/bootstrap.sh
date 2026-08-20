@@ -83,6 +83,28 @@ setup_vp_read_installed_version() {
   ' "$1"
 }
 
+setup_vp_source_installer() {
+  local setup_vp_installer_path="$1"
+  local setup_vp_nounset_was_enabled="false"
+  local setup_vp_installer_status
+
+  case "$-" in
+    *u*) setup_vp_nounset_was_enabled="true" ;;
+  esac
+
+  set +u
+  . "$setup_vp_installer_path"
+  setup_vp_installer_status=$?
+
+  if [ "$setup_vp_nounset_was_enabled" = "true" ]; then
+    set -u
+  else
+    set +u
+  fi
+
+  return "$setup_vp_installer_status"
+}
+
 setup_vp_install_viteplus_from() {
   setup_vp_url="$1"
   setup_vp_download "$setup_vp_url" "$setup_vp_install_tmp" || return 1
@@ -99,7 +121,7 @@ setup_vp_install_viteplus_from() {
       export VP_VPDIRS_AWARE="1"
       # Source the official installer so its VpDirs-resolved shim remains
       # available long enough to ask the installed payload for its directories.
-      . "$setup_vp_install_tmp" || return $?
+      setup_vp_source_installer "$setup_vp_install_tmp" || return $?
       setup_vp_shim_dir="${SHIM_DIR:-${INSTALL_DIR:-${VP_HOME:-$HOME/.vite-plus}}/bin}"
       if [ -x "$setup_vp_shim_dir/vp" ]; then
         "$setup_vp_shim_dir/vp" --version > "$setup_vp_dirs_tmp"
