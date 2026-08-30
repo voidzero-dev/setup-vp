@@ -8,6 +8,9 @@ import { LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
 
 export function getVitePlusHome(): string {
+  const configuredHome = process.env.VP_HOME || process.env.INSTALL_DIR || process.env.SHIM_DIR;
+  if (configuredHome) return configuredHome;
+
   const home = process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
   return join(home || homedir(), ".vite-plus");
 }

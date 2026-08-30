@@ -7,6 +7,7 @@ import {
   getConfiguredProjectDir,
   getCacheDirectories,
   getInstallCwd,
+  getVitePlusHome,
   isWithin,
   parseInstalledVpVersion,
   resolvePath,
@@ -502,6 +503,18 @@ describe("parseInstalledVpVersion", () => {
 
   it("returns 'unknown' when no version can be parsed", () => {
     expect(parseInstalledVpVersion("no version here")).toBe("unknown");
+  });
+});
+
+describe("getVitePlusHome", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("uses VP_HOME when the installer is configured with one", () => {
+    vi.stubEnv("VP_HOME", "/shared/vite-plus");
+
+    expect(getVitePlusHome()).toBe("/shared/vite-plus");
   });
 });
 

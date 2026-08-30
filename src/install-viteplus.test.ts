@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
-import { exec } from "@actions/exec";
+import { exec, getExecOutput } from "@actions/exec";
 import { addPath, warning } from "@actions/core";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { installVitePlus } from "./install-viteplus.js";
 import type { Inputs } from "./types.js";
 
@@ -13,6 +16,11 @@ vi.mock("@actions/core", () => ({
 
 vi.mock("@actions/exec", () => ({
   exec: vi.fn(),
+  getExecOutput: vi.fn(),
+}));
+
+vi.mock("./install-lock.js", () => ({
+  withVitePlusInstallLock: async <T>(_home: string, task: () => Promise<T>) => task(),
 }));
 
 vi.mock("node:timers/promises", () => ({
@@ -65,6 +73,9 @@ describe("installVitePlus", () => {
     vi.stubEnv("VP_NODE_MANAGER", undefined);
     vi.stubEnv("VP_VPDIRS_AWARE", undefined);
     vi.stubEnv("SETUP_VP_DIRS_FILE", undefined);
+    vi.stubEnv("VP_HOME", undefined);
+    vi.stubEnv("INSTALL_DIR", undefined);
+    vi.stubEnv("SHIM_DIR", undefined);
   });
 
   afterEach(() => {
@@ -114,6 +125,83 @@ describe("installVitePlus", () => {
     await installVitePlus(baseInputs);
 
     expect(addPath).toHaveBeenCalledWith("/home/runner/.vite-plus/bin");
+  });
+
+  it("reuses an installed exact version after waiting for the shared install lock", async () => {
+    const home = mkdtempSync(join(tmpdir(), "setup-vp-home-"));
+    vi.stubEnv("HOME", home);
+    const binary = join(home, ".vite-plus", "current", "bin", "vp");
+    mkdirSync(join(home, ".vite-plus", "current", "bin"), { recursive: true });
+    writeFileSync(binary, "#!/bin/sh\n");
+    vi.mocked(getExecOutput)
+      .mockResolvedValueOnce({ exitCode: 0, stdout: "vp v0.3.0\n", stderr: "" })
+      .mockResolvedValueOnce({
+        exitCode: 0,
+        stdout: [
+          "data\t/test/data",
+          "bin\t/test/data/bin",
+          "cache\t/test/cache",
+          "config\t/test/config",
+          "state\t/test/state",
+        ].join("\n"),
+        stderr: "",
+      });
+
+    try {
+      await installVitePlus({ ...baseInputs, version: "0.3.0" });
+
+      expect(exec).toHaveBeenCalledWith(binary, ["env", "setup", "--refresh"]);
+      expect(addPath).toHaveBeenCalledWith("/test/data/bin");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("reinstalls when an existing Vite+ binary cannot be probed", async () => {
+    const home = mkdtempSync(join(tmpdir(), "setup-vp-home-"));
+    vi.stubEnv("VP_HOME", join(home, ".shared-vite-plus"));
+    const binary = join(home, ".shared-vite-plus", "current", "bin", "vp");
+    mkdirSync(join(home, ".shared-vite-plus", "current", "bin"), { recursive: true });
+    writeFileSync(binary, "#!/bin/sh\n");
+    vi.mocked(getExecOutput).mockRejectedValueOnce(new Error("spawn EACCES"));
+    mockSuccessfulInstallOnce();
+
+    try {
+      await installVitePlus({ ...baseInputs, version: "0.3.0" });
+
+      expect(exec).toHaveBeenCalledTimes(1);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("reconciles disabled Node.js management when reusing an install", async () => {
+    const home = mkdtempSync(join(tmpdir(), "setup-vp-home-"));
+    vi.stubEnv("VP_HOME", join(home, ".shared-vite-plus"));
+    const binary = join(home, ".shared-vite-plus", "current", "bin", "vp");
+    mkdirSync(join(home, ".shared-vite-plus", "current", "bin"), { recursive: true });
+    writeFileSync(binary, "#!/bin/sh\n");
+    vi.mocked(getExecOutput)
+      .mockResolvedValueOnce({ exitCode: 0, stdout: "vp v0.3.0\n", stderr: "" })
+      .mockResolvedValueOnce({
+        exitCode: 0,
+        stdout: [
+          "data\t/test/data",
+          "bin\t/test/data/bin",
+          "cache\t/test/cache",
+          "config\t/test/config",
+          "state\t/test/state",
+        ].join("\n"),
+        stderr: "",
+      });
+
+    try {
+      await installVitePlus({ ...baseInputs, version: "0.3.0", nodeManager: false });
+
+      expect(exec).toHaveBeenCalledWith(binary, ["env", "off"]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it.each([

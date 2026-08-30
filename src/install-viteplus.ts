@@ -1,5 +1,6 @@
 import { info, warning, addPath } from "@actions/core";
-import { exec } from "@actions/exec";
+import { exec, getExecOutput } from "@actions/exec";
+import { existsSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { getInstallScriptUrls, pkgPrNewCommitSha } from "./ci/install-script-urls.js";
@@ -14,6 +15,8 @@ import {
 import type { Inputs } from "./types.js";
 import { DISPLAY_NAME } from "./types.js";
 import { getVitePlusHome } from "./utils.js";
+import { withVitePlusInstallLock } from "./install-lock.js";
+import { parseInstalledVpVersion } from "./ci/version.js";
 
 // Try each group's URLs in order, for up to N rounds per group (max attempts
 // per group = rounds * URLs). Two rounds × two URLs = 4 attempts, ~1 minute
@@ -22,6 +25,10 @@ const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
 
 export async function installVitePlus(inputs: Inputs): Promise<void> {
+  await withVitePlusInstallLock(getVitePlusHome(), () => installVitePlusUnlocked(inputs));
+}
+
+async function installVitePlusUnlocked(inputs: Inputs): Promise<void> {
   const { version } = inputs;
 
   info(`Installing ${DISPLAY_NAME}@${version}...`);
@@ -49,6 +56,17 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
   // half of the opt-out (`vp env off`) runs after install in runMain.
   if (inputs.nodeManager !== undefined) {
     env.VP_NODE_MANAGER = inputs.nodeManager ? "yes" : "no";
+  }
+
+  if (await canReuseInstalledVersion(version)) {
+    info(`Reusing installed ${DISPLAY_NAME}@${version}.`);
+    try {
+      await restoreReusedInstall(version, dirsFile, inputs.nodeManager);
+      ensureVitePlusBinInPath(version, dirsFile, !dirsFile);
+    } finally {
+      if (dirsFile) removeVitePlusDirsFile(dirsFile);
+    }
+    return;
   }
 
   // For pkg.pr.new preview builds, tell the install script to fetch from
@@ -124,8 +142,66 @@ async function runInstallCommand(url: string, env: { [key: string]: string }): P
   return exec(command, args, options);
 }
 
-function ensureVitePlusBinInPath(version: string, dirsFile: string | undefined): void {
-  const binDir = resolveVitePlusBinDir(version, dirsFile, join(getVitePlusHome(), "bin"));
+async function canReuseInstalledVersion(version: string): Promise<boolean> {
+  const requestedVersion = version.replace(/^v/, "");
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(requestedVersion)) return false;
+
+  const binary = getCurrentVitePlusBinary();
+  if (!existsSync(binary)) return false;
+
+  try {
+    const result = await getExecOutput(binary, ["--version"], {
+      ignoreReturnCode: true,
+      silent: true,
+    });
+    return result.exitCode === 0 && parseInstalledVpVersion(result.stdout) === requestedVersion;
+  } catch {
+    return false;
+  }
+}
+
+async function restoreReusedInstall(
+  version: string,
+  dirsFile: string | undefined,
+  nodeManager: boolean | undefined,
+): Promise<void> {
+  const binary = getCurrentVitePlusBinary();
+
+  if (dirsFile) {
+    const result = await getExecOutput(binary, [], {
+      env: { ...process.env, VP_DUMP_DIRS: "1" },
+      ignoreReturnCode: true,
+      silent: true,
+    });
+    if (result.exitCode !== 0) {
+      throw new Error(`Could not read VpDirs from reused ${DISPLAY_NAME}@${version}.`);
+    }
+    writeFileSync(dirsFile, result.stdout);
+  }
+
+  // The installer refreshes managed Node.js shims by default on CI. Reapply
+  // that behavior after reuse so the requested configuration never depends on
+  // the job that populated the shared home first.
+  if (nodeManager === false) {
+    await exec(binary, ["env", "off"]);
+  } else {
+    await exec(binary, ["env", "setup", "--refresh"]);
+  }
+}
+
+function getCurrentVitePlusBinary(): string {
+  return join(getVitePlusHome(), "current", "bin", process.platform === "win32" ? "vp.exe" : "vp");
+}
+
+function ensureVitePlusBinInPath(
+  version: string,
+  dirsFile: string | undefined,
+  allowLegacyBin = false,
+): void {
+  const legacyBinDir = join(getVitePlusHome(), "bin");
+  const binDir = allowLegacyBin
+    ? legacyBinDir
+    : resolveVitePlusBinDir(version, dirsFile, legacyBinDir);
   if (!process.env.PATH?.split(delimiter).includes(binDir)) {
     addPath(binDir);
   }
