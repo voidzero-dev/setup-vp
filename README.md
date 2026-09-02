@@ -9,6 +9,7 @@ GitHub Action, GitLab CI/CD remote template, and Azure Pipelines step template t
 - GitHub Action: cache project dependencies with auto-detection of lock files
 - Optionally run `vp install` after setup
 - Optionally wrap `vp install` with [Socket Firewall Free (`sfw`)](https://docs.socket.dev/docs/socket-firewall-free) to block malicious dependencies
+- Optionally install pnpm globally
 - Support for all major package managers (npm, pnpm, yarn, bun)
 - GitLab CI/CD support through a reusable `include:remote` template
 - Azure Pipelines support through a reusable step template and compiled runtime
@@ -108,6 +109,19 @@ steps:
       version: "1.2.3"
       node-version: "lts"
       cache: true
+```
+
+### With pnpm
+
+Certain tools invoke `pnpm` directly without using `vp`. Install
+pnpm globally to make its executable available.
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+  - uses: voidzero-dev/setup-vp@v1.18.0
+    with:
+      pnpm: true
 ```
 
 ### Version from `package.json` / Catalog
@@ -338,6 +352,7 @@ jobs:
 | `working-directory`     | Project directory used for relative paths, lockfile auto-detection, environment checks, and default install | No       | Workspace root   |
 | `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                              | No       | `true`           |
 | `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)    | No       | `false`          |
+| `pnpm`                  | Install pnpm globally                                                                                       | No       | `false`          |
 | `cache`                 | Enable caching of project dependencies                                                                      | No       | `false`          |
 | `cache-save`            | Save the dependency cache in the post action. Has no effect when `cache` is `false`                         | No       | `true`           |
 | `cache-dependency-path` | Path to lock file for cache key generation                                                                  | No       | Auto-detected    |

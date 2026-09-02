@@ -2,6 +2,7 @@ import { saveState, getState, setFailed, info, setOutput, warning } from "@actio
 import { exec, getExecOutput } from "@actions/exec";
 import { getInputs } from "./inputs.js";
 import { installVitePlus } from "./install-viteplus.js";
+import { installPnpm } from "./install-pnpm.js";
 import { setupSfw } from "./install-sfw.js";
 import { runViteInstall } from "./run-install.js";
 import { restoreCache } from "./cache-restore.js";
@@ -59,7 +60,10 @@ async function runMain(inputs: Inputs): Promise<void> {
   // (downloads our pinned binary), unsupported platform (falls back).
   const effectiveSfw = await setupSfw(inputs);
 
-  // Step 7: Run vp install if requested
+  // Step 7: Install pnpm globally for tools that invoke `pnpm` directly.
+  await installPnpm(inputs);
+
+  // Step 8: Run vp install if requested
   if (inputs.runInstall.length > 0) {
     await runViteInstall({ ...inputs, sfw: effectiveSfw });
   }

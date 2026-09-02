@@ -32,6 +32,7 @@ const baseInputs: Inputs = {
   version: "latest",
   runInstall: [{}],
   sfw: true,
+  pnpm: false,
   cache: false,
   cacheSave: true,
 };

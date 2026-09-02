@@ -142,6 +142,7 @@ function makeInputs(overrides: Partial<Inputs> = {}): Inputs {
     workingDirectory: undefined,
     runInstall: [{}],
     sfw: true,
+    pnpm: false,
     cache: false,
     cacheSave: true,
     cacheDependencyPath: undefined,

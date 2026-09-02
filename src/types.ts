@@ -26,6 +26,7 @@ export interface Inputs {
   readonly workingDirectory?: string;
   readonly runInstall: RunInstall[];
   readonly sfw: boolean;
+  readonly pnpm: boolean;
   readonly cache: boolean;
   readonly cacheSave: boolean;
   readonly cacheDependencyPath?: string;
