@@ -31,6 +31,7 @@ describe("getInputs", () => {
       workingDirectory: undefined,
       runInstall: [],
       sfw: false,
+      pnpm: false,
       cache: false,
       cacheSave: false,
       cacheDependencyPath: undefined,
@@ -143,6 +144,18 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs.sfw).toBe(true);
+  });
+
+  it("should parse pnpm input", () => {
+    vi.mocked(getInput).mockReturnValue("");
+    vi.mocked(getBooleanInput).mockImplementation((name) => {
+      if (name === "pnpm") return true;
+      return false;
+    });
+
+    const inputs = getInputs();
+
+    expect(inputs.pnpm).toBe(true);
   });
 
   it("should parse node-version-file input", () => {

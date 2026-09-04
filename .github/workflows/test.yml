@@ -813,6 +813,33 @@ jobs:
           fi
           echo "OK: composed sfw blocked lodahs (exit $CODE, block-line found)"
 
+  test-pnpm:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Setup Vite+ with global pnpm
+        uses: ./
+        with:
+          pnpm: true
+          run-install: false
+          cache: false
+
+      - name: Verify pnpm is installed globally
+        shell: bash
+        run: |
+          global_list="$(vp list -g pnpm)"
+          echo "$global_list"
+          if [[ "$global_list" == *"No global packages matching 'pnpm'"* ]]; then
+            echo "pnpm was not installed globally" >&2
+            exit 1
+          fi
+          pnpm --version
+
   test-azure-runtime:
     strategy:
       fail-fast: false
