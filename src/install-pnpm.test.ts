@@ -24,6 +24,7 @@ describe("installPnpm", () => {
       sfw: false,
       pnpm: true,
       cache: false,
+      cacheSave: false,
     };
     await installPnpm(inputs);
 
@@ -38,6 +39,7 @@ describe("installPnpm", () => {
       sfw: false,
       pnpm: false,
       cache: false,
+      cacheSave: false,
     };
     await installPnpm(inputs);
 

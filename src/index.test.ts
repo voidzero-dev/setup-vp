@@ -33,6 +33,7 @@ const inputs = (cache: boolean, cacheSave: boolean): Inputs => ({
   version: "",
   runInstall: [],
   sfw: false,
+  pnpm: false,
   cache,
   cacheSave,
 });
