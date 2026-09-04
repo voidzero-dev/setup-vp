@@ -629,6 +629,7 @@ describe("resolveVitePlusVersion (precedence)", () => {
     runInstall: [],
     sfw: false,
     cache: false,
+    cacheSave: true,
     cacheDependencyPath: undefined,
     registryUrl: undefined,
     scope: undefined,

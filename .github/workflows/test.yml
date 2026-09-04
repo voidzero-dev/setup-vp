@@ -337,6 +337,10 @@ jobs:
           echo "OK: ${{ matrix.scenario }} resolved to $ACTUAL"
 
   test-cache-pnpm:
+    strategy:
+      fail-fast: false
+      matrix:
+        cache-save: [true, false]
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -348,12 +352,13 @@ jobs:
           echo '{"name":"test-project","private":true}' > package.json
           touch pnpm-lock.yaml
 
-      - name: Setup Vite+ with pnpm cache
+      - name: Setup Vite+ with pnpm cache (cache-save=${{ matrix.cache-save }})
         uses: ./
         id: setup
         with:
           run-install: false
           cache: true
+          cache-save: ${{ matrix.cache-save }}
           cache-dependency-path: test-project/pnpm-lock.yaml
 
       - name: Verify installation

@@ -37,6 +37,10 @@ inputs:
     description: "Enable caching of project dependencies"
     required: false
     default: "false"
+  cache-save:
+    description: "Whether to save the dependency cache in the post action. Has no effect when cache is false."
+    required: false
+    default: "true"
   cache-dependency-path:
     description: "Path to lock file for cache key generation. Auto-detected if not specified."
     required: false

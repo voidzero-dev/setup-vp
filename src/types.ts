@@ -27,6 +27,7 @@ export interface Inputs {
   readonly runInstall: RunInstall[];
   readonly sfw: boolean;
   readonly cache: boolean;
+  readonly cacheSave: boolean;
   readonly cacheDependencyPath?: string;
   readonly registryUrl?: string;
   readonly scope?: string;
