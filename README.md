@@ -339,6 +339,7 @@ jobs:
 | `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                              | No       | `true`           |
 | `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)    | No       | `false`          |
 | `cache`                 | Enable caching of project dependencies                                                                      | No       | `false`          |
+| `cache-save`            | Save the dependency cache in the post action. Has no effect when `cache` is `false`                         | No       | `true`           |
 | `cache-dependency-path` | Path to lock file for cache key generation                                                                  | No       | Auto-detected    |
 | `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`   | No       |                  |
 | `scope`                 | Optional scope for scoped registries. Falls back to repo owner for GitHub Packages                          | No       |                  |
@@ -377,6 +378,27 @@ The dependency cache key format is: `vite-plus-{OS}-{arch}-{pm}-{lockfile-hash}`
 When `working-directory` is set, lockfile auto-detection runs in that directory.
 
 When `cache-dependency-path` points to a lock file in a subdirectory, the action resolves the package-manager cache directory from that lock file's directory.
+
+### Control cache saving
+
+Set `cache-save: false` to restore an existing dependency cache without writing a new cache. The `cache` input remains the main switch for both operations:
+
+| `cache` | `cache-save`      | Restore | Save |
+| ------- | ----------------- | ------- | ---- |
+| `false` | Any value         | No      | No   |
+| `true`  | Omitted or `true` | Yes     | Yes  |
+| `true`  | `false`           | Yes     | No   |
+
+For example, this workflow restores caches on every run but saves them only from the `main` branch:
+
+```yaml
+- uses: voidzero-dev/setup-vp@v1.18.0
+  with:
+    cache: true
+    cache-save: ${{ github.ref == 'refs/heads/main' }}
+```
+
+Disabling cache saving doesn't change the `cache-hit` output, which continues to report whether the action restored a matching cache.
 
 ## GitLab CI/CD
 
