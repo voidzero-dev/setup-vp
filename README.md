@@ -395,7 +395,7 @@ For example, this workflow restores caches on every run but saves them only from
 - uses: voidzero-dev/setup-vp@v1.18.0
   with:
     cache: true
-    cache-save: ${{ github.ref == 'refs/heads/main' }}
+    cache-save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 ```
 
 Disabling cache saving doesn't change the `cache-hit` output, which continues to report whether the action restored a matching cache.
