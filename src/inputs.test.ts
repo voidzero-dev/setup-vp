@@ -32,6 +32,7 @@ describe("getInputs", () => {
       runInstall: [],
       sfw: false,
       cache: false,
+      cacheSave: false,
       cacheDependencyPath: undefined,
     });
   });
@@ -118,6 +119,18 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs.cache).toBe(true);
+  });
+
+  it("should parse cache-save input", () => {
+    vi.mocked(getInput).mockReturnValue("");
+    vi.mocked(getBooleanInput).mockImplementation((name) => {
+      if (name === "cache-save") return true;
+      return false;
+    });
+
+    const inputs = getInputs();
+
+    expect(inputs.cacheSave).toBe(true);
   });
 
   it("should parse sfw input", () => {

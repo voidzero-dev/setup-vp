@@ -84,10 +84,15 @@ async function printViteVersion(cwd: string): Promise<void> {
   }
 }
 
-async function runPost(inputs: Inputs): Promise<void> {
-  if (inputs.cache) {
-    await saveCache();
+export async function runPost(inputs: Inputs): Promise<void> {
+  if (!inputs.cache) return;
+
+  if (!inputs.cacheSave) {
+    info("Cache saving is disabled. Skipping cache save.");
+    return;
   }
+
+  await saveCache();
 }
 
 async function main(): Promise<void> {
