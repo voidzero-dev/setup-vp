@@ -32,7 +32,7 @@ Releases are listed on the [tags page](https://github.com/voidzero-dev/setup-vp/
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
 ```
 
@@ -40,7 +40,7 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       node-version: "lts"
@@ -50,7 +50,7 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       node-version-file: ".node-version"
@@ -64,7 +64,7 @@ image), disable it so `vp` and its shims use that Node.js:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: actions/setup-node@v5
     with:
       node-version: 24
@@ -77,7 +77,7 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       working-directory: web
@@ -90,7 +90,7 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       node-version: "lts"
@@ -102,7 +102,7 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       version: "1.2.3"
@@ -126,7 +126,7 @@ to `latest` only when nothing pins a resolvable version. So a project that pins
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       cache: true
@@ -139,7 +139,7 @@ worth watching for, since it means the pinned version was not applied:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       version-file: package.json
@@ -199,7 +199,7 @@ action warns and falls back to `latest`. (Auto-detection instead resolves a
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       node-version: "lts"
@@ -224,7 +224,7 @@ minimal:
 #   @myorg:registry=https://npm.pkg.github.com
 
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       node-version: "lts"
@@ -241,7 +241,7 @@ read the repo `.npmrc` per its own config resolution):
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       node-version: "lts"
@@ -259,7 +259,7 @@ Set `sfw: true` to wrap `vp install` with [Socket Firewall Free](https://docs.so
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   - uses: voidzero-dev/setup-vp@v1.19.0
     with:
       sfw: true
@@ -276,7 +276,7 @@ The bundled download uses a pinned URL but is not itself SHA-pinned. For workflo
 
 ```yaml
 steps:
-  - uses: actions/checkout@v6
+  - uses: actions/checkout@v7
   # SHA-pinned; let Renovate bump it
   - uses: socketdev/action@<sha>
     with:
@@ -304,7 +304,7 @@ jobs:
       image: alpine:3.21
     steps:
       - run: apk add --no-cache bash curl gcompat libstdc++
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1.19.0
 ```
 
@@ -318,7 +318,7 @@ jobs:
         node-version: ["20", "22", "24"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1.19.0
         with:
           node-version: ${{ matrix.node-version }}
@@ -632,7 +632,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: voidzero-dev/setup-vp@v1.19.0
         with:
