@@ -14,6 +14,7 @@ import {
 import type { Inputs } from "./types.js";
 import { DISPLAY_NAME } from "./types.js";
 import { getVitePlusHome } from "./utils.js";
+import { findReusableVitePlus } from "./reuse-viteplus.js";
 
 // Try each group's URLs in order, for up to N rounds per group (max attempts
 // per group = rounds * URLs). Two rounds × two URLs = 4 attempts, ~1 minute
@@ -23,6 +24,15 @@ const INSTALL_RETRY_DELAY_MS = 2000;
 
 export async function installVitePlus(inputs: Inputs): Promise<void> {
   const { version } = inputs;
+
+  const existingBin = findReusableVitePlus(version, inputs.nodeManager);
+  if (existingBin) {
+    // Prepend even when already present later on PATH: another installation
+    // must not shadow the version that passed the reuse checks.
+    addPath(existingBin);
+    info(`Reusing ${DISPLAY_NAME}@${version} from ${existingBin}`);
+    return;
+  }
 
   info(`Installing ${DISPLAY_NAME}@${version}...`);
 
