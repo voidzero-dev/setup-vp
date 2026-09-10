@@ -374,6 +374,18 @@ Omitting both `node-version` and `node-version-file` leaves the session without 
 
 ## Caching
 
+### Reuse an installed version
+
+On runners that retain the Vite+ installation, the GitHub Action reuses an
+active exact version when its files, shims, and Node.js manager configuration
+pass the reuse checks. This applies to versions that support `VP_DUMP_DIRS`
+(`0.3.0` and later). Node.js setup and the remaining action steps still run.
+
+The action runs the installer when it needs to change versions or repair the
+installation. It also runs the installer for dist-tags such as `latest`, version
+ranges, preview builds, and older releases. Reuse works with `cache: false` and
+does not restore an installation onto a fresh runner.
+
 ### Dependency Cache
 
 When `cache: true` is set, the action additionally caches project dependencies by auto-detecting your lock file:

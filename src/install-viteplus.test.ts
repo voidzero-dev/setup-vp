@@ -3,6 +3,7 @@ import { exec } from "@actions/exec";
 import { addPath, warning } from "@actions/core";
 import { writeFileSync } from "node:fs";
 import { installVitePlus } from "./install-viteplus.js";
+import { findReusableVitePlus } from "./reuse-viteplus.js";
 import type { Inputs } from "./types.js";
 
 vi.mock("@actions/core", () => ({
@@ -14,6 +15,8 @@ vi.mock("@actions/core", () => ({
 vi.mock("@actions/exec", () => ({
   exec: vi.fn(),
 }));
+
+vi.mock("./reuse-viteplus.js", () => ({ findReusableVitePlus: vi.fn() }));
 
 vi.mock("node:timers/promises", () => ({
   setTimeout: vi.fn().mockResolvedValue(undefined),
@@ -84,6 +87,17 @@ describe("installVitePlus", () => {
     expect(exec).toHaveBeenCalledTimes(1);
     expect(warning).not.toHaveBeenCalled();
     expect(addPath).toHaveBeenCalledWith("/test/data/bin");
+  });
+
+  it("reuses a validated installation and puts it first on PATH", async () => {
+    vi.stubEnv("PATH", "/other/bin:/existing/bin");
+    vi.mocked(findReusableVitePlus).mockReturnValue("/existing/bin");
+
+    await installVitePlus({ ...baseInputs, version: "0.3.0", nodeManager: true });
+
+    expect(findReusableVitePlus).toHaveBeenCalledWith("0.3.0", true);
+    expect(addPath).toHaveBeenCalledWith("/existing/bin");
+    expect(exec).not.toHaveBeenCalled();
   });
 
   it("should fall back to the legacy bin for Vite+ releases without VpDirs", async () => {
