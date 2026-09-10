@@ -65,23 +65,26 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/reuse-project" "$RUNNER_TEMP/reuse-curl"
           echo '{"name":"reuse-project","private":true,"devDependencies":{"vite-plus":"0.3.0"}}' > "$RUNNER_TEMP/reuse-project/package.json"
+          reuse_root="$RUNNER_TEMP/setup-vp-reuse"
+          # The Windows installer passes this path to cmd.exe for mklink.
+          if [ "$RUNNER_OS" = "Windows" ]; then reuse_root="$(cygpath -w "$reuse_root")"; fi
           {
             case "$REUSE_LAYOUT" in
               home)
-                echo "VP_HOME=$RUNNER_TEMP/setup-vp-reuse"
-                echo "SETUP_VP_REUSE_DATA=$RUNNER_TEMP/setup-vp-reuse"
+                echo "VP_HOME=$reuse_root"
+                echo "SETUP_VP_REUSE_DATA=$reuse_root"
                 ;;
               split)
                 echo "VP_HOME="
-                echo "VP_DATA_DIR=$RUNNER_TEMP/setup-vp-reuse"
-                echo "VP_BIN_DIR=$RUNNER_TEMP/setup-vp-reuse-bin"
-                echo "VP_CACHE_DIR=$RUNNER_TEMP/setup-vp-reuse-cache"
-                echo "SETUP_VP_REUSE_DATA=$RUNNER_TEMP/setup-vp-reuse"
+                echo "VP_DATA_DIR=$reuse_root"
+                echo "VP_BIN_DIR=$reuse_root-bin"
+                echo "VP_CACHE_DIR=$reuse_root-cache"
+                echo "SETUP_VP_REUSE_DATA=$reuse_root"
                 ;;
               xdg)
                 echo "VP_HOME="
-                echo "XDG_DATA_HOME=$RUNNER_TEMP/setup-vp-reuse-xdg"
-                echo "SETUP_VP_REUSE_DATA=$RUNNER_TEMP/setup-vp-reuse-xdg/vite-plus"
+                echo "XDG_DATA_HOME=$reuse_root-xdg"
+                echo "SETUP_VP_REUSE_DATA=$reuse_root-xdg/vite-plus"
                 ;;
             esac
             echo "SETUP_VP_REUSE_CURL=$(command -v curl)"
