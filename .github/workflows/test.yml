@@ -41,6 +41,101 @@ jobs:
       - name: Verify installation
         run: vp --version
 
+  test-reuse-installed-version:
+    # Reproduces https://github.com/voidzero-dev/setup-vp/issues/145. Two setup
+    # steps share an installation, as jobs on a persistent runner would.
+    # This regression test fails until setup can reuse the installed version.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VP_PR_VERSION: ""
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Prepare project and record CLI downloads
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/reuse-project" "$RUNNER_TEMP/reuse-curl"
+          echo '{"name":"reuse-project","private":true,"devDependencies":{"vite-plus":"0.3.0"}}' > "$RUNNER_TEMP/reuse-project/package.json"
+          {
+            echo "VP_HOME=$RUNNER_TEMP/setup-vp-reuse"
+            echo "SETUP_VP_REUSE_CURL=$(command -v curl)"
+            echo "SETUP_VP_REUSE_DOWNLOADS=$RUNNER_TEMP/setup-vp-reuse-downloads.log"
+          } >> "$GITHUB_ENV"
+          : > "$RUNNER_TEMP/setup-vp-reuse-downloads.log"
+          cat > "$RUNNER_TEMP/reuse-curl/curl" <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          for arg in "$@"; do
+            case "$arg" in
+              */vite-plus-cli-*.tgz)
+                printf '%s\n' "$arg" >> "$SETUP_VP_REUSE_DOWNLOADS"
+                ;;
+            esac
+          done
+          exec "$SETUP_VP_REUSE_CURL" "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/reuse-curl/curl"
+          echo "$RUNNER_TEMP/reuse-curl" >> "$GITHUB_PATH"
+
+      - name: Setup Vite+ for the first time
+        id: first-setup
+        uses: ./
+        with:
+          working-directory: ${{ runner.temp }}/reuse-project
+          node-version: "22.23.1"
+          run-install: false
+          cache: false
+
+      - name: Check the first installation and start recording reuse
+        shell: bash
+        working-directory: ${{ runner.temp }}/reuse-project
+        env:
+          INSTALLED_VERSION: ${{ steps.first-setup.outputs.version }}
+        run: |
+          test "$INSTALLED_VERSION" = "0.3.0"
+          test -x "$VP_HOME/current/bin/vp"
+          test -f "$VP_HOME/0.3.0/node_modules/vite-plus/package.json"
+          test "$(node --version)" = "v22.23.1"
+          # Check that the recorder sees real downloads before relying on it.
+          test -s "$SETUP_VP_REUSE_DOWNLOADS"
+          echo "CLI downloads during the first setup:"
+          cat "$SETUP_VP_REUSE_DOWNLOADS"
+          # The installer truncates this log when it runs its own vp install.
+          stat -c '%y' "$VP_HOME/0.3.0/install.log" > "$RUNNER_TEMP/reuse-install-log-before"
+          : > "$SETUP_VP_REUSE_DOWNLOADS"
+
+      - name: Setup the same Vite+ version again
+        id: second-setup
+        uses: ./
+        with:
+          working-directory: ${{ runner.temp }}/reuse-project
+          node-version: "22.23.1"
+          run-install: false
+          cache: false
+
+      - name: Verify the second setup reuses the installation
+        shell: bash
+        working-directory: ${{ runner.temp }}/reuse-project
+        env:
+          INSTALLED_VERSION: ${{ steps.second-setup.outputs.version }}
+        run: |
+          test "$INSTALLED_VERSION" = "0.3.0"
+          test "$(node --version)" = "v22.23.1"
+          failed=0
+          if [ -s "$SETUP_VP_REUSE_DOWNLOADS" ]; then
+            echo "::error::The second setup downloaded the installed Vite+ version again (issue #145)."
+            cat "$SETUP_VP_REUSE_DOWNLOADS"
+            failed=1
+          fi
+          stat -c '%y' "$VP_HOME/0.3.0/install.log" > "$RUNNER_TEMP/reuse-install-log-after"
+          if ! cmp -s "$RUNNER_TEMP/reuse-install-log-before" "$RUNNER_TEMP/reuse-install-log-after"; then
+            echo "::error::The second setup rewrote install.log by running the wrapper install again (issue #145)."
+            diff -u "$RUNNER_TEMP/reuse-install-log-before" "$RUNNER_TEMP/reuse-install-log-after" || true
+            failed=1
+          fi
+          exit "$failed"
+
   test-preview-build:
     # End-to-end coverage for the commit-pinned install path: resolve the
     # newest pkg.pr.new preview build (0.0.0-commit.<sha>) from the registry
