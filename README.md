@@ -392,6 +392,19 @@ Separate package-manager modes require Vite+ 0.3.1+. Any explicit configuration,
 
 ## Caching
 
+### Reuse an installed version
+
+On runners that retain the Vite+ installation, the GitHub Action reuses an
+active exact version when its files and shims pass the reuse checks and Node.js
+and package-manager management are enabled. This applies to versions that support
+`VP_DUMP_DIRS` (`0.3.0` and later). The action still applies requested management
+opt-outs, sets up Node.js, and runs the remaining steps.
+
+The action runs the installer when it needs to change versions or repair the
+installation. It also runs the installer for dist-tags such as `latest`, version
+ranges, preview builds, and older releases. Reuse works with `cache: false` and
+does not restore an installation onto a fresh runner.
+
 ### Dependency Cache
 
 When `cache: true` is set, the action additionally caches project dependencies by auto-detecting your lock file:

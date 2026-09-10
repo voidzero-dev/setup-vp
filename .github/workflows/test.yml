@@ -44,11 +44,19 @@ jobs:
   test-reuse-installed-version:
     # Reproduces https://github.com/voidzero-dev/setup-vp/issues/145. Two setup
     # steps share an installation, as jobs on a persistent runner would.
-    # This regression test fails until setup can reuse the installed version.
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        layout: [home, split]
+        include:
+          - os: ubuntu-latest
+            layout: xdg
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     env:
       VP_PR_VERSION: ""
+      REUSE_LAYOUT: ${{ matrix.layout }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -58,7 +66,24 @@ jobs:
           mkdir -p "$RUNNER_TEMP/reuse-project" "$RUNNER_TEMP/reuse-curl"
           echo '{"name":"reuse-project","private":true,"devDependencies":{"vite-plus":"0.3.0"}}' > "$RUNNER_TEMP/reuse-project/package.json"
           {
-            echo "VP_HOME=$RUNNER_TEMP/setup-vp-reuse"
+            case "$REUSE_LAYOUT" in
+              home)
+                echo "VP_HOME=$RUNNER_TEMP/setup-vp-reuse"
+                echo "SETUP_VP_REUSE_DATA=$RUNNER_TEMP/setup-vp-reuse"
+                ;;
+              split)
+                echo "VP_HOME="
+                echo "VP_DATA_DIR=$RUNNER_TEMP/setup-vp-reuse"
+                echo "VP_BIN_DIR=$RUNNER_TEMP/setup-vp-reuse-bin"
+                echo "VP_CACHE_DIR=$RUNNER_TEMP/setup-vp-reuse-cache"
+                echo "SETUP_VP_REUSE_DATA=$RUNNER_TEMP/setup-vp-reuse"
+                ;;
+              xdg)
+                echo "VP_HOME="
+                echo "XDG_DATA_HOME=$RUNNER_TEMP/setup-vp-reuse-xdg"
+                echo "SETUP_VP_REUSE_DATA=$RUNNER_TEMP/setup-vp-reuse-xdg/vite-plus"
+                ;;
+            esac
             echo "SETUP_VP_REUSE_CURL=$(command -v curl)"
             echo "SETUP_VP_REUSE_DOWNLOADS=$RUNNER_TEMP/setup-vp-reuse-downloads.log"
           } >> "$GITHUB_ENV"
@@ -94,15 +119,18 @@ jobs:
           INSTALLED_VERSION: ${{ steps.first-setup.outputs.version }}
         run: |
           test "$INSTALLED_VERSION" = "0.3.0"
-          test -x "$VP_HOME/current/bin/vp"
-          test -f "$VP_HOME/0.3.0/node_modules/vite-plus/package.json"
+          binary=vp
+          if [ "$RUNNER_OS" = "Windows" ]; then binary=vp.exe; fi
+          test -x "$SETUP_VP_REUSE_DATA/current/bin/$binary"
+          test -f "$SETUP_VP_REUSE_DATA/0.3.0/node_modules/vite-plus/package.json"
           test "$(node --version)" = "v22.23.1"
           # Check that the recorder sees real downloads before relying on it.
-          test -s "$SETUP_VP_REUSE_DOWNLOADS"
+          # Windows downloads through PowerShell; install.log covers that path.
+          if [ "$RUNNER_OS" != "Windows" ]; then test -s "$SETUP_VP_REUSE_DOWNLOADS"; fi
           echo "CLI downloads during the first setup:"
           cat "$SETUP_VP_REUSE_DOWNLOADS"
           # The installer truncates this log when it runs its own vp install.
-          stat -c '%y' "$VP_HOME/0.3.0/install.log" > "$RUNNER_TEMP/reuse-install-log-before"
+          python -c 'import os, sys; print(os.stat(sys.argv[1]).st_mtime_ns)' "$SETUP_VP_REUSE_DATA/0.3.0/install.log" > "$RUNNER_TEMP/reuse-install-log-before"
           : > "$SETUP_VP_REUSE_DOWNLOADS"
 
       - name: Setup the same Vite+ version again
@@ -128,7 +156,7 @@ jobs:
             cat "$SETUP_VP_REUSE_DOWNLOADS"
             failed=1
           fi
-          stat -c '%y' "$VP_HOME/0.3.0/install.log" > "$RUNNER_TEMP/reuse-install-log-after"
+          python -c 'import os, sys; print(os.stat(sys.argv[1]).st_mtime_ns)' "$SETUP_VP_REUSE_DATA/0.3.0/install.log" > "$RUNNER_TEMP/reuse-install-log-after"
           if ! cmp -s "$RUNNER_TEMP/reuse-install-log-before" "$RUNNER_TEMP/reuse-install-log-after"; then
             echo "::error::The second setup rewrote install.log by running the wrapper install again (issue #145)."
             diff -u "$RUNNER_TEMP/reuse-install-log-before" "$RUNNER_TEMP/reuse-install-log-after" || true
