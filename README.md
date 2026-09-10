@@ -110,6 +110,19 @@ steps:
       cache: true
 ```
 
+### Use Package Managers Directly
+
+Vite+ has built-in managed `npm`, `pnpm`, `yarn`, and `bun` commands.
+By default, setup-vp enables these commands automatically in CI.
+If your project uses an older Vite+ version, upgrade Vite+ to v0.3.1 or later.
+
+```yaml
+steps:
+  - uses: actions/checkout@v7
+  - uses: voidzero-dev/setup-vp@v1.19.0
+  - run: pnpm --version
+```
+
 ### Version from `package.json` / Catalog
 
 Keep a single source of truth for the Vite+ version by resolving it from the
