@@ -41,6 +41,12 @@ jobs:
        github.event.workflow_run.head_repository.full_name != github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    outputs:
+      pr_number: ${{ steps.parameters.outputs.pr_number }}
+      setup_vp_ref: ${{ steps.parameters.outputs.setup_vp_ref }}
+      suite: ${{ steps.parameters.outputs.suite }}
+      vite_plus_version: ${{ steps.parameters.outputs.vite_plus_version }}
+      pipeline_url: ${{ steps.trigger.outputs.pipeline_url }}
     # Keep this privileged job API-only: no PR checkout, artifacts, or caches.
     steps:
       - name: Resolve test parameters
@@ -70,6 +76,7 @@ jobs:
           setup_vp_ref="$GITHUB_SHA"
           suite=required
           vite_plus_version=latest
+          report_pr_number=""
           skip_reason=""
 
           resolve_fork_request() {
@@ -126,6 +133,7 @@ jobs:
             should_run=true
             setup_vp_ref="$REQUEST_HEAD_SHA"
             suite=full
+            report_pr_number="$pr_number"
           }
 
           if [ "$EVENT_NAME" = "pull_request" ]; then
@@ -134,6 +142,7 @@ jobs:
               skip_reason='A maintainer with write access can review this fork PR and add the run-e2e label to test its current commit. New commits require removing and re-adding the label. The merge queue also tests the reviewed merge commit.'
             else
               setup_vp_ref="$PR_HEAD_SHA"
+              report_pr_number="$PR_NUMBER"
               while IFS= read -r changed_path; do
                 case "$changed_path" in
                   gitlab/* | src/gitlab/* | src/ci/* | dist/gitlab/* | .github/workflows/gitlab-e2e.yml | vite.config.ts | package.json | pnpm-lock.yaml | pnpm-workspace.yaml)
@@ -163,6 +172,7 @@ jobs:
             echo "setup_vp_ref=$setup_vp_ref"
             echo "suite=$suite"
             echo "vite_plus_version=$vite_plus_version"
+            echo "pr_number=$report_pr_number"
           } >> "$GITHUB_OUTPUT"
 
           if [ "$should_run" = "false" ]; then
@@ -272,3 +282,90 @@ jobs:
           fi
           echo "::error::GitLab pipeline finished with status $final_status."
           exit 1
+
+  report-result:
+    name: Report GitLab E2E result
+    needs: gitlab-e2e
+    if: always() && needs.gitlab-e2e.outputs.pr_number != ''
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    concurrency:
+      group: gitlab-e2e-comment-${{ needs.gitlab-e2e.outputs.pr_number }}
+      cancel-in-progress: false
+    steps:
+      - name: Update PR comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PR_NUMBER: ${{ needs.gitlab-e2e.outputs.pr_number }}
+          SETUP_VP_REF: ${{ needs.gitlab-e2e.outputs.setup_vp_ref }}
+          TEST_SUITE: ${{ needs.gitlab-e2e.outputs.suite }}
+          VITE_PLUS_VERSION: ${{ needs.gitlab-e2e.outputs.vite_plus_version }}
+          PIPELINE_URL: ${{ needs.gitlab-e2e.outputs.pipeline_url }}
+          RESULT: ${{ needs.gitlab-e2e.result }}
+        with:
+          script: |
+            const { PR_NUMBER, SETUP_VP_REF, TEST_SUITE, VITE_PLUS_VERSION, PIPELINE_URL, RESULT } = process.env;
+            const issue = { ...context.repo, issue_number: Number(PR_NUMBER) };
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: issue.issue_number });
+            if (pr.head.sha !== SETUP_VP_REF) {
+              core.info('The PR head changed; skip this result.');
+              return;
+            }
+
+            const marker = '<!-- setup-vp-gitlab-e2e -->';
+            const comments = await github.paginate(github.rest.issues.listComments, { ...issue, per_page: 100 });
+            let previous;
+            for (const comment of comments) {
+              if (!comment.body?.startsWith(marker)) continue;
+              if (comment.user?.login === 'github-actions[bot]') {
+                previous = comment;
+                break;
+              }
+              // Reuse a result posted by a maintainer, including before automation was added.
+              if (!comment.user) continue;
+              let permission;
+              try {
+                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  ...context.repo, username: comment.user.login,
+                });
+                permission = data.permission;
+              } catch (error) {
+                if (error.status === 404) continue;
+                throw error;
+              }
+              if (permission === 'admin' || permission === 'write') {
+                previous = comment;
+                break;
+              }
+            }
+
+            const attempt = Number(process.env.GITHUB_RUN_ATTEMPT);
+            const previousRun = previous?.body.match(/<!-- setup-vp-gitlab-e2e-run:(\d+):(\d+) -->/);
+            if (previousRun && (Number(previousRun[1]) > context.runId ||
+              (Number(previousRun[1]) === context.runId && Number(previousRun[2]) > attempt))) {
+              core.info('A newer run already reported its result.');
+              return;
+            }
+
+            let title;
+            if (RESULT === 'success') title = '✅ GitLab E2E passed';
+            else if (RESULT === 'cancelled') title = '⚠️ GitLab E2E run cancelled';
+            else if (!PIPELINE_URL) title = '❌ GitLab E2E could not start';
+            else title = '❌ GitLab E2E did not complete successfully';
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/attempts/${attempt}`;
+            const links = [PIPELINE_URL && `[GitLab pipeline](${PIPELINE_URL})`, `[GitHub Actions run](${runUrl})`].filter(Boolean);
+            const body = [
+              marker,
+              `<!-- setup-vp-gitlab-e2e-run:${context.runId}:${attempt} -->`,
+              '', `### ${title}`, '',
+              `Commit: \`${SETUP_VP_REF}\`  `,
+              `Suite: \`${TEST_SUITE}\` · Vite+ version: \`${VITE_PLUS_VERSION}\``,
+              '', links.join(' · '),
+            ].join('\n');
+            if (previous) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...issue, body });
+            }

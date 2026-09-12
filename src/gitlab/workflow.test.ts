@@ -152,6 +152,7 @@ describe("GitLab E2E workflow", () => {
         setup_vp_ref: headSha,
         suite: "full",
         vite_plus_version: "latest",
+        pr_number: "123",
       });
       expect(result.calls).toContain("collaborators/reviewer/permission");
       expect(result.calls).not.toContain("/files");
@@ -189,6 +190,7 @@ describe("GitLab E2E workflow", () => {
     const result = resolveParameters({ MOCK_PR: JSON.stringify({ ...approvedPr, ...changes }) });
     expect(result.status, result.stderr).toBe(0);
     expect(result.outputs.should_run).toBe("false");
+    expect(result.outputs.pr_number).toBe("");
     expect(result.summary).toContain("This approval is stale");
   });
 
@@ -204,6 +206,7 @@ describe("GitLab E2E workflow", () => {
     const result = resolveParameters(env);
     expect(result.status, result.stderr).toBe(0);
     expect(result.outputs.should_run).toBe("false");
+    expect(result.outputs.pr_number).toBe("");
     expect(result.calls).toBe("");
   });
 
@@ -226,6 +229,7 @@ describe("GitLab E2E workflow", () => {
     const result = resolveParameters({ EVENT_NAME: "pull_request" });
     expect(result.status, result.stderr).toBe(0);
     expect(result.outputs.should_run).toBe("false");
+    expect(result.outputs.pr_number).toBe("");
     expect(result.calls).toBe("");
     expect(result.summary).toContain("add the run-e2e label");
   });
@@ -240,7 +244,12 @@ describe("GitLab E2E workflow", () => {
       MOCK_CHANGED_FILES: files,
     });
     expect(result.status, result.stderr).toBe(0);
-    expect(result.outputs).toMatchObject({ should_run: "true", setup_vp_ref: headSha, suite });
+    expect(result.outputs).toMatchObject({
+      should_run: "true",
+      setup_vp_ref: headSha,
+      suite,
+      pr_number: "123",
+    });
     expect(result.calls).not.toContain("/permission");
   });
 
@@ -275,6 +284,7 @@ describe("GitLab E2E workflow", () => {
       setup_vp_ref: ref,
       suite,
       vite_plus_version: version,
+      pr_number: "",
     });
     expect(result.calls).toBe("");
   });
