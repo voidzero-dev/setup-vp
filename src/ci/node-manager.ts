@@ -29,5 +29,10 @@ export function supportsScopedEnv(versionOutput: string): boolean {
 }
 
 export function nodeManagerOffArgs(versionOutput: string): string[] {
+  if (parseInstalledVpVersion(versionOutput).startsWith("0.0.0-commit.")) {
+    console.info(
+      "setup-vp: node-manager: false requires a preview build that supports `vp env off node`. If this command is unsupported, use a newer preview or a stable release. setup-vp will not fall back to disabling package-manager management.",
+    );
+  }
   return supportsScopedEnv(versionOutput) ? ["env", "off", "node"] : ["env", "off"];
 }

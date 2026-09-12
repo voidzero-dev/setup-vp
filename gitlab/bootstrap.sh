@@ -184,8 +184,16 @@ SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1}"
 SETUP_VP_NODE_MANAGER="${SETUP_VP_NODE_MANAGER:-}"
 
 # Validate before installation; environment modes are configured by the runtime.
+setup_vp_runtime_node="node"
 case "$SETUP_VP_NODE_MANAGER" in
-  true | True | TRUE | false | False | FALSE | "") ;;
+  false | False | FALSE)
+    # Capture the image's Node before the installer adds shims; the runtime must start before it can disable Node management.
+    if ! setup_vp_runtime_node="$(command -v node)"; then
+      echo "setup-vp: Node.js is required in the GitLab runner image to execute the setup-vp runtime." >&2
+      return 127 2>/dev/null || exit 127
+    fi
+    ;;
+  true | True | TRUE | "") ;;
   *)
     echo "setup-vp: invalid node-manager value \"${SETUP_VP_NODE_MANAGER}\"; expected \"true\", \"false\", or empty." >&2
     return 1 2>/dev/null || exit 1
@@ -263,4 +271,4 @@ fi
 
 setup_vp_runtime_url="https://raw.githubusercontent.com/voidzero-dev/setup-vp/${SETUP_VP_SETUP_REF}/dist/gitlab/index.mjs"
 setup_vp_download "$setup_vp_runtime_url" "$setup_vp_runtime_tmp"
-node "$setup_vp_runtime_tmp"
+"$setup_vp_runtime_node" "$setup_vp_runtime_tmp"
