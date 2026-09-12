@@ -185,7 +185,7 @@ SETUP_VP_NODE_MANAGER="${SETUP_VP_NODE_MANAGER:-}"
 
 # Map the tri-state node-manager input onto the install script's
 # VP_NODE_MANAGER override (empty keeps the script's CI auto-detection).
-# The runtime completes the "false" opt-out with `vp env off` after install.
+# The runtime completes the "false" opt-out with `vp env off node` (Vite+ 0.3.1+; `vp env off` on older versions) after install.
 case "$SETUP_VP_NODE_MANAGER" in
   true | True | TRUE) export VP_NODE_MANAGER="yes" ;;
   false | False | FALSE) export VP_NODE_MANAGER="no" ;;

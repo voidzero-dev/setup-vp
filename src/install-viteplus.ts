@@ -46,7 +46,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
 
   // The install script auto-enables the Node.js manager on CI; VP_NODE_MANAGER
   // overrides that (yes/no; "no" skips node/npm/npx shim creation). The runtime
-  // half of the opt-out (`vp env off`) runs after install in runMain.
+  // half of the opt-out runs after install in runMain, scoped to Node.js on 0.3.1+.
   if (inputs.nodeManager !== undefined) {
     env.VP_NODE_MANAGER = inputs.nodeManager ? "yes" : "no";
   }

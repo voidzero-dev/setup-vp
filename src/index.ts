@@ -1,5 +1,6 @@
 import { saveState, getState, setFailed, info, setOutput, warning } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
+import { nodeManagerOffArgs } from "./ci/node-manager.js";
 import { getInputs } from "./inputs.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { setupSfw } from "./install-sfw.js";
@@ -34,8 +35,9 @@ async function runMain(inputs: Inputs): Promise<void> {
   // their internal JS runtime to managed Node, so also flip the config to
   // system-first. Inputs validation guarantees nodeVersion is unset here.
   if (inputs.nodeManager === false) {
-    info("Disabling Vite+ Node.js version management via vp env off...");
-    await exec("vp", ["env", "off"]);
+    const { stdout } = await getExecOutput("vp", ["--version"], { silent: true });
+    info("Disabling Vite+ Node.js version management...");
+    await exec("vp", nodeManagerOffArgs(stdout));
   } else if (nodeVersion) {
     info(`Setting up Node.js ${nodeVersion} via vp env use...`);
     await exec("vp", ["env", "use", nodeVersion]);
