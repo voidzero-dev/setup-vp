@@ -44,6 +44,9 @@ describe("installVitePlus", () => {
     });
 
     expect(calls).toEqual(["win32", "linux"]);
+    for (const [, installEnv] of runInstall.mock.calls) {
+      expect(installEnv.VP_NODE_MANAGER).toBeUndefined();
+    }
     expect(runInstall.mock.calls[0]?.[0]).toContain("install.ps1");
     expect(runInstall.mock.calls[1]?.[0]).toContain("install.sh");
   });

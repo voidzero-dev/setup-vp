@@ -165,15 +165,10 @@ jobs:
             exit 1
           fi
 
-  # End-to-end check of node-manager: false. The installer must skip
-  # node/npm/npx/corepack shim creation (VP_NODE_MANAGER=no) and the action
-  # must run `vp env off`, so vp commands resolve the Node.js already on the
-  # runner instead of a managed one. Records the preinstalled Node.js binary,
-  # runs a real `vp install`, then asserts the binary is unchanged, no shims
-  # exist, and `vp exec` resolves the system Node.js. $VP_HOME/js_runtime is
-  # NOT asserted empty: the installer always downloads a managed Node LTS
-  # there to install vp's own production deps with a deterministic runtime
-  # (vite_setup install_production_deps), independent of VP_NODE_MANAGER.
+  # End-to-end check of node-manager: false. Node.js management is disabled
+  # while package-manager management keeps the installer defaults. Shims may
+  # remain on PATH, so compare process.execPath to verify that both `node`
+  # and `vp exec node` execute the runner's original Node.js after installation.
   test-node-manager-off:
     strategy:
       fail-fast: false
@@ -187,8 +182,8 @@ jobs:
         id: before
         shell: bash
         run: |
-          echo "path=$(command -v node)" >> "$GITHUB_OUTPUT"
-          echo "version=$(node --version)" >> "$GITHUB_OUTPUT"
+          echo "path=$(node -p 'process.execPath' | tr -d '\r')" >> "$GITHUB_OUTPUT"
+          echo "version=$(node --version | tr -d '\r')" >> "$GITHUB_OUTPUT"
 
       - name: Create test project
         shell: bash
@@ -211,8 +206,8 @@ jobs:
       - name: Verify system Node.js is untouched
         shell: bash
         run: |
-          ACTUAL_PATH=$(command -v node)
-          ACTUAL_VERSION=$(node --version)
+          ACTUAL_PATH=$(node -p 'process.execPath' | tr -d '\r')
+          ACTUAL_VERSION=$(node --version | tr -d '\r')
           echo "node before: ${{ steps.before.outputs.path }} (${{ steps.before.outputs.version }})"
           echo "node after:  $ACTUAL_PATH ($ACTUAL_VERSION)"
           if [ "$ACTUAL_PATH" != "${{ steps.before.outputs.path }}" ]; then
@@ -224,20 +219,17 @@ jobs:
             exit 1
           fi
 
-      - name: Verify no Node.js shims were created
-        shell: bash
-        run: |
-          SHIMS=$(ls "$HOME/.vite-plus/bin" | grep -E '^(node|npm|npx|corepack)' || true)
-          if [ -n "$SHIMS" ]; then
-            echo "::error::unexpected Node.js shims in $HOME/.vite-plus/bin: $SHIMS"
-            exit 1
-          fi
-
       - name: Verify vp commands use the system Node.js
         shell: bash
         run: |
+          EXEC_PATH=$(vp exec node -p 'process.execPath' | tr -d '\r')
           EXEC_VERSION=$(vp exec node --version | tr -d '\r')
+          echo "vp exec node -p process.execPath: $EXEC_PATH"
           echo "vp exec node --version: $EXEC_VERSION"
+          if [ "$EXEC_PATH" != "${{ steps.before.outputs.path }}" ]; then
+            echo "::error::vp resolved Node.js at $EXEC_PATH; expected system ${{ steps.before.outputs.path }}"
+            exit 1
+          fi
           if [ "$EXEC_VERSION" != "${{ steps.before.outputs.version }}" ]; then
             echo "::error::vp resolved Node.js $EXEC_VERSION; expected system ${{ steps.before.outputs.version }}"
             exit 1

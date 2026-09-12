@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { nodeManagerOffArgs } from "../ci/node-manager.js";
 import { configureAuth } from "../ci/auth.js";
 import { prepareCacheMetadata } from "../ci/cache.js";
 import { setupSfw } from "../ci/install-sfw.js";
@@ -61,16 +62,13 @@ export async function runPrepare(
 
   await ports.installVitePlus(inputs.version, {
     env,
-    nodeManager: inputs.nodeManager,
     prependPath: (binDir) => ports.prependPath(binDir),
     logWarningFn: ports.logWarning,
   });
 
-  // VP_NODE_MANAGER=no at install time only skips shim creation; vp commands
-  // would still resolve their internal JS runtime to managed Node, so also
-  // flip the config to system-first (e.g. the Node.js from UseNode@1).
+  // Switch to the agent's Node.js after installation, preserving package-manager management.
   if (inputs.nodeManager === false) {
-    ports.run("vp", ["env", "off"]);
+    ports.run("vp", nodeManagerOffArgs(ports.getCommandOutput("vp", ["--version"]) || ""));
   }
 
   const runtimePath = path.resolve(process.argv[1] || "");

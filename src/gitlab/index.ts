@@ -1,6 +1,7 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseNodeManager } from "../ci/node-manager.js";
+import { getCommandOutput } from "../ci/process.js";
+import { nodeManagerOffArgs, parseNodeManager } from "../ci/node-manager.js";
 import type { RuntimeEnv } from "../ci/types.js";
 import { configureAuth } from "./auth.js";
 import { setupSfw } from "./install-sfw.js";
@@ -13,13 +14,10 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-// bootstrap.sh already exported VP_NODE_MANAGER=no for the install script,
-// which only skips shim creation; vp commands would still resolve their
-// internal JS runtime to managed Node, so also flip the config to
-// system-first.
+// Switch to the image's Node.js after installation, preserving package-manager management.
 export function applyNodeManagerMode(env: RuntimeEnv = process.env, runFn: typeof run = run): void {
   if (parseNodeManager(env.SETUP_VP_NODE_MANAGER) === false) {
-    runFn("vp", ["env", "off"]);
+    runFn("vp", nodeManagerOffArgs(getCommandOutput("vp", ["--version"]) || ""));
   }
 }
 

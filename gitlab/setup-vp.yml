@@ -14,7 +14,7 @@ spec:
       type: boolean
       default: false
     node-manager:
-      description: 'Control Vite+''s Node.js version manager. This is a string input: empty (default) lets the Vite+ installer decide (enabled on CI); "false" keeps the runner image''s Node.js (skips shim creation and makes vp commands prefer the system Node.js); "true" force-enables the managed Node.js.'
+      description: 'Control Vite+''s Node.js version manager. This is a string input: empty (default) lets the Vite+ installer decide (enabled on CI); "false" keeps the runner image''s Node.js (makes vp commands prefer the system Node.js after installation); "true" leaves the installer default unchanged.'
       default: ""
     registry-url:
       description: "Optional registry URL to write to a temporary .npmrc. Auth token is read from NODE_AUTH_TOKEN."

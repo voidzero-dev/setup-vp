@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +24,76 @@ function readShellFunction(name: string): string {
 }
 
 describe("GitLab bootstrap", () => {
+  it("starts the opt-out runtime with the image's Node before any managed Node can run", () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "setup-vp-node-opt-out-"));
+    const imageBin = join(fixtureDir, "image bin");
+    const shimDir = join(fixtureDir, "shims");
+    mkdirSync(imageBin);
+    mkdirSync(shimDir);
+    symlinkSync(process.execPath, join(imageBin, "node"));
+
+    // Downloads are local fixtures; the installed Node shim fails like an unavailable runtime download.
+    writeFileSync(
+      join(imageBin, "curl"),
+      `#!/usr/bin/env bash
+case "$6" in
+  */install.sh) cp "$SETUP_VP_TEST_DIR/installer.sh" "$8" ;;
+  */dist/gitlab/index.mjs) cp "$SETUP_VP_TEST_DIR/runtime.mjs" "$8" ;;
+  *) exit 90 ;;
+esac
+`,
+    );
+    chmodSync(join(imageBin, "curl"), 0o755);
+    writeFileSync(
+      join(fixtureDir, "installer.sh"),
+      `SHIM_DIR="$SETUP_VP_TEST_DIR/shims"
+cp "$SETUP_VP_TEST_DIR/node-shim" "$SHIM_DIR/node"
+`,
+    );
+    writeFileSync(
+      join(fixtureDir, "node-shim"),
+      "#!/usr/bin/env bash\necho 'managed Node download failed' >&2\nexit 42\n",
+    );
+    chmodSync(join(fixtureDir, "node-shim"), 0o755);
+    writeFileSync(
+      join(shimDir, "vp"),
+      `#!/usr/bin/env bash
+if [ "\${VP_DUMP_DIRS:-}" = "1" ]; then
+  for key in data bin cache config state; do
+    printf '%s\\t%s\\n' "$key" "$SETUP_VP_TEST_DIR/shims"
+  done
+else
+  printf 'vp v0.3.1\\n'
+fi
+`,
+    );
+    chmodSync(join(shimDir, "vp"), 0o755);
+    writeFileSync(
+      join(fixtureDir, "runtime.mjs"),
+      "console.log('runtime started:', process.execPath);\n",
+    );
+
+    try {
+      const result = spawnSync("bash", [bootstrapPath], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          HOME: fixtureDir,
+          PATH: `${imageBin}:${process.env.PATH}`,
+          CI: "true",
+          SETUP_VP_VERSION: "0.3.1",
+          SETUP_VP_NODE_MANAGER: "false",
+          SETUP_VP_ENV_FILE: "",
+          SETUP_VP_TEST_DIR: fixtureDir,
+        },
+      });
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain(`runtime started: ${process.execPath}`);
+    } finally {
+      rmSync(fixtureDir, { force: true, recursive: true });
+    }
+  });
+
   it("has valid Bash syntax", () => {
     const result = spawnSync("bash", ["-n", bootstrapPath], { encoding: "utf8" });
 
