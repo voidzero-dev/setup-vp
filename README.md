@@ -435,7 +435,7 @@ setup-vp also provides a GitLab CI/CD remote template hosted from this GitHub re
 
 See [GitLab integration notes](rfcs/gitlab-integration.md) for the design background, constraints, and follow-up work.
 
-The dedicated [GitLab end-to-end test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) tests each setup-vp pull request, merge, and release. The pipeline loads the template, bootstrap script, and compiled runtime from the exact setup-vp commit or release tag that it tests.
+The dedicated [GitLab end-to-end test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) tests same-repository pull requests, approved fork pull requests, merge queue commits, merges, and releases. The pipeline loads the template, bootstrap script, and compiled runtime from the exact setup-vp commit or release tag that it tests.
 
 ### Basic GitLab Usage
 
@@ -706,6 +706,12 @@ vp install
 - Run `vp run check:fix` and `vp run build`
 - Generated files under `dist/` must be committed, including `dist/index.mjs` for the GitHub Action, `dist/gitlab/index.mjs` for the GitLab template, and `dist/azure/index.mjs` for the Azure Pipelines runtime
 - Pre-commit hooks (via husky + lint-staged) will automatically run `vp check --fix` on staged files via `vpx lint-staged`
+
+### GitLab E2E for Fork Pull Requests
+
+After reviewing the commit, a maintainer with write access can add `run-e2e` to run the full GitLab suite. Approve the Actions run if prompted.
+
+For new commits, review the changes and remove and re-add `run-e2e`. Results and the GitLab pipeline link appear in the GitLab E2E workflow summary.
 
 ### Releasing
 

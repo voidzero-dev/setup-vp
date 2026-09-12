@@ -1,0 +1,23 @@
+name: GitLab E2E request
+
+# The privileged workflow verifies this file's Git blob before it trusts this
+# run-name format. Keep all request metadata in GitHub's run record, not artifacts.
+run-name: "PR #${{ github.event.pull_request.number }}: ${{ github.event.action }} ${{ github.event.label.name }} at ${{ github.event.pull_request.head.sha }}"
+
+on:
+  pull_request:
+    branches: [main]
+    # New commits need a fresh review and label event.
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  request:
+    if: >-
+      github.event.label.name == 'run-e2e' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo 'GitLab E2E requested. The workflow on main will validate this request.'
