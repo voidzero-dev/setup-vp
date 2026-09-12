@@ -183,12 +183,10 @@ SETUP_VP_VERSION="${SETUP_VP_VERSION:-latest}"
 SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1}"
 SETUP_VP_NODE_MANAGER="${SETUP_VP_NODE_MANAGER:-}"
 
-# Map the tri-state node-manager input onto the install script's
-# VP_NODE_MANAGER override (empty keeps the script's CI auto-detection).
-# The runtime completes the "false" opt-out with `vp env off node` (Vite+ 0.3.1+; `vp env off` on older versions) after install.
+# Opt out in the runtime: VP_NODE_MANAGER=no also disables package-manager management in newer installers.
 case "$SETUP_VP_NODE_MANAGER" in
   true | True | TRUE) export VP_NODE_MANAGER="yes" ;;
-  false | False | FALSE) export VP_NODE_MANAGER="no" ;;
+  false | False | FALSE) ;;
   "") ;;
   *)
     echo "setup-vp: invalid node-manager value \"${SETUP_VP_NODE_MANAGER}\"; expected \"true\", \"false\", or empty." >&2

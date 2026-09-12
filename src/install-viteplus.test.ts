@@ -318,9 +318,9 @@ describe("installVitePlus", () => {
 
   it.each([
     {
-      desc: "should pass VP_NODE_MANAGER=no when node-manager is false",
+      desc: "should leave installer management enabled when node-manager is false",
       nodeManager: false,
-      expected: "no",
+      expected: undefined,
     },
     {
       desc: "should pass VP_NODE_MANAGER=yes when node-manager is true",

@@ -14,10 +14,7 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-// bootstrap.sh already exported VP_NODE_MANAGER=no for the install script,
-// which only skips shim creation; vp commands would still resolve their
-// internal JS runtime to managed Node, so also flip the config to
-// system-first.
+// Switch to the image's Node.js after installation, preserving package-manager management.
 export function applyNodeManagerMode(env: RuntimeEnv = process.env, runFn: typeof run = run): void {
   if (parseNodeManager(env.SETUP_VP_NODE_MANAGER) === false) {
     runFn("vp", nodeManagerOffArgs(getCommandOutput("vp", ["--version"]) || ""));

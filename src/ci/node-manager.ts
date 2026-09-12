@@ -1,10 +1,8 @@
 import { parseInstalledVpVersion } from "./version.js";
 
-// Tri-state node-manager setting shared by the GitHub, GitLab, and Azure
-// runtimes. Unset lets the Vite+ install script auto-detect (it enables the
-// Node.js manager on CI); "false" opts out: VP_NODE_MANAGER=no at install
-// time skips node/npm/npx shim creation, and `vp env off node` (Vite+ 0.3.1+) afterwards makes vp
-// commands prefer the system Node.js; "true" force-enables.
+// Unset lets the installer decide (enabled on CI); true force-enables it.
+// False switches to system Node.js after installation via vp env off node
+// (vp env off before 0.3.1), without disabling package-manager management.
 // Accept the YAML 1.2 boolean forms (same set as @actions/core
 // getBooleanInput); Azure serializes booleans passed to string parameters as
 // "True"/"False".

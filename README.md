@@ -363,7 +363,7 @@ Omitting both `node-version` and `node-version-file` leaves the session without 
 
 `working-directory` applies to the action. Each later workflow step keeps its own working directory. Vite+ searches for Node.js version sources from each command's current working directory. For a subproject, set `working-directory` on the step that runs `node` or `vp`.
 
-`node-manager: false` skips Node.js shim creation and runs `vp env off node` (Vite+ 0.3.1+; `vp env off` on older versions), so `vp` commands prefer the Node.js already on `PATH`. It cannot be combined with `node-version` or `node-version-file`.
+`node-manager: false` runs `vp env off node` (Vite+ 0.3.1+; `vp env off` on older versions), so `vp` commands prefer the Node.js already on `PATH`. It cannot be combined with `node-version` or `node-version-file`.
 
 ## Outputs
 
@@ -539,16 +539,16 @@ test:
 
 ### GitLab Inputs
 
-| Input               | Description                                                                                                                                                                                         | Default   |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `version`           | Version of Vite+ to install                                                                                                                                                                         | `latest`  |
-| `working-directory` | Project directory used for relative paths and default `vp install` execution                                                                                                                        | `.`       |
-| `run-install`       | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args`                                                                                           | `true`    |
-| `sfw`               | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)                                                                                                    | `false`   |
-| `node-manager`      | String input: `"false"` keeps the runner image's Node.js (skips shims and disables Node.js management); `"true"` force-enables the managed Node.js; empty lets the installer decide (enabled on CI) |           |
-| `registry-url`      | Optional registry URL to write to a temporary `.npmrc`                                                                                                                                              |           |
-| `scope`             | Optional scope for authenticating against scoped registries                                                                                                                                         |           |
-| `setup-ref`         | setup-vp ref used to download the GitLab bootstrap and compiled runtime. Always set it to the same tag as the remote URL; the default is the latest release when the template was published         | `v1.19.0` |
+| Input               | Description                                                                                                                                                                                            | Default   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
+| `version`           | Version of Vite+ to install                                                                                                                                                                            | `latest`  |
+| `working-directory` | Project directory used for relative paths and default `vp install` execution                                                                                                                           | `.`       |
+| `run-install`       | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args`                                                                                              | `true`    |
+| `sfw`               | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)                                                                                                       | `false`   |
+| `node-manager`      | String input: `"false"` keeps the runner image's Node.js (disables Node.js management after installation); `"true"` force-enables the managed Node.js; empty lets the installer decide (enabled on CI) |           |
+| `registry-url`      | Optional registry URL to write to a temporary `.npmrc`                                                                                                                                                 |           |
+| `scope`             | Optional scope for authenticating against scoped registries                                                                                                                                            |           |
+| `setup-ref`         | setup-vp ref used to download the GitLab bootstrap and compiled runtime. Always set it to the same tag as the remote URL; the default is the latest release when the template was published            | `v1.19.0` |
 
 ### GitLab Notes
 

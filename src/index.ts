@@ -30,10 +30,8 @@ async function runMain(inputs: Inputs): Promise<void> {
   const version = resolveVitePlusVersion(inputs, projectDir);
   await installVitePlus({ ...inputs, version });
 
-  // Step 3: Set up Node.js. With node-manager: false, VP_NODE_MANAGER=no at
-  // install time only skips shim creation; vp commands would still resolve
-  // their internal JS runtime to managed Node, so also flip the config to
-  // system-first. Inputs validation guarantees nodeVersion is unset here.
+  // Step 3: Configure Node.js after installation so opting out leaves package managers enabled.
+  // Inputs validation guarantees nodeVersion is unset when node-manager is false.
   if (inputs.nodeManager === false) {
     const { stdout } = await getExecOutput("vp", ["--version"], { silent: true });
     info("Disabling Vite+ Node.js version management...");
