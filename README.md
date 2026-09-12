@@ -369,7 +369,7 @@ Omitting both `node-version` and `node-version-file` leaves the session without 
 `package-manager` controls Vite+'s package-manager management independently of `node-manager`. When omitted, it leaves the installer default unchanged (enabled on CI) and runs no environment-mode commands. Set it to `false` to run `vp env off pm` and prefer system package managers, or provide a mapping:
 
 ```yaml
-- uses: voidzero-dev/setup-vp@v1
+- uses: voidzero-dev/setup-vp@v1.19.0
   with:
     node-manager: false
     package-manager: |
