@@ -693,7 +693,7 @@ vp install
 
 After reviewing the commit, a maintainer with write access can add `run-e2e` to run the full GitLab suite. Approve the Actions run if prompted.
 
-For new commits, review the changes and remove and re-add `run-e2e`. Results and the GitLab pipeline link appear in the GitLab E2E workflow summary.
+For new commits, review the changes and remove and re-add `run-e2e`. Results and the GitLab pipeline link appear in a PR comment, which is updated after each run.
 
 ### Releasing
 
