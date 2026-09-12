@@ -29,10 +29,19 @@ function runInstallCommand(
   platform: NodeJS.Platform = process.platform,
 ): number {
   const { command, args } = getInstallScriptCommand(url, platform, env.VP_VPDIRS_AWARE === "1");
-  const result = spawnSync(command, args, {
+  const spawnOptions = {
     env: { ...process.env, ...env },
-    stdio: "inherit",
-  });
+    stdio: "inherit" as const,
+  };
+  let result = spawnSync(command, args, spawnOptions);
+  // GitLab PowerShell Desktop runners need not have PowerShell Core installed.
+  // Only fall back when the executable is missing, not when an installer fails.
+  if (
+    platform === "win32" &&
+    (result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
+  ) {
+    result = spawnSync("powershell.exe", args, spawnOptions);
+  }
   if (result.error) throw result.error;
   return result.status ?? 1;
 }
