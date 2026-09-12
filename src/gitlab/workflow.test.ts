@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,42 +29,41 @@ const approvedPr = {
 };
 const tempDirs: string[] = [];
 
+type ParameterResult = SpawnSyncReturns<string> & {
+  outputs: Record<string, string>;
+  summary: string;
+  calls: string;
+};
+
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-function resolveParameters(overrides: Record<string, string> = {}) {
+function resolveParameters(overrides: Record<string, string> = {}): ParameterResult {
   const dir = mkdtempSync(join(tmpdir(), "setup-vp-gitlab-workflow-"));
   tempDirs.push(dir);
   const output = join(dir, "output");
   const summary = join(dir, "summary");
   const calls = join(dir, "calls");
-  for (const file of [output, summary, calls]) writeFileSync(file, "");
+  for (const file of [output, summary, calls]) {
+    writeFileSync(file, "");
+  }
   writeFileSync(
     join(dir, "gh"),
     `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' "$*" >> "$MOCK_GH_CALLS"
+if [ -n "$MOCK_GH_FAILURE" ] && [[ "$*" == *"$MOCK_GH_FAILURE"* ]]; then
+  exit 1
+fi
 case "$*" in
-  */permission*)
-    [ "$MOCK_GH_FAILURE" != permission ]
-    printf '%s\\n' "$MOCK_PERMISSION"
-    ;;
-  *"contents/.github/workflows/e2e-request.yml?ref=$GITHUB_SHA"*)
-    [ "$MOCK_GH_FAILURE" != trusted_workflow ]
-    printf '%s\\n' trusted-blob
-    ;;
-  *"contents/.github/workflows/e2e-request.yml?ref=$REQUEST_HEAD_SHA"*)
-    [ "$MOCK_GH_FAILURE" != request_workflow ]
-    printf '%s\\n' "$MOCK_REQUEST_BLOB"
-    ;;
+  */permission*) printf '%s\\n' "$MOCK_PERMISSION" ;;
+  *"contents/.github/workflows/e2e-request.yml?ref=$GITHUB_SHA"*) printf '%s\\n' trusted-blob ;;
+  *"contents/.github/workflows/e2e-request.yml?ref=$REQUEST_HEAD_SHA"*) printf '%s\\n' "$MOCK_REQUEST_BLOB" ;;
   */files*) printf '%s\\n' "$MOCK_CHANGED_FILES" ;;
-  "api repos/upstream/setup-vp/pulls/123")
-    [ "$MOCK_GH_FAILURE" != pull ]
-    printf '%s\\n' "$MOCK_PR"
-    ;;
+  "api repos/upstream/setup-vp/pulls/123") printf '%s\\n' "$MOCK_PR" ;;
   *) exit 90 ;;
 esac
 `,
@@ -138,7 +137,7 @@ describe("GitLab E2E workflow", () => {
     expect(steps.every((step) => !step.uses && !step.run.includes("${{"))).toBe(true);
     expect(parameters.env?.REQUEST_HEAD_SHA).toBe("${{ github.event.workflow_run.head_sha }}");
     expect(parameters.env?.REQUEST_ACTOR).toBe("${{ github.event.workflow_run.actor.login }}");
-    for (const step of steps.filter((step) => step !== parameters)) {
+    for (const step of steps.slice(1)) {
       expect(step.if).toBe("steps.parameters.outputs.should_run == 'true'");
     }
   });
@@ -167,7 +166,7 @@ describe("GitLab E2E workflow", () => {
     expect(result.calls).not.toContain("/pulls/");
   });
 
-  it.each(["permission", "pull", "trusted_workflow", "request_workflow"])(
+  it.each(["/permission", "/pulls/", `?ref=${baseSha}`, `?ref=${headSha}`])(
     "fails closed when the %s API request fails",
     (endpoint) => {
       const result = resolveParameters({ MOCK_GH_FAILURE: endpoint });
@@ -177,20 +176,17 @@ describe("GitLab E2E workflow", () => {
   );
 
   it.each([
-    ["new commit", { ...approvedPr, head: { ...approvedPr.head, sha: "c".repeat(40) } }],
-    [
-      "different fork",
-      { ...approvedPr, head: { sha: headSha, repo: { full_name: "other/setup-vp" } } },
-    ],
-    ["base change", { ...approvedPr, base: { ...approvedPr.base, ref: "release" } }],
+    ["new commit", { head: { ...approvedPr.head, sha: "c".repeat(40) } }],
+    ["different fork", { head: { ...approvedPr.head, repo: { full_name: "other/setup-vp" } } }],
+    ["base change", { base: { ...approvedPr.base, ref: "release" } }],
     [
       "different repository",
-      { ...approvedPr, base: { ref: "main", repo: { full_name: "other/setup-vp" } } },
+      { base: { ...approvedPr.base, repo: { full_name: "other/setup-vp" } } },
     ],
-    ["closed PR", { ...approvedPr, state: "closed" }],
-    ["removed label", { ...approvedPr, labels: [{ name: "other-label" }] }],
-  ])("skips a stale approval after a %s", (_reason, pr) => {
-    const result = resolveParameters({ MOCK_PR: JSON.stringify(pr) });
+    ["closed PR", { state: "closed" }],
+    ["removed label", { labels: [{ name: "other-label" }] }],
+  ])("skips a stale approval after a %s", (_reason, changes) => {
+    const result = resolveParameters({ MOCK_PR: JSON.stringify({ ...approvedPr, ...changes }) });
     expect(result.status, result.stderr).toBe(0);
     expect(result.outputs.should_run).toBe("false");
     expect(result.summary).toContain("This approval is stale");
@@ -248,39 +244,38 @@ describe("GitLab E2E workflow", () => {
     expect(result.calls).not.toContain("/permission");
   });
 
-  it.each(["push", "merge_group", "workflow_dispatch"])("preserves %s defaults", (event) => {
-    const result = resolveParameters({ EVENT_NAME: event });
+  it.each([
+    ["push", { EVENT_NAME: "push" }, baseSha, "full", "latest"],
+    ["merge queue", { EVENT_NAME: "merge_group" }, baseSha, "full", "latest"],
+    ["manual defaults", { EVENT_NAME: "workflow_dispatch" }, baseSha, "full", "latest"],
+    [
+      "release tag",
+      { EVENT_NAME: "push", EVENT_REF: "refs/tags/v1.19.0", EVENT_REF_NAME: "v1.19.0" },
+      "v1.19.0",
+      "full",
+      "latest",
+    ],
+    [
+      "manual overrides",
+      {
+        EVENT_NAME: "workflow_dispatch",
+        MANUAL_SETUP_REF: headSha,
+        MANUAL_SUITE: "required",
+        MANUAL_VITE_PLUS_VERSION: "0.3.1",
+      },
+      headSha,
+      "required",
+      "0.3.1",
+    ],
+  ])("preserves %s parameters", (_name, env, ref, suite, version) => {
+    const result = resolveParameters(env);
     expect(result.status, result.stderr).toBe(0);
     expect(result.outputs).toEqual({
       should_run: "true",
-      setup_vp_ref: baseSha,
-      suite: "full",
-      vite_plus_version: "latest",
+      setup_vp_ref: ref,
+      suite,
+      vite_plus_version: version,
     });
     expect(result.calls).toBe("");
-  });
-
-  it("preserves release tags and manual input overrides", () => {
-    const release = resolveParameters({
-      EVENT_NAME: "push",
-      EVENT_REF: "refs/tags/v1.19.0",
-      EVENT_REF_NAME: "v1.19.0",
-    });
-    expect(release.status, release.stderr).toBe(0);
-    expect(release.outputs.setup_vp_ref).toBe("v1.19.0");
-
-    const manual = resolveParameters({
-      EVENT_NAME: "workflow_dispatch",
-      MANUAL_SETUP_REF: headSha,
-      MANUAL_SUITE: "required",
-      MANUAL_VITE_PLUS_VERSION: "0.3.1",
-    });
-    expect(manual.status, manual.stderr).toBe(0);
-    expect(manual.outputs).toEqual({
-      should_run: "true",
-      setup_vp_ref: headSha,
-      suite: "required",
-      vite_plus_version: "0.3.1",
-    });
   });
 });

@@ -691,15 +691,9 @@ vp install
 
 ### GitLab E2E for Fork Pull Requests
 
-Fork pull requests skip the automatic GitLab E2E run because `pull_request` workflows cannot access `GITLAB_TRIGGER_TOKEN`. After reviewing the current commit, a maintainer with repository write access can add the `run-e2e` label to run the full GitLab suite. Create this label in the repository if it does not exist.
+Update the fork branch from `main`. After reviewing the commit, a maintainer with write access can add `run-e2e` to run the full GitLab suite. Approve the Actions run if prompted.
 
-The label starts `.github/workflows/e2e-request.yml` through `pull_request`. This small workflow has no secrets and records the label event, PR number, and head SHA in its run name. GitHub may require a maintainer to approve this fork workflow run. Its completion starts `.github/workflows/gitlab-e2e.yml` on `main` through `workflow_run`.
-
-Both workflows must first be merged into `main`. Update the fork branch from `main` so it includes `e2e-request.yml` unchanged. The handler checks the labeler's write permission and compares the request workflow's Git blob at the requested SHA with the trusted copy. This prevents a fork from changing the events or run name used for approval. It then checks the PR's head SHA, head repository, base branch, open state, and current label through the GitHub API.
-
-The handler calls the GitLab API without checking out PR code or loading artifacts or caches from the fork. The approval allows the GitLab test project to load and execute the fork's template, bootstrap script, and compiled runtime at the exact PR head SHA from the label event. `workflow_run` has access to secrets, so keep this handler limited to API calls. The GitLab trigger token is available only to the pipeline trigger step.
-
-Each approval applies to that commit only. New pushes do not trigger another GitLab pipeline, even if the label remains. Review the new commit, then remove and re-add `run-e2e`. A queued run or rerun skips if the PR head changed, the PR closed, or the label was removed. The workflow summary contains the tested SHA, suite, pipeline link, and result.
+For new commits, review the changes and remove and re-add `run-e2e`. Results and the GitLab pipeline link appear in the GitLab E2E workflow summary.
 
 ### Releasing
 

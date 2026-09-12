@@ -72,6 +72,62 @@ jobs:
           vite_plus_version=latest
           skip_reason=""
 
+          resolve_fork_request() {
+            should_run=false
+            skip_reason='Only a successful run-e2e label request for a fork PR can approve a GitLab E2E run.'
+            local request_pattern='^PR #([1-9][0-9]*): labeled run-e2e at ([0-9a-f]{40})$'
+            if [ "$REQUEST_EVENT" != "pull_request" ] || [ "$REQUEST_CONCLUSION" != "success" ] ||
+              [ "$REQUEST_PATH" != ".github/workflows/e2e-request.yml" ] ||
+              [ "$REQUEST_HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ] ||
+              ! [[ "$REQUEST_TITLE" =~ $request_pattern ]]; then
+              return
+            fi
+
+            local pr_number="${BASH_REMATCH[1]}"
+            if [ "${BASH_REMATCH[2]}" != "$REQUEST_HEAD_SHA" ]; then
+              echo "::error::The request title does not match the workflow run's head SHA."
+              exit 1
+            fi
+
+            # Check the original labeler's access, even on reruns.
+            # GitHub maps the maintain role to write.
+            local permission
+            permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${REQUEST_ACTOR}/permission" --jq '.permission')"
+            case "$permission" in
+              admin | write) ;;
+              *)
+                echo "::error::Adding run-e2e requires repository write access to approve a test run."
+                exit 1
+                ;;
+            esac
+
+            # Compare Git blobs to reject altered request triggers or run names.
+            local workflow_url="repos/${GITHUB_REPOSITORY}/contents/${REQUEST_PATH}"
+            local trusted_blob request_blob
+            trusted_blob="$(gh api "${workflow_url}?ref=${GITHUB_SHA}" --jq '.sha')"
+            if ! request_blob="$(gh api "${workflow_url}?ref=${REQUEST_HEAD_SHA}" --jq '.sha')" ||
+              [ "$request_blob" != "$trusted_blob" ]; then
+              echo "::error::The fork must include e2e-request.yml unchanged from main. Update the branch, then remove and re-add run-e2e."
+              exit 1
+            fi
+
+            # Fork runs can have an empty workflow_run.pull_requests array.
+            # Resolve the PR from the verified title and cross-check its head.
+            local pull_request
+            pull_request="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}")"
+            if ! jq -e --arg sha "$REQUEST_HEAD_SHA" --arg head_repo "$REQUEST_HEAD_REPOSITORY" --arg repo "$GITHUB_REPOSITORY" \
+              '.state == "open" and .head.sha == $sha and .head.repo.full_name == $head_repo and
+               .base.repo.full_name == $repo and .base.ref == "main" and any(.labels[]; .name == "run-e2e")' \
+              <<< "$pull_request" > /dev/null; then
+              skip_reason='This approval is stale or does not match the PR: check its head, base, and run-e2e label. Review the current commit, then remove and re-add run-e2e to test it.'
+              return
+            fi
+
+            should_run=true
+            setup_vp_ref="$REQUEST_HEAD_SHA"
+            suite=full
+          }
+
           if [ "$EVENT_NAME" = "pull_request" ]; then
             if [ "$PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
               should_run=false
@@ -88,55 +144,7 @@ jobs:
               done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
             fi
           elif [ "$EVENT_NAME" = "workflow_run" ]; then
-            should_run=false
-            skip_reason='Only a successful run-e2e label request for a fork PR can approve a GitLab E2E run.'
-            request_pattern='^PR #([1-9][0-9]*): labeled run-e2e at ([0-9a-f]{40})$'
-            if [ "$REQUEST_EVENT" = "pull_request" ] && [ "$REQUEST_CONCLUSION" = "success" ] &&
-              [ "$REQUEST_PATH" = ".github/workflows/e2e-request.yml" ] &&
-              [ "$REQUEST_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ] &&
-              [[ "$REQUEST_TITLE" =~ $request_pattern ]]; then
-              PR_NUMBER="${BASH_REMATCH[1]}"
-              if [ "${BASH_REMATCH[2]}" != "$REQUEST_HEAD_SHA" ]; then
-                echo "::error::The request title does not match the workflow run's head SHA."
-                exit 1
-              fi
-
-              # Use the original request actor, not the person who reruns it.
-              # GitHub maps the maintain role to write.
-              permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${REQUEST_ACTOR}/permission" --jq '.permission')"
-              case "$permission" in
-                admin | write) ;;
-                *)
-                  echo "::error::Adding run-e2e requires repository write access to approve a test run."
-                  exit 1
-                  ;;
-              esac
-
-              # A fork could change the request workflow's triggers or title.
-              # Compare immutable Git blobs before trusting its run-name format.
-              # Read these files as metadata only; never execute their contents.
-              workflow_path=".github/workflows/e2e-request.yml"
-              trusted_blob="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${workflow_path}?ref=${GITHUB_SHA}" --jq '.sha')"
-              if ! request_blob="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${workflow_path}?ref=${REQUEST_HEAD_SHA}" --jq '.sha')" ||
-                [ "$request_blob" != "$trusted_blob" ]; then
-                echo "::error::The fork must include e2e-request.yml unchanged from main. Update the branch, then remove and re-add run-e2e."
-                exit 1
-              fi
-
-              # Fork runs can have an empty workflow_run.pull_requests array.
-              # Resolve the PR from the verified title and cross-check its head.
-              pull_request="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
-              if jq -e --arg sha "$REQUEST_HEAD_SHA" --arg head_repo "$REQUEST_HEAD_REPOSITORY" --arg repo "$GITHUB_REPOSITORY" \
-                '.state == "open" and .head.sha == $sha and .head.repo.full_name == $head_repo and
-                 .base.repo.full_name == $repo and .base.ref == "main" and any(.labels[]; .name == "run-e2e")' \
-                <<< "$pull_request" > /dev/null; then
-                should_run=true
-                setup_vp_ref="$REQUEST_HEAD_SHA"
-                suite=full
-              else
-                skip_reason='This approval is stale or does not match the PR: check its head, base, and run-e2e label. Review the current commit, then remove and re-add run-e2e to test it.'
-              fi
-            fi
+            resolve_fork_request
           elif [ "$EVENT_NAME" = "merge_group" ]; then
             suite=full
           elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
