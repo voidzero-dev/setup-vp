@@ -419,7 +419,7 @@ setup-vp also provides a GitLab CI/CD remote template hosted from this GitHub re
 
 See [GitLab integration notes](rfcs/gitlab-integration.md) for the design background, constraints, and follow-up work.
 
-The dedicated [GitLab end-to-end test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) tests each setup-vp pull request, merge, and release. The pipeline loads the template, bootstrap script, and compiled runtime from the exact setup-vp commit or release tag that it tests.
+The dedicated [GitLab end-to-end test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) tests same-repository pull requests, approved fork pull requests, merge queue commits, merges, and releases. The pipeline loads the template, bootstrap script, and compiled runtime from the exact setup-vp commit or release tag that it tests.
 
 ### Basic GitLab Usage
 
@@ -688,6 +688,18 @@ vp install
 - Run `vp run check:fix` and `vp run build`
 - Generated files under `dist/` must be committed, including `dist/index.mjs` for the GitHub Action, `dist/gitlab/index.mjs` for the GitLab template, and `dist/azure/index.mjs` for the Azure Pipelines runtime
 - Pre-commit hooks (via husky + lint-staged) will automatically run `vp check --fix` on staged files via `vpx lint-staged`
+
+### GitLab E2E for Fork Pull Requests
+
+Fork pull requests skip the automatic GitLab E2E run because `pull_request` workflows cannot access `GITLAB_TRIGGER_TOKEN`. After reviewing the current commit, a maintainer with repository write access can add the `run-e2e` label to run the full GitLab suite. Create this label in the repository if it does not exist.
+
+The label starts `.github/workflows/e2e-request.yml` through `pull_request`. This small workflow has no secrets and records the label event, PR number, and head SHA in its run name. GitHub may require a maintainer to approve this fork workflow run. Its completion starts `.github/workflows/gitlab-e2e.yml` on `main` through `workflow_run`.
+
+Both workflows must first be merged into `main`. Update the fork branch from `main` so it includes `e2e-request.yml` unchanged. The handler checks the labeler's write permission and compares the request workflow's Git blob at the requested SHA with the trusted copy. This prevents a fork from changing the events or run name used for approval. It then checks the PR's head SHA, head repository, base branch, open state, and current label through the GitHub API.
+
+The handler calls the GitLab API without checking out PR code or loading artifacts or caches from the fork. The approval allows the GitLab test project to load and execute the fork's template, bootstrap script, and compiled runtime at the exact PR head SHA from the label event. `workflow_run` has access to secrets, so keep this handler limited to API calls. The GitLab trigger token is available only to the pipeline trigger step.
+
+Each approval applies to that commit only. New pushes do not trigger another GitLab pipeline, even if the label remains. Review the new commit, then remove and re-add `run-e2e`. A queued run or rerun skips if the PR head changed, the PR closed, or the label was removed. The workflow summary contains the tested SHA, suite, pipeline link, and result.
 
 ### Releasing
 

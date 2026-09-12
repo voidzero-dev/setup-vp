@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+  workflow_run:
+    workflows: [GitLab E2E request]
+    types: [completed]
   merge_group:
   workflow_dispatch:
     inputs:
@@ -30,8 +33,15 @@ permissions:
 jobs:
   gitlab-e2e:
     name: GitLab E2E
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.path == '.github/workflows/e2e-request.yml' &&
+       github.event.workflow_run.head_repository.full_name != github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    # Keep this privileged job API-only: no PR checkout, artifacts, or caches.
     steps:
       - name: Resolve test parameters
         id: parameters
@@ -39,6 +49,13 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_REF: ${{ github.ref }}
           EVENT_REF_NAME: ${{ github.ref_name }}
+          REQUEST_EVENT: ${{ github.event.workflow_run.event }}
+          REQUEST_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          REQUEST_PATH: ${{ github.event.workflow_run.path }}
+          REQUEST_TITLE: ${{ github.event.workflow_run.display_title }}
+          REQUEST_ACTOR: ${{ github.event.workflow_run.actor.login }}
+          REQUEST_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REQUEST_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
           PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -53,11 +70,12 @@ jobs:
           setup_vp_ref="$GITHUB_SHA"
           suite=required
           vite_plus_version=latest
+          skip_reason=""
 
           if [ "$EVENT_NAME" = "pull_request" ]; then
             if [ "$PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
               should_run=false
-              echo "The workflow skips fork pull requests. The merge queue or a maintainer can test these changes."
+              skip_reason='A maintainer with write access can review this fork PR and add the run-e2e label to test its current commit. New commits require removing and re-adding the label. The merge queue also tests the reviewed merge commit.'
             else
               setup_vp_ref="$PR_HEAD_SHA"
               while IFS= read -r changed_path; do
@@ -68,6 +86,56 @@ jobs:
                     ;;
                 esac
               done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
+            fi
+          elif [ "$EVENT_NAME" = "workflow_run" ]; then
+            should_run=false
+            skip_reason='Only a successful run-e2e label request for a fork PR can approve a GitLab E2E run.'
+            request_pattern='^PR #([1-9][0-9]*): labeled run-e2e at ([0-9a-f]{40})$'
+            if [ "$REQUEST_EVENT" = "pull_request" ] && [ "$REQUEST_CONCLUSION" = "success" ] &&
+              [ "$REQUEST_PATH" = ".github/workflows/e2e-request.yml" ] &&
+              [ "$REQUEST_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ] &&
+              [[ "$REQUEST_TITLE" =~ $request_pattern ]]; then
+              PR_NUMBER="${BASH_REMATCH[1]}"
+              if [ "${BASH_REMATCH[2]}" != "$REQUEST_HEAD_SHA" ]; then
+                echo "::error::The request title does not match the workflow run's head SHA."
+                exit 1
+              fi
+
+              # Use the original request actor, not the person who reruns it.
+              # GitHub maps the maintain role to write.
+              permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${REQUEST_ACTOR}/permission" --jq '.permission')"
+              case "$permission" in
+                admin | write) ;;
+                *)
+                  echo "::error::Adding run-e2e requires repository write access to approve a test run."
+                  exit 1
+                  ;;
+              esac
+
+              # A fork could change the request workflow's triggers or title.
+              # Compare immutable Git blobs before trusting its run-name format.
+              # Read these files as metadata only; never execute their contents.
+              workflow_path=".github/workflows/e2e-request.yml"
+              trusted_blob="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${workflow_path}?ref=${GITHUB_SHA}" --jq '.sha')"
+              if ! request_blob="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${workflow_path}?ref=${REQUEST_HEAD_SHA}" --jq '.sha')" ||
+                [ "$request_blob" != "$trusted_blob" ]; then
+                echo "::error::The fork must include e2e-request.yml unchanged from main. Update the branch, then remove and re-add run-e2e."
+                exit 1
+              fi
+
+              # Fork runs can have an empty workflow_run.pull_requests array.
+              # Resolve the PR from the verified title and cross-check its head.
+              pull_request="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+              if jq -e --arg sha "$REQUEST_HEAD_SHA" --arg head_repo "$REQUEST_HEAD_REPOSITORY" --arg repo "$GITHUB_REPOSITORY" \
+                '.state == "open" and .head.sha == $sha and .head.repo.full_name == $head_repo and
+                 .base.repo.full_name == $repo and .base.ref == "main" and any(.labels[]; .name == "run-e2e")' \
+                <<< "$pull_request" > /dev/null; then
+                should_run=true
+                setup_vp_ref="$REQUEST_HEAD_SHA"
+                suite=full
+              else
+                skip_reason='This approval is stale or does not match the PR: check its head, base, and run-e2e label. Review the current commit, then remove and re-add run-e2e to test it.'
+              fi
             fi
           elif [ "$EVENT_NAME" = "merge_group" ]; then
             suite=full
@@ -90,10 +158,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [ "$should_run" = "false" ]; then
+            echo "$skip_reason"
             {
               echo "### GitLab E2E"
               echo
-              echo "The workflow skipped this fork pull request. The merge queue tests the reviewed merge commit."
+              echo "$skip_reason"
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
