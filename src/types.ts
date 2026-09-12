@@ -35,19 +35,8 @@ export interface Inputs {
   readonly scope?: string;
 }
 
-// Lock file types
-export enum LockFileType {
-  Npm = "npm",
-  Pnpm = "pnpm",
-  Yarn = "yarn",
-  Bun = "bun",
-}
-
-export interface LockFileInfo {
-  type: LockFileType;
-  path: string;
-  filename: string;
-}
+export { LockFileType } from "./ci/types.js";
+export type { LockFileInfo } from "./ci/types.js";
 
 // State keys for main/post communication
 export enum State {

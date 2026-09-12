@@ -1,5 +1,7 @@
 # RFC: setup-vp GitLab CI/CD Remote Template
 
+The original rollout examples below describe the initial release. For current inputs and usage, see the [README](../README.md#gitlab-cicd). Version resolution, Node selection, project auth, and install execution now use shared portable primitives under `src/ci/`.
+
 ## Summary
 
 This RFC proposes a GitLab CI/CD remote template for `voidzero-dev/setup-vp`.
@@ -72,7 +74,7 @@ Relevant GitLab documentation:
 3. Do not use `include:component` for the initial design.
 4. Do not run the GitHub Action bundle (`dist/index.mjs`) inside GitLab.
 5. Do not implement GitHub Actions cache semantics inside the GitLab template.
-6. Do not provide Windows runner support in the initial template.
+6. Keep shell-specific bootstraps thin; Windows uses `gitlab/setup-vp-windows.yml` and the same compiled runtime.
 
 ## Design
 
@@ -248,7 +250,7 @@ include:
 ```
 
 If `sfw` is already on `PATH`, the template reuses it. Otherwise it downloads a
-pinned `sfw-free` release for Linux or macOS when a matching binary exists. If
+pinned `sfw-free` release for Linux, macOS, or Windows when a matching binary exists. If
 the runner architecture is unsupported, the template logs a warning and falls
 back to plain `vp install`.
 
@@ -264,50 +266,15 @@ back to plain `vp install`.
 | `scope`             |          | Optional scope for authenticating against scoped registries.                  |
 | `setup-ref`         | `v1`     | Ref used to download `bootstrap.sh` and `dist/gitlab/index.mjs`.              |
 
-## GitHub Action Parity
+## Current Parity and Cache Design
 
-| Capability              | GitHub Action | GitLab template | Notes                                        |
-| ----------------------- | ------------- | --------------- | -------------------------------------------- |
-| Install Vite+           | Yes           | Yes             | GitLab uses shell in `before_script`.        |
-| `node-version`          | Yes           | No              | GitLab requires Node.js in the runner image. |
-| `node-version-file`     | Yes           | No              | GitLab requires Node.js in the runner image. |
-| `working-directory`     | Yes           | Yes             | Used for relative paths and default install. |
-| `run-install`           | Yes           | Yes             | Structured `cwd` and `args` are supported.   |
-| `registry-url`          | Yes           | Yes             | GitLab requires `NODE_AUTH_TOKEN` variable.  |
-| `scope`                 | Yes           | Yes             | Same input name.                             |
-| `sfw`                   | Yes           | Yes             | GitLab supports Unix-like runners only.      |
-| `cache`                 | Yes           | No              | GitLab cache is job-level YAML behavior.     |
-| `cache-dependency-path` | Yes           | No              | See cache section below.                     |
+GitLab and GitHub now share Vite+ version resolution from explicit inputs, package manifests, catalogs, and lockfiles. Both support Node version files and explicit `vp env use` selection, project `.npmrc` auth, full YAML install entries, and the bounded `sfw` command-lookup retry. Windows runners use the PowerShell template; Unix runners keep the Bash template.
 
-## Cache Design
+Native caching remains provider-specific. Extend `.setup-vp-cached` to persist `.setup-vp-cache/`. GitLab restores this project-relative directory before setup; the runtime then copies a compatible snapshot into the store returned by `vp pm cache dir`. Snapshots are separated by OS, architecture, and package manager. A lock-file hash distinguishes exact hits from fallback data. The job's `after_script` snapshots the store again before GitLab uploads it. The same native cache also holds version/platform-specific `sfw` binaries.
 
-The GitLab template does not expose `cache` or `cache-dependency-path` inputs.
-This is an intentional difference.
+The `cache-dependency-path` input selects a lock file. `cache-policy: pull` restores without uploading; the default is `pull-push`. Cache policy is static YAML because GitLab restores before any job scripts run. Existing jobs can override the native cache mapping. See [GitLab caching](https://docs.gitlab.com/ci/caching/).
 
-The GitHub Action restores cache during the action's main phase and saves cache
-during the action's post phase. GitLab cache is configured as a job keyword and
-is restored by the runner before `before_script` starts. A remote template
-running shell commands inside `before_script` cannot compute dynamic cache paths
-and then ask GitLab to restore those paths for the same job.
-
-GitLab users should configure `cache:` on their jobs directly:
-
-```yaml
-test:
-  extends: .setup-vp
-  image: node:24
-  cache:
-    key:
-      files:
-        - pnpm-lock.yaml
-    paths:
-      - .pnpm-store/
-  script:
-    - vp run test
-```
-
-Follow-up cache work should happen separately after deciding whether Vite+ should
-support a stable project-local package manager cache directory for GitLab.
+`SETUP_VP_INSTALLED_VERSION` and `SETUP_VP_CACHE_HIT` are exported to the job shell and written to `.setup-vp-outputs.env`. Consumers can publish that file as a dotenv report. Auth values are not included.
 
 ## Security
 

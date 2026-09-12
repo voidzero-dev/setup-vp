@@ -1,5 +1,7 @@
 # RFC: setup-vp Azure Pipelines Step Template
 
+The original rollout examples below describe the initial release. For current inputs and usage, see the [README](../README.md#azure-pipelines). Version resolution, Node selection, project auth, and install execution now use shared portable primitives under `src/ci/`.
+
 ## Summary
 
 This RFC adds an Azure Pipelines step template for `voidzero-dev/setup-vp`. Azure users install Vite+, optionally select Node.js, restore and save the Vite+ package-manager cache through Azure `Cache@2`, optionally run `vp install`, and can use Socket Firewall Free and private npm registry authentication.
@@ -57,8 +59,8 @@ The GitLab integration established the right pattern: a provider-native template
 
 1. Do not publish an Azure DevOps Marketplace extension in this release.
 2. Do not run `dist/index.mjs` inside Azure Pipelines.
-3. Do not add `versionFile` or `nodeVersionFile` inputs in this release.
-4. Do not change GitHub Action or GitLab template behavior.
+3. Keep version resolution shared with GitHub and GitLab; no provider-specific parser.
+4. Keep provider-specific cache transport outside the shared resolvers.
 
 ## Design
 
@@ -77,7 +79,7 @@ Pin `ref` and `setupRef` to the same immutable tag or commit SHA for strict repr
 
 ### Execution Flow
 
-1. Optional `UseNode@1` when `nodeVersion` is non-empty.
+1. Optional `UseNode@1` when `bootstrapNodeVersion` is non-empty.
 2. `prepare`: install Vite+, prepend Vite+ bin to PATH, compute cache metadata.
 3. Optional `Cache@2` when `cache: true` and `SETUP_VP_CACHE_READY=true`.
 4. `finalize`: configure npm auth, install/reuse `sfw`, run `vp install`, emit `SETUP_VP_INSTALLED_VERSION`.
@@ -112,21 +114,18 @@ For private registries, consumers define `NODE_AUTH_TOKEN` as an Azure secret
 pipeline variable. Both finalize branches explicitly map that secret into the
 runtime environment before configuring registry authentication.
 
-## GitHub/GitLab/Azure Parity
+## Current GitHub/GitLab/Azure Parity
 
-| Capability              | GitHub Action | GitLab template | Azure template    |
-| ----------------------- | ------------- | --------------- | ----------------- |
-| Install Vite+           | Yes           | Yes             | Yes               |
-| `node-version`          | Yes           | No              | Yes (`UseNode@1`) |
-| `node-version-file`     | Yes           | No              | No                |
-| `version-file`          | Yes           | No              | No                |
-| `working-directory`     | Yes           | Yes             | Yes               |
-| `run-install`           | Yes           | Yes             | Yes               |
-| `registry-url`          | Yes           | Yes             | Yes               |
-| `scope`                 | Yes           | Yes             | Yes               |
-| `sfw`                   | Yes           | Yes (Unix)      | Yes (all OS)      |
-| `cache`                 | Yes           | No              | Yes (`Cache@2`)   |
-| `cache-dependency-path` | Yes           | No              | Yes               |
+| Capability                                                  | GitHub              | GitLab                 | Azure                             |
+| ----------------------------------------------------------- | ------------------- | ---------------------- | --------------------------------- |
+| Vite+ package/catalog/lockfile resolution and version files | Shared resolver     | Shared resolver        | Shared resolver                   |
+| Node version and version-file selection                     | `vp env use`        | `vp env use`           | `vp env use`                      |
+| Project `.npmrc` auth and explicit registry/scope           | Yes                 | Yes                    | Yes; custom secrets use `authEnv` |
+| Full YAML install entries and `sfw` lookup retry            | Yes                 | Yes                    | Yes                               |
+| Windows bootstrap                                           | Action runtime      | PowerShell template    | PowerShell branch                 |
+| Dependency and `sfw` caching                                | Actions cache       | `.setup-vp-cached`     | `Cache@2`                         |
+| Restore-only dependency cache                               | `cache-save: false` | `cache-policy: pull`   | Not supported by `Cache@2`        |
+| Version/cache-hit outputs                                   | Step outputs        | Shell variables/dotenv | Job variables/named task outputs  |
 
 ## Cache Design
 
@@ -138,6 +137,14 @@ When `cache: true`, prepare detects the lock file, resolves `vp pm cache dir`, a
 - `SETUP_VP_LOCK_TYPE`
 
 `Cache@2` runs only when `SETUP_VP_CACHE_READY=true`. Missing lock files or cache paths log a warning and skip caching without failing setup.
+
+The template also restores a separate version/platform-specific `sfw` cache before finalize. Azure `Cache@2` automatically registers post-job saving and has no supported restore-only input. A `cacheSave` parameter would not be enforceable with this backend, so none is exposed. [Azure pipeline caching](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops)
+
+Finalize tasks are named `<stepName>Unix` and `<stepName>Windows`. Both publish `version` and a boolean `cacheHit`; the existing `SETUP_VP_CACHE_HIT` variable retains Azure's `inexact` value. The default prefix is `setupVp`.
+
+`nodeVersion` now selects the managed runtime; `bootstrapNodeVersion` retains the former `UseNode@1` role. The prepare phase records its actual Node executable so finalize does not depend on the selected project Node version.
+
+Native Azure E2E provisioning and execution are deferred. Local runtime and template tests remain part of repository verification.
 
 ## Rollout
 

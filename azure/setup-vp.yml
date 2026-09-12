@@ -1,7 +1,19 @@
 parameters:
   - name: version
     type: string
-    default: latest
+    default: ""
+  - name: versionFile
+    type: string
+    default: ""
+  - name: nodeVersionFile
+    type: string
+    default: ""
+  - name: bootstrapNodeVersion
+    type: string
+    default: 24.x
+  - name: stepName
+    type: string
+    default: setupVp
   - name: workingDirectory
     type: string
     default: .
@@ -14,6 +26,9 @@ parameters:
   - name: registryUrl
     type: string
     default: ""
+  - name: authEnv
+    type: object
+    default: {}
   - name: scope
     type: string
     default: ""
@@ -22,7 +37,7 @@ parameters:
     default: v1.20.0
   - name: nodeVersion
     type: string
-    default: 24.x
+    default: ""
   - name: packageManager
     type: object
     default: ""
@@ -37,11 +52,11 @@ parameters:
     default: ""
 
 steps:
-  - ${{ if ne(parameters.nodeVersion, '') }}:
+  - ${{ if ne(parameters.bootstrapNodeVersion, '') }}:
       - task: UseNode@1
-        displayName: Use Node.js
+        displayName: Use bootstrap Node.js
         inputs:
-          version: ${{ parameters.nodeVersion }}
+          version: ${{ parameters.bootstrapNodeVersion }}
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -53,6 +68,9 @@ steps:
     displayName: setup-vp prepare (Windows)
     env:
       SETUP_VP_VERSION: ${{ parameters.version }}
+      SETUP_VP_VERSION_FILE: ${{ parameters.versionFile }}
+      SETUP_VP_NODE_VERSION: ${{ parameters.nodeVersion }}
+      SETUP_VP_NODE_VERSION_FILE: ${{ parameters.nodeVersionFile }}
       SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
       SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
       SETUP_VP_SFW: ${{ iif(eq(parameters.sfw, true), 'true', 'false') }}
@@ -76,6 +94,9 @@ steps:
     displayName: setup-vp prepare (Unix)
     env:
       SETUP_VP_VERSION: ${{ parameters.version }}
+      SETUP_VP_VERSION_FILE: ${{ parameters.versionFile }}
+      SETUP_VP_NODE_VERSION: ${{ parameters.nodeVersion }}
+      SETUP_VP_NODE_VERSION_FILE: ${{ parameters.nodeVersionFile }}
       SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
       SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
       SETUP_VP_SFW: ${{ iif(eq(parameters.sfw, true), 'true', 'false') }}
@@ -87,6 +108,14 @@ steps:
       SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
       SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
       SETUP_VP_RUNTIME_OUT: $(Agent.TempDirectory)/setup-vp-azure/dist/azure/index.mjs
+
+  - ${{ if eq(parameters.sfw, true) }}:
+      - task: Cache@2
+        displayName: Cache Socket Firewall Free
+        condition: and(succeeded(), eq(variables['SETUP_VP_SFW_READY'], 'true'))
+        inputs:
+          key: '"setup-vp-sfw" | "$(SETUP_VP_SFW_CACHE_KEY)"'
+          path: $(SETUP_VP_SFW_CACHE_DIR)
 
   - ${{ if eq(parameters.cache, true) }}:
       - task: Cache@2
@@ -102,9 +131,10 @@ steps:
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
-      node "$(Agent.TempDirectory)\setup-vp-azure\dist\azure\index.mjs" finalize
+      & "$(SETUP_VP_BOOTSTRAP_NODE)" "$(Agent.TempDirectory)\setup-vp-azure\dist\azure\index.mjs" finalize
     condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
     displayName: setup-vp finalize (Windows)
+    name: ${{ parameters.stepName }}Windows
     env:
       SETUP_VP_VERSION: ${{ parameters.version }}
       SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
@@ -113,14 +143,16 @@ steps:
       SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
       SETUP_VP_SCOPE: ${{ parameters.scope }}
       NODE_AUTH_TOKEN: $(NODE_AUTH_TOKEN)
+      ${{ insert }}: ${{ parameters.authEnv }}
       SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
       SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
 
   - bash: |
       set -euo pipefail
-      node "$(Agent.TempDirectory)/setup-vp-azure/dist/azure/index.mjs" finalize
+      "$(SETUP_VP_BOOTSTRAP_NODE)" "$(Agent.TempDirectory)/setup-vp-azure/dist/azure/index.mjs" finalize
     condition: and(succeeded(), ne(variables['Agent.OS'], 'Windows_NT'))
     displayName: setup-vp finalize (Unix)
+    name: ${{ parameters.stepName }}Unix
     env:
       SETUP_VP_VERSION: ${{ parameters.version }}
       SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
@@ -129,5 +161,6 @@ steps:
       SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
       SETUP_VP_SCOPE: ${{ parameters.scope }}
       NODE_AUTH_TOKEN: $(NODE_AUTH_TOKEN)
+      ${{ insert }}: ${{ parameters.authEnv }}
       SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
       SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}

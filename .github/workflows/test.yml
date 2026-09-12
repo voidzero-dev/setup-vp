@@ -889,6 +889,7 @@ jobs:
         shell: pwsh
         run: |
           [scriptblock]::Create((Get-Content -Raw azure/bootstrap.ps1)) > $null
+          [scriptblock]::Create((Get-Content -Raw gitlab/bootstrap.ps1)) > $null
 
   build:
     runs-on: ubuntu-latest

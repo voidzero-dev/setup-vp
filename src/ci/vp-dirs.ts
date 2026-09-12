@@ -121,7 +121,7 @@ export function getInstallScriptCommand(
 
     const script = `
 $dirsFile = $env:${VP_DIRS_FILE_ENV}
-Set-Content -LiteralPath $dirsFile -Value '' -NoNewline
+Set-Content -LiteralPath $dirsFile -Value '' -NoNewline -Encoding UTF8
 . ([scriptblock]::Create((irm -TimeoutSec ${PWSH_TIMEOUT_SEC} ${url})))
 $vpDir = if ($script:ShimDir) {
   $script:ShimDir
@@ -135,18 +135,21 @@ if (-not (Test-Path -LiteralPath $vpPath)) {
   $vpPath = Join-Path $vpDir 'vp.cmd'
 }
 if (Test-Path -LiteralPath $vpPath) {
-  & $vpPath --version | Set-Content -LiteralPath $dirsFile
+  & $vpPath --version | Set-Content -LiteralPath $dirsFile -Encoding UTF8
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   $env:VP_DUMP_DIRS = '1'
-  & $vpPath | Add-Content -LiteralPath $dirsFile
+  & $vpPath | Add-Content -LiteralPath $dirsFile -Encoding UTF8
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 `.trim();
     return { command: "pwsh", args: ["-Command", script] };
   }
 
+  // Upstream installers read optional positional arguments without defaults.
+  // Do not inherit nounset from a caller that exports SHELLOPTS.
   if (!detectDirs) {
     const script = `
+set +u
 set -o pipefail
 curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | bash
 `.trim();
@@ -154,6 +157,7 @@ curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | bash
   }
 
   const script = `
+set +u
 set -eo pipefail
 installer_file="$(mktemp "\${TMPDIR:-/tmp}/setup-vp-install.XXXXXX")"
 trap 'rm -f "$installer_file"' EXIT

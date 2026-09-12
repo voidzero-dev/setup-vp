@@ -19,6 +19,15 @@ afterEach(() => {
 });
 
 describe("GitLab shell helpers", () => {
+  it("quotes PowerShell values literally and validates variable names", () => {
+    const envFile = path.join(tempDir(), "env.ps1");
+    const env = { SETUP_VP_ENV_FILE: envFile, SETUP_VP_ENV_FORMAT: "powershell" };
+    exportShellEnv("TOKEN", "it's $literal; `text", env);
+    expect(readFileSync(envFile, "utf8")).toBe("$env:TOKEN = 'it''s $literal; `text'\n");
+    expect(() => exportShellEnv("TOKEN; whoami", "value", env)).toThrow(
+      "Invalid environment variable name",
+    );
+  });
   it("quotes shell environment values", () => {
     expect(shellQuote("plain")).toBe("'plain'");
     expect(shellQuote("has spaces")).toBe("'has spaces'");
