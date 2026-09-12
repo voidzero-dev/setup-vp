@@ -235,6 +235,55 @@ jobs:
             exit 1
           fi
 
+  test-package-manager:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        config:
+          - input: "true"
+            modes: '["managed", "managed", "managed", "managed"]'
+          - input: "false"
+            modes: '["system_first", "system_first", "system_first", "system_first"]'
+          - input: "{npm: false, pnpm: true, yarn: false}"
+            modes: '["system_first", "managed", "system_first", "managed"]'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Setup Vite+ with package-manager configuration
+        uses: ./
+        with:
+          package-manager: ${{ matrix.config.input }}
+          run-install: false
+          cache: false
+
+      # Query the real CLI so this covers input parsing, installation, and mode
+      # changes, including true and omitted entries in a partial mapping.
+      - name: Verify package-manager modes and independent Node.js management
+        shell: bash
+        env:
+          EXPECTED_MODES: ${{ matrix.config.modes }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+
+          const managers = ['npm', 'pnpm', 'yarn', 'bun'];
+          const modes = JSON.parse(process.env.EXPECTED_MODES);
+          for (const [index, manager] of managers.entries()) {
+            const { package_manager: current } = JSON.parse(
+              execFileSync('vp', ['env', 'current', manager, '--json'], { encoding: 'utf8' }),
+            );
+            console.log(`${manager}: ${current.mode}`);
+            assert.equal(current.mode, modes[index], `${manager} mode`);
+          }
+          const { node } = JSON.parse(
+            execFileSync('vp', ['env', 'current', 'node', '--json'], { encoding: 'utf8' }),
+          );
+          assert.equal(node.mode, 'managed', 'Node.js management must remain enabled');
+          NODE
+
   test-default-version:
     # End-to-end check of the default version-resolution logic: with no `version`
     # or `version-file` input, the action auto-detects the vite-plus version from
