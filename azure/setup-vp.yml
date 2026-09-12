@@ -23,6 +23,9 @@ parameters:
   - name: nodeVersion
     type: string
     default: 24.x
+  - name: packageManager
+    type: object
+    default: ""
   - name: nodeManager
     type: string
     default: ""
@@ -53,6 +56,7 @@ steps:
       SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
       SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
       SETUP_VP_SFW: ${{ iif(eq(parameters.sfw, true), 'true', 'false') }}
+      SETUP_VP_PACKAGE_MANAGER: ${{ convertToJson(parameters.packageManager) }}
       SETUP_VP_NODE_MANAGER: ${{ parameters.nodeManager }}
       SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
       SETUP_VP_SCOPE: ${{ parameters.scope }}
@@ -75,6 +79,7 @@ steps:
       SETUP_VP_WORKING_DIRECTORY: ${{ parameters.workingDirectory }}
       SETUP_VP_RUN_INSTALL: ${{ convertToJson(parameters.runInstall) }}
       SETUP_VP_SFW: ${{ iif(eq(parameters.sfw, true), 'true', 'false') }}
+      SETUP_VP_PACKAGE_MANAGER: ${{ convertToJson(parameters.packageManager) }}
       SETUP_VP_NODE_MANAGER: ${{ parameters.nodeManager }}
       SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
       SETUP_VP_SCOPE: ${{ parameters.scope }}

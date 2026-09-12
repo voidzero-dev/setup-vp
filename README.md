@@ -341,21 +341,22 @@ jobs:
 
 ## Inputs
 
-| Input                   | Description                                                                                                        | Required | Default          |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------ | -------- | ---------------- |
-| `version`               | Version of Vite+ to install. Takes precedence over `version-file`                                                  | No       | auto / `latest`  |
-| `version-file`          | Path to a file to resolve the Vite+ version from (`package.json`, `pnpm-workspace.yaml`, or `.yarnrc.yml`)         | No       |                  |
-| `node-version`          | Node.js version to install via `vp env use`                                                                        | No       | Vite+ resolution |
-| `node-version-file`     | Path to file containing Node.js version (`.nvmrc`, `.node-version`, `.tool-versions`, `package.json`)              | No       |                  |
-| `node-manager`          | Control Vite+'s Node.js manager: `false` keeps the runner's Node.js, `true` leaves the installer default unchanged | No       | Auto (on for CI) |
-| `working-directory`     | Project directory used for relative paths, lockfile auto-detection, environment checks, and default install        | No       | Workspace root   |
-| `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                                     | No       | `true`           |
-| `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)           | No       | `false`          |
-| `cache`                 | Enable caching of project dependencies                                                                             | No       | `false`          |
-| `cache-save`            | Save the dependency cache in the post action. Has no effect when `cache` is `false`                                | No       | `true`           |
-| `cache-dependency-path` | Path to lock file for cache key generation                                                                         | No       | Auto-detected    |
-| `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`          | No       |                  |
-| `scope`                 | Optional scope for scoped registries. Falls back to repo owner for GitHub Packages                                 | No       |                  |
+| Input                   | Description                                                                                                        | Required | Default               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ | -------- | --------------------- |
+| `version`               | Version of Vite+ to install. Takes precedence over `version-file`                                                  | No       | auto / `latest`       |
+| `version-file`          | Path to a file to resolve the Vite+ version from (`package.json`, `pnpm-workspace.yaml`, or `.yarnrc.yml`)         | No       |                       |
+| `node-version`          | Node.js version to install via `vp env use`                                                                        | No       | Vite+ resolution      |
+| `node-version-file`     | Path to file containing Node.js version (`.nvmrc`, `.node-version`, `.tool-versions`, `package.json`)              | No       |                       |
+| `node-manager`          | Control Vite+'s Node.js manager: `false` keeps the runner's Node.js, `true` leaves the installer default unchanged | No       | Auto (on for CI)      |
+| `package-manager`       | Opt out of management for all package managers or individual npm, pnpm, yarn, and bun families (Vite+ 0.3.1+)      | No       | Unset (enabled on CI) |
+| `working-directory`     | Project directory used for relative paths, lockfile auto-detection, environment checks, and default install        | No       | Workspace root        |
+| `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                                     | No       | `true`                |
+| `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)           | No       | `false`               |
+| `cache`                 | Enable caching of project dependencies                                                                             | No       | `false`               |
+| `cache-save`            | Save the dependency cache in the post action. Has no effect when `cache` is `false`                                | No       | `true`                |
+| `cache-dependency-path` | Path to lock file for cache key generation                                                                         | No       | Auto-detected         |
+| `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`          | No       |                       |
+| `scope`                 | Optional scope for scoped registries. Falls back to repo owner for GitHub Packages                                 | No       |                       |
 
 When `working-directory` is set, relative `run-install.cwd`, `node-version-file`, `version-file`, and `cache-dependency-path` values are resolved from that directory.
 
@@ -364,6 +365,21 @@ Omitting both `node-version` and `node-version-file` leaves the session without 
 `working-directory` applies to the action. Each later workflow step keeps its own working directory. Vite+ searches for Node.js version sources from each command's current working directory. For a subproject, set `working-directory` on the step that runs `node` or `vp`.
 
 `node-manager: false` runs `vp env off node` (Vite+ 0.3.1+; `vp env off` on older versions), so `vp` commands prefer the Node.js already on `PATH`. It cannot be combined with `node-version` or `node-version-file`.
+
+`package-manager` controls Vite+'s package-manager management independently of `node-manager`. When omitted, it leaves the installer default unchanged (enabled on CI) and runs no environment-mode commands. Set it to `false` to run `vp env off pm` and prefer system package managers, or provide a mapping:
+
+```yaml
+- uses: voidzero-dev/setup-vp@v1.19.0
+  with:
+    node-manager: false
+    package-manager: |
+      pnpm: true
+      bun: false
+```
+
+Supported keys are `npm`, `pnpm`, `yarn`, and `bun`, with boolean values. Only `false` entries change modes; `true` and unspecified entries leave the installer default unchanged. These settings change resolution mode; they do not uninstall package managers or disable `run-install`.
+
+Separate package-manager modes require Vite+ 0.3.1+. Any explicit configuration, including `true` or an empty mapping, fails with a version requirement error on older versions. Leave the input unset to use older Vite+ versions.
 
 ## Outputs
 
@@ -539,16 +555,17 @@ test:
 
 ### GitLab Inputs
 
-| Input               | Description                                                                                                                                                                                                 | Default   |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `version`           | Version of Vite+ to install                                                                                                                                                                                 | `latest`  |
-| `working-directory` | Project directory used for relative paths and default `vp install` execution                                                                                                                                | `.`       |
-| `run-install`       | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args`                                                                                                   | `true`    |
-| `sfw`               | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)                                                                                                            | `false`   |
-| `node-manager`      | String input: `"false"` keeps the runner image's Node.js (disables Node.js management after installation); `"true"` leaves the installer default unchanged; empty lets the installer decide (enabled on CI) |           |
-| `registry-url`      | Optional registry URL to write to a temporary `.npmrc`                                                                                                                                                      |           |
-| `scope`             | Optional scope for authenticating against scoped registries                                                                                                                                                 |           |
-| `setup-ref`         | setup-vp ref used to download the GitLab bootstrap and compiled runtime. Always set it to the same tag as the remote URL; the default is the latest release when the template was published                 | `v1.19.0` |
+| Input               | Description                                                                                                                                                                                                 | Default               |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `version`           | Version of Vite+ to install                                                                                                                                                                                 | `latest`              |
+| `working-directory` | Project directory used for relative paths and default `vp install` execution                                                                                                                                | `.`                   |
+| `run-install`       | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args`                                                                                                   | `true`                |
+| `sfw`               | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)                                                                                                            | `false`               |
+| `node-manager`      | String input: `"false"` keeps the runner image's Node.js (disables Node.js management after installation); `"true"` leaves the installer default unchanged; empty lets the installer decide (enabled on CI) |                       |
+| `package-manager`   | String input: `"true"`, `"false"`, or a YAML mapping of npm, pnpm, yarn, and bun to booleans (Vite+ 0.3.1+)                                                                                                 | Unset (enabled on CI) |
+| `registry-url`      | Optional registry URL to write to a temporary `.npmrc`                                                                                                                                                      |                       |
+| `scope`             | Optional scope for authenticating against scoped registries                                                                                                                                                 |                       |
+| `setup-ref`         | setup-vp ref used to download the GitLab bootstrap and compiled runtime. Always set it to the same tag as the remote URL; the default is the latest release when the template was published                 | `v1.19.0`             |
 
 ### GitLab Notes
 
@@ -600,19 +617,20 @@ Pin `ref` and `setupRef` to the same exact tag or commit SHA. Do not use the `v1
 
 ### Azure Parameters
 
-| Parameter             | Default   | Description                                                                                                                                                                   |
-| --------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`             | `latest`  | Vite+ version/dist-tag passed to the official installer.                                                                                                                      |
-| `workingDirectory`    | `.`       | Project directory for lock detection and default `vp install`.                                                                                                                |
-| `runInstall`          | `true`    | Run `vp install`; accepts boolean or object/list with `cwd` and `args`.                                                                                                       |
-| `sfw`                 | `false`   | Wrap `vp install` with Socket Firewall Free.                                                                                                                                  |
-| `registryUrl`         |           | Optional registry URL for a temporary `.npmrc`.                                                                                                                               |
-| `scope`               |           | Optional npm registry scope.                                                                                                                                                  |
-| `setupRef`            | `v1.19.0` | Ref used to download bootstrap scripts and `dist/azure/index.mjs`. Always set it to the same tag as `ref`; the default is the latest release when the template was published. |
-| `nodeVersion`         | `24.x`    | Passed to `UseNode@1`; an empty string skips Node setup.                                                                                                                      |
-| `nodeManager`         |           | Control Vite+'s Node.js manager: `false` keeps the agent's Node.js (e.g. from `UseNode@1`); `true` leaves the installer default unchanged; empty lets the installer decide.   |
-| `cache`               | `false`   | Enable Azure `Cache@2` around the package-manager cache directory.                                                                                                            |
-| `cacheDependencyPath` |           | Explicit lock file relative to `workingDirectory`; otherwise auto-detect.                                                                                                     |
+| Parameter             | Default               | Description                                                                                                                                                                   |
+| --------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`             | `latest`              | Vite+ version/dist-tag passed to the official installer.                                                                                                                      |
+| `workingDirectory`    | `.`                   | Project directory for lock detection and default `vp install`.                                                                                                                |
+| `runInstall`          | `true`                | Run `vp install`; accepts boolean or object/list with `cwd` and `args`.                                                                                                       |
+| `sfw`                 | `false`               | Wrap `vp install` with Socket Firewall Free.                                                                                                                                  |
+| `registryUrl`         |                       | Optional registry URL for a temporary `.npmrc`.                                                                                                                               |
+| `scope`               |                       | Optional npm registry scope.                                                                                                                                                  |
+| `setupRef`            | `v1.19.0`             | Ref used to download bootstrap scripts and `dist/azure/index.mjs`. Always set it to the same tag as `ref`; the default is the latest release when the template was published. |
+| `nodeVersion`         | `24.x`                | Passed to `UseNode@1`; an empty string skips Node setup.                                                                                                                      |
+| `nodeManager`         |                       | Control Vite+'s Node.js manager: `false` keeps the agent's Node.js (e.g. from `UseNode@1`); `true` leaves the installer default unchanged; empty lets the installer decide.   |
+| `packageManager`      | Unset (enabled on CI) | Boolean or object mapping npm, pnpm, yarn, and bun to booleans (Vite+ 0.3.1+). Only false entries change modes.                                                               |
+| `cache`               | `false`               | Enable Azure `Cache@2` around the package-manager cache directory.                                                                                                            |
+| `cacheDependencyPath` |                       | Explicit lock file relative to `workingDirectory`; otherwise auto-detect.                                                                                                     |
 
 ### Azure Job Variables
 

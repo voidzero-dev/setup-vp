@@ -9,6 +9,32 @@ vi.mock("@actions/core", () => ({
 }));
 
 describe("getInputs", () => {
+  it.each([
+    ["", undefined],
+    ["true", true],
+    ["false", false],
+    ["pnpm: true\nbun: false", { pnpm: true, bun: false }],
+    ['{"npm":false,"yarn":true}', { npm: false, yarn: true }],
+  ])("parses package-manager %s", (input, expected) => {
+    vi.mocked(getInput).mockImplementation((name) =>
+      name === "package-manager" ? String(input) : "",
+    );
+    expect(getInputs().packageManager).toEqual(expected);
+  });
+
+  it.each([
+    "pnpm: no",
+    "pnpm: 'false'",
+    "node: false",
+    "[pnpm]",
+    "null",
+    "pnpm: [",
+    "pnpm: true\npnpm: false",
+  ])("rejects invalid package-manager %s", (input) => {
+    vi.mocked(getInput).mockImplementation((name) => (name === "package-manager" ? input : ""));
+    expect(() => getInputs()).toThrow("Invalid package-manager input");
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
   });
@@ -25,6 +51,7 @@ describe("getInputs", () => {
 
     expect(inputs).toEqual({
       version: "",
+      packageManager: undefined,
       versionFile: undefined,
       nodeVersion: undefined,
       nodeVersionFile: undefined,

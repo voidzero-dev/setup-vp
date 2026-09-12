@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { packageManagerArgs } from "../ci/package-manager.js";
 import { nodeManagerOffArgs } from "../ci/node-manager.js";
 import { configureAuth } from "../ci/auth.js";
 import { prepareCacheMetadata } from "../ci/cache.js";
@@ -66,9 +67,19 @@ export async function runPrepare(
     logWarningFn: ports.logWarning,
   });
 
+  const versionOutput =
+    inputs.nodeManager === false || inputs.packageManager !== undefined
+      ? ports.getCommandOutput("vp", ["--version"]) || ""
+      : "";
+  const packageManagerCommands = packageManagerArgs(inputs.packageManager, versionOutput);
+
   // Switch to the agent's Node.js after installation, preserving package-manager management.
   if (inputs.nodeManager === false) {
-    ports.run("vp", nodeManagerOffArgs(ports.getCommandOutput("vp", ["--version"]) || ""));
+    ports.run("vp", nodeManagerOffArgs(versionOutput));
+  }
+
+  for (const args of packageManagerCommands) {
+    ports.run("vp", args);
   }
 
   const runtimePath = path.resolve(process.argv[1] || "");

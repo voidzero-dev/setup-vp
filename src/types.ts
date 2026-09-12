@@ -1,3 +1,4 @@
+import type { PackageManagerConfig } from "./ci/package-manager.js";
 import { z } from "zod/mini";
 
 // Run install configuration schema
@@ -23,6 +24,7 @@ export interface Inputs {
   readonly nodeVersion?: string;
   readonly nodeVersionFile?: string;
   readonly nodeManager?: boolean;
+  readonly packageManager?: PackageManagerConfig;
   readonly workingDirectory?: string;
   readonly runInstall: RunInstall[];
   readonly sfw: boolean;

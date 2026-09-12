@@ -12,6 +12,7 @@ describe("parseAzureInputs", () => {
       SETUP_VP_RUN_INSTALL: "false",
       SETUP_VP_SFW: "true",
       SETUP_VP_NODE_MANAGER: "false",
+      SETUP_VP_PACKAGE_MANAGER: '{"pnpm":true,"bun":false}',
       SETUP_VP_REGISTRY_URL: "https://registry.example/npm/",
       SETUP_VP_SCOPE: "@acme",
       SETUP_VP_CACHE: "true",
@@ -25,6 +26,7 @@ describe("parseAzureInputs", () => {
       runInstall: "false",
       sfw: true,
       nodeManager: false,
+      packageManager: { pnpm: true, bun: false },
       registryUrl: "https://registry.example/npm/",
       scope: "@acme",
       cache: true,
@@ -41,6 +43,7 @@ describe("parseAzureInputs", () => {
 
     expect(inputs.sfw).toBe(true);
     expect(inputs.cache).toBe(true);
+    expect(parseAzureInputs({ SETUP_VP_PACKAGE_MANAGER: '""' }).packageManager).toBeUndefined();
   });
 });
 
@@ -59,6 +62,7 @@ describe("resolveProjectDirFromInputs", () => {
       runInstall: "true",
       sfw: false,
       nodeManager: undefined,
+      packageManager: undefined,
       registryUrl: "",
       scope: "",
       cache: false,
