@@ -14,8 +14,8 @@ spec:
       type: boolean
       default: false
     package-manager:
-      description: 'Control Vite+ package-manager management (0.3.1+). Use "true", "false", or a YAML mapping of npm, pnpm, yarn, and bun to booleans. Unspecified managers default to true.'
-      default: "true"
+      description: 'Control Vite+ package-manager management (0.3.1+). Use "true", "false", or a YAML mapping of npm, pnpm, yarn, and bun to booleans. Unspecified managers keep the installer default (enabled on CI). Any explicit configuration requires 0.3.1+.'
+      default: ""
     node-manager:
       description: 'Control Vite+''s Node.js version manager. This is a string input: empty (default) lets the Vite+ installer decide (enabled on CI); "false" keeps the runner image''s Node.js (makes vp commands prefer the system Node.js after installation); "true" leaves the installer default unchanged.'
       default: ""
@@ -52,7 +52,7 @@ spec:
       export SETUP_VP_WORKING_DIRECTORY="${SETUP_VP_WORKING_DIRECTORY:-.}"
       export SETUP_VP_RUN_INSTALL="${SETUP_VP_RUN_INSTALL:-true}"
       export SETUP_VP_SFW="${SETUP_VP_SFW:-false}"
-      export SETUP_VP_PACKAGE_MANAGER="${SETUP_VP_PACKAGE_MANAGER:-true}"
+      export SETUP_VP_PACKAGE_MANAGER="${SETUP_VP_PACKAGE_MANAGER:-}"
       export SETUP_VP_NODE_MANAGER="${SETUP_VP_NODE_MANAGER:-}"
       export SETUP_VP_REGISTRY_URL="${SETUP_VP_REGISTRY_URL:-}"
       export SETUP_VP_SCOPE="${SETUP_VP_SCOPE:-}"

@@ -43,6 +43,7 @@ describe("parseAzureInputs", () => {
 
     expect(inputs.sfw).toBe(true);
     expect(inputs.cache).toBe(true);
+    expect(parseAzureInputs({ SETUP_VP_PACKAGE_MANAGER: '""' }).packageManager).toBeUndefined();
   });
 });
 
@@ -61,7 +62,7 @@ describe("resolveProjectDirFromInputs", () => {
       runInstall: "true",
       sfw: false,
       nodeManager: undefined,
-      packageManager: true,
+      packageManager: undefined,
       registryUrl: "",
       scope: "",
       cache: false,

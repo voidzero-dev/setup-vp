@@ -10,7 +10,7 @@ vi.mock("@actions/core", () => ({
 
 describe("getInputs", () => {
   it.each([
-    ["", true],
+    ["", undefined],
     ["true", true],
     ["false", false],
     ["pnpm: true\nbun: false", { pnpm: true, bun: false }],
@@ -51,7 +51,7 @@ describe("getInputs", () => {
 
     expect(inputs).toEqual({
       version: "",
-      packageManager: true,
+      packageManager: undefined,
       versionFile: undefined,
       nodeVersion: undefined,
       nodeVersionFile: undefined,

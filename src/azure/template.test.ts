@@ -24,7 +24,7 @@ describe("azure/setup-vp.yml", () => {
     expect(byName.scope).toMatchObject({ type: "string", default: "" });
     expect(byName.setupRef).toMatchObject({ type: "string", default: "v1.19.0" });
     expect(byName.nodeVersion).toMatchObject({ type: "string", default: "24.x" });
-    expect(byName.packageManager).toMatchObject({ type: "object", default: true });
+    expect(byName.packageManager).toMatchObject({ type: "object", default: "" });
     expect(byName.nodeManager).toMatchObject({ type: "string", default: "" });
     expect(byName.cache).toMatchObject({ type: "boolean", default: false });
     expect(byName.cacheDependencyPath).toMatchObject({ type: "string", default: "" });

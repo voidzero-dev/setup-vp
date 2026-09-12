@@ -82,7 +82,7 @@ describe("Azure lifecycle", () => {
       {
         SETUP_VP_VERSION: "latest",
         SETUP_VP_NODE_MANAGER: "false",
-        SETUP_VP_PACKAGE_MANAGER: version === "0.3.1" ? '{"pnpm":true,"bun":false}' : "true",
+        SETUP_VP_PACKAGE_MANAGER: version === "0.3.1" ? '{"pnpm":true,"bun":false}' : "",
         SYSTEM_DEFAULTWORKINGDIRECTORY: process.cwd(),
       },
       {
@@ -107,7 +107,7 @@ describe("Azure lifecycle", () => {
       version === "0.3.0" ? ["env", "off"] : ["env", "off", "node"],
     );
     if (version === "0.3.1") {
-      expect(run).toHaveBeenCalledWith("vp", ["env", "on", "pm"]);
+      expect(run).not.toHaveBeenCalledWith("vp", ["env", "on", "pm"]);
       expect(run).toHaveBeenCalledWith("vp", ["env", "off", "bun"]);
     }
   });

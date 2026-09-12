@@ -36,14 +36,14 @@ describe("applyEnvironmentModes", () => {
   );
 
   it.each([{ SETUP_VP_NODE_MANAGER: "true" }, { SETUP_VP_NODE_MANAGER: "" }, {}])(
-    "enables package managers without changing Node.js for %o",
+    "leaves default environment modes unchanged for %o",
     (env) => {
       const runFn = vi.fn();
       vi.mocked(getCommandOutput).mockReturnValue("vp v0.3.1");
 
       applyEnvironmentModes(env, runFn);
 
-      expect(runFn.mock.calls).toEqual([["vp", ["env", "on", "pm"]]]);
+      expect(runFn).not.toHaveBeenCalled();
     },
   );
 
@@ -59,20 +59,13 @@ describe("applyEnvironmentModes", () => {
 
 describe("package-manager modes", () => {
   it.each([
-    [undefined, [["env", "on", "pm"]]],
-    ["true", [["env", "on", "pm"]]],
+    [undefined, []],
+    ["true", []],
     ["false", [["env", "off", "pm"]]],
-    [
-      "pnpm: true\nbun: false",
-      [
-        ["env", "on", "pm"],
-        ["env", "off", "bun"],
-      ],
-    ],
+    ["pnpm: true\nbun: false", [["env", "off", "bun"]]],
     [
       '{"npm":false,"yarn":false}',
       [
-        ["env", "on", "pm"],
         ["env", "off", "npm"],
         ["env", "off", "yarn"],
       ],
@@ -84,12 +77,15 @@ describe("package-manager modes", () => {
     expect(runFn.mock.calls).toEqual(expected.map((args) => ["vp", args]));
   });
 
-  it.each(["true", "false", "bun: false"])("handles %s on older Vite+", (input) => {
-    vi.mocked(getCommandOutput).mockReturnValue("vp v0.3.0");
-    const runFn = vi.fn();
-    const apply = () => applyEnvironmentModes({ SETUP_VP_PACKAGE_MANAGER: input }, runFn);
-    if (input === "true") apply();
-    else expect(apply).toThrow("package-manager opt-outs require Vite+ 0.3.1 or newer");
-    expect(runFn).not.toHaveBeenCalled();
-  });
+  it.each([undefined, "true", "false", "pnpm: true", "bun: false", "{}"])(
+    "handles %s on older Vite+",
+    (input) => {
+      vi.mocked(getCommandOutput).mockReturnValue("vp v0.3.0");
+      const runFn = vi.fn();
+      const apply = () => applyEnvironmentModes({ SETUP_VP_PACKAGE_MANAGER: input }, runFn);
+      if (input === undefined) apply();
+      else expect(apply).toThrow("package-manager configuration requires Vite+ 0.3.1 or newer");
+      expect(runFn).not.toHaveBeenCalled();
+    },
+  );
 });

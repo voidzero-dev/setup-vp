@@ -10,7 +10,7 @@ export interface AzureInputs {
   runInstall: string;
   sfw: boolean;
   nodeManager: boolean | undefined;
-  packageManager: PackageManagerConfig;
+  packageManager: PackageManagerConfig | undefined;
   registryUrl: string;
   scope: string;
   cache: boolean;

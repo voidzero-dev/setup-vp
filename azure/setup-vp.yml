@@ -25,7 +25,7 @@ parameters:
     default: 24.x
   - name: packageManager
     type: object
-    default: true
+    default: ""
   - name: nodeManager
     type: string
     default: ""
