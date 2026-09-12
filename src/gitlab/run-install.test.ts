@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe("GitLab run-install parsing", () => {
-  it("parses booleans, JSON, and the supported YAML subset", () => {
+  it("parses booleans, JSON, and YAML", () => {
     expect(parseRunInstall("false")).toEqual([]);
     expect(parseRunInstall("null")).toEqual([]);
     expect(parseRunInstall("true")).toEqual([{}]);
@@ -74,15 +74,9 @@ describe("GitLab run-install parsing", () => {
   });
 
   it("rejects malformed flow array items", () => {
-    expect(() => parseFlowArray("['--a',, '--b']")).toThrow(
-      "args flow array entries must be non-empty strings",
-    );
-    expect(() => parseRunInstall("args: ['--a',, '--b']")).toThrow(
-      "args flow array entries must be non-empty strings",
-    );
-    expect(() => parseFlowArray("['--a', '--b]")).toThrow(
-      "unterminated quoted string in args flow array",
-    );
+    expect(() => parseFlowArray("['--a',, '--b']")).toThrow();
+    expect(() => parseRunInstall("args: ['--a',, '--b']")).toThrow();
+    expect(() => parseFlowArray("['--a', '--b]")).toThrow();
   });
 
   it("matches GitHub Actions args validation by allowing empty strings", () => {
@@ -93,7 +87,7 @@ describe("GitLab run-install parsing", () => {
 });
 
 describe("GitLab run-install execution", () => {
-  it("runs install entries with cwd and args", () => {
+  it("runs install entries with cwd and args", async () => {
     const dir = tempDir();
     const binDir = path.join(dir, "bin");
     const appDir = path.join(dir, "app");
@@ -111,7 +105,7 @@ describe("GitLab run-install execution", () => {
     const previousPath = process.env.PATH;
     try {
       process.env.PATH = `${binDir}:${previousPath || ""}`;
-      runInstall([{ cwd: "app", args: ["--frozen-lockfile"] }], dir, "vp");
+      await runInstall([{ cwd: "app", args: ["--frozen-lockfile"] }], dir, "vp");
     } finally {
       process.env.PATH = previousPath;
     }
@@ -121,7 +115,7 @@ describe("GitLab run-install execution", () => {
     );
   });
 
-  it("runs install entries through sfw when requested", () => {
+  it("runs install entries through sfw when requested", async () => {
     const dir = tempDir();
     const binDir = path.join(dir, "bin");
     const logFile = path.join(dir, "sfw.log");
@@ -133,7 +127,7 @@ describe("GitLab run-install execution", () => {
     const previousPath = process.env.PATH;
     try {
       process.env.PATH = `${binDir}:${previousPath || ""}`;
-      runInstall([{}], dir, "sfw");
+      await runInstall([{}], dir, "sfw");
     } finally {
       process.env.PATH = previousPath;
     }
@@ -141,7 +135,7 @@ describe("GitLab run-install execution", () => {
     expect(readFileSync(logFile, "utf8")).toBe("vp install\n");
   });
 
-  it("does not expose SETUP_VP_ENV_FILE to install subprocesses", () => {
+  it("does not expose SETUP_VP_ENV_FILE to install subprocesses", async () => {
     const dir = tempDir();
     const binDir = path.join(dir, "bin");
     const logFile = path.join(dir, "env.log");
@@ -166,7 +160,7 @@ describe("GitLab run-install execution", () => {
     try {
       process.env.PATH = `${binDir}:${previousPath || ""}`;
       process.env.SETUP_VP_ENV_FILE = path.join(dir, "setup-vp.env");
-      runInstall([{}], dir, "vp");
+      await runInstall([{}], dir, "vp");
     } finally {
       process.env.PATH = previousPath;
       if (previousEnvFile === undefined) {

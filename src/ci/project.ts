@@ -1,6 +1,15 @@
 import { statSync } from "node:fs";
 import path from "node:path";
 
+export function resolvePath(filePath: string, baseDir: string): string {
+  return path.isAbsolute(filePath) ? filePath : path.join(baseDir, filePath);
+}
+
+export function isWithin(child: string, parent: string): boolean {
+  const rel = path.relative(parent, child);
+  return !path.isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${path.sep}`);
+}
+
 export function resolveProjectDirectory(options: {
   workingDirectory: string;
   workspaceRoot: string;

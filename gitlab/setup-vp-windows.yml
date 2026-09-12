@@ -1,0 +1,130 @@
+spec:
+  inputs:
+    version:
+      description: "Version of Vite+ to install; empty resolves from the project."
+      default: ""
+    version-file:
+      description: "Vite+ version file relative to working-directory."
+      default: ""
+    node-version:
+      description: "Node.js version to select with vp env use."
+      default: ""
+    node-version-file:
+      description: "Node.js version file relative to working-directory."
+      default: ""
+    cache-dependency-path:
+      description: "Lock file relative to working-directory; otherwise auto-detect."
+      default: ""
+    cache-policy:
+      description: "Native cache policy for .setup-vp-cached; pull restores without saving."
+      default: "pull-push"
+      options: ["pull", "pull-push"]
+    working-directory:
+      description: "Project directory used for relative paths and default `vp install` execution."
+      default: "."
+    run-install:
+      description: 'Run `vp install` after setup. This is a string input: use "true"/"false" or a YAML object/list with cwd/args.'
+      default: "true"
+    sfw:
+      description: "Wrap `vp install` with Socket Firewall Free (`sfw`) to block malicious dependency fetches."
+      type: boolean
+      default: false
+    package-manager:
+      description: 'Control Vite+ package-manager management (0.3.1+). Use "true", "false", or a YAML mapping of npm, pnpm, yarn, and bun to booleans. Unspecified managers keep the installer default (enabled on CI). Any explicit configuration requires 0.3.1+.'
+      default: ""
+    node-manager:
+      description: 'Control Vite+''s Node.js version manager. This is a string input: empty (default) lets the Vite+ installer decide (enabled on CI); "false" keeps the runner image''s Node.js (makes vp commands prefer the system Node.js after installation); "true" leaves the installer default unchanged.'
+      default: ""
+    registry-url:
+      description: "Optional registry URL to write to a temporary .npmrc. Auth token is read from NODE_AUTH_TOKEN."
+      default: ""
+    scope:
+      description: "Optional scope for authenticating against scoped registries."
+      default: ""
+    setup-ref:
+      description: "setup-vp ref used to download the GitLab bootstrap and compiled runtime. Pin this to the same tag or commit as the remote template; the default is the latest release when this template was published."
+      default: "v1.20.0"
+---
+.setup-vp-bootstrap:
+  before_script:
+    - |
+      $ErrorActionPreference = 'Stop'
+      if (-not $env:SETUP_VP_SETUP_REF) { $env:SETUP_VP_SETUP_REF = 'v1.20.0' }
+      $bootstrap = Join-Path ([IO.Path]::GetTempPath()) ("setup-vp-bootstrap-" + [guid]::NewGuid() + ".ps1")
+      $envFile = Join-Path ([IO.Path]::GetTempPath()) ("setup-vp-env-" + [guid]::NewGuid() + ".ps1")
+      try {
+        Set-Content -LiteralPath $envFile -Value '' -Encoding UTF8
+        $env:SETUP_VP_ENV_FILE = $envFile
+        $env:SETUP_VP_ENV_FORMAT = 'powershell'
+        $url = "https://raw.githubusercontent.com/voidzero-dev/setup-vp/$env:SETUP_VP_SETUP_REF/gitlab/bootstrap.ps1"
+        Invoke-WebRequest -Uri $url -OutFile $bootstrap -TimeoutSec 60
+        & $bootstrap
+        . $envFile
+      } finally {
+        Remove-Item Env:SETUP_VP_ENV_FILE -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $bootstrap, $envFile -Force -ErrorAction SilentlyContinue
+      }
+
+.setup-vp:
+  before_script:
+    - |
+      $env:SETUP_VP_VERSION = @'
+      $[[ inputs.version ]]
+      '@
+      $env:SETUP_VP_VERSION_FILE = @'
+      $[[ inputs.version-file ]]
+      '@
+      $env:SETUP_VP_NODE_VERSION = @'
+      $[[ inputs.node-version ]]
+      '@
+      $env:SETUP_VP_NODE_VERSION_FILE = @'
+      $[[ inputs.node-version-file ]]
+      '@
+      $env:SETUP_VP_CACHE_DEPENDENCY_PATH = @'
+      $[[ inputs.cache-dependency-path ]]
+      '@
+      $env:SETUP_VP_WORKING_DIRECTORY = @'
+      $[[ inputs.working-directory ]]
+      '@
+      $env:SETUP_VP_RUN_INSTALL = @'
+      $[[ inputs.run-install ]]
+      '@
+      $env:SETUP_VP_SFW = @'
+      $[[ inputs.sfw ]]
+      '@
+      $env:SETUP_VP_PACKAGE_MANAGER = @'
+      $[[ inputs.package-manager ]]
+      '@
+      $env:SETUP_VP_NODE_MANAGER = @'
+      $[[ inputs.node-manager ]]
+      '@
+      $env:SETUP_VP_REGISTRY_URL = @'
+      $[[ inputs.registry-url ]]
+      '@
+      $env:SETUP_VP_SCOPE = @'
+      $[[ inputs.scope ]]
+      '@
+      $env:SETUP_VP_SETUP_REF = @'
+      $[[ inputs.setup-ref ]]
+      '@
+      if ('$[[ inputs.cache-policy ]]' -eq 'pull') { $env:SETUP_VP_CACHE_SAVE = 'false' }
+    - !reference [.setup-vp-bootstrap, before_script]
+
+# Opt in to native GitLab persistence without replacing an existing job cache.
+.setup-vp-cached:
+  extends: .setup-vp
+  variables:
+    SETUP_VP_CACHE: "true"
+  after_script:
+    - |
+      if (Test-Path -LiteralPath "$env:CI_PROJECT_DIR/.setup-vp-cache-state.json") {
+        node "$env:CI_PROJECT_DIR/.setup-vp-runtime.mjs" save-cache
+        if ($LASTEXITCODE -ne 0) { throw "setup-vp cache save failed" }
+      }
+  cache:
+    key: "setup-vp-v1-$CI_JOB_NAME_SLUG-$CI_COMMIT_REF_SLUG"
+    fallback_keys:
+      - "setup-vp-v1-$CI_JOB_NAME_SLUG-$CI_DEFAULT_BRANCH"
+    paths:
+      - .setup-vp-cache/
+    policy: $[[ inputs.cache-policy ]]

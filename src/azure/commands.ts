@@ -18,11 +18,12 @@ export function prependPath(pathValue: string): void {
 export function setVariable(
   name: string,
   value: string,
-  options: { isOutput?: boolean; isReadonly?: boolean } = {},
+  options: { isOutput?: boolean; isReadonly?: boolean; isSecret?: boolean } = {},
 ): void {
   const parts = [`variable=${name}`];
   if (options.isOutput) parts.push("isOutput=true");
   if (options.isReadonly) parts.push("isReadonly=true");
+  if (options.isSecret) parts.push("issecret=true");
   process.stdout.write(
     `##vso[task.setvariable ${parts.join(";")}]${escapeLoggingCommandData(value)}\n`,
   );

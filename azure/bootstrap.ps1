@@ -38,3 +38,4 @@ foreach ($chunkName in $chunkNames) {
 }
 
 & node $runtimeOut prepare
+if ($LASTEXITCODE -ne 0) { throw "setup-vp prepare failed with exit code $LASTEXITCODE" }

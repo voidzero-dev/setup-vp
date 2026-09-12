@@ -1,5 +1,5 @@
 import { createWriteStream, existsSync } from "node:fs";
-import { chmod, mkdtemp } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { get as httpGet } from "node:http";
 import { get as httpsGet } from "node:https";
@@ -159,6 +159,7 @@ export async function setupSfw(
     arch?: string;
     isMusl?: boolean;
     download?: typeof downloadFile;
+    cacheDirectory?: string;
   } = {},
 ): Promise<InstallCommand> {
   const env = options.env ?? process.env;
@@ -196,22 +197,44 @@ export async function setupSfw(
     return "vp";
   }
 
-  const sfwDir = await mkdtemp(path.join(tmpdir(), "setup-vp-sfw-"));
+  const cacheDirectory = options.cacheDirectory || env.SETUP_VP_SFW_CACHE_DIR;
+  const sfwDir = cacheDirectory
+    ? path.join(cacheDirectory, SFW_VERSION, asset)
+    : await mkdtemp(path.join(tmpdir(), "setup-vp-sfw-"));
+  await mkdir(sfwDir, { recursive: true });
   const sfwBin = path.join(sfwDir, platform === "win32" ? "sfw.exe" : "sfw");
   const sfwUrl = `${SFW_RELEASE_BASE}/${asset}`;
+  const activate = (): InstallCommand => {
+    const pathSeparator = platform === "win32" ? ";" : ":";
+    env.PATH = `${sfwDir}${pathSeparator}${env.PATH || ""}`;
+    options.exportVariable?.("PATH", env.PATH);
+    return "sfw";
+  };
+  if (
+    await stat(sfwBin).then(
+      (file) => file.isFile() && file.size > 0,
+      () => false,
+    )
+  ) {
+    console.log(`setup-vp: using cached sfw ${SFW_VERSION}: ${sfwBin}`);
+    return activate();
+  }
 
   for (let round = 1; round <= 2; round += 1) {
+    const downloadDir = await mkdtemp(path.join(sfwDir, ".download-"));
+    const downloadPath = path.join(downloadDir, "sfw");
     try {
       console.log(`setup-vp: installing sfw ${SFW_VERSION} from ${sfwUrl}`);
-      await download(sfwUrl, sfwBin);
-      await chmod(sfwBin, 0o755);
-      const pathSeparator = platform === "win32" ? ";" : ":";
-      env.PATH = `${sfwDir}${pathSeparator}${env.PATH || ""}`;
-      options.exportVariable?.("PATH", env.PATH);
-      return "sfw";
+      await download(sfwUrl, downloadPath);
+      if ((await stat(downloadPath)).size === 0) throw new Error("Downloaded sfw binary is empty");
+      await chmod(downloadPath, 0o755);
+      await rename(downloadPath, sfwBin);
+      return activate();
     } catch (error) {
       if (round === 2) throw error;
       await new Promise((resolve) => setTimeout(resolve, 2000));
+    } finally {
+      await rm(downloadDir, { recursive: true, force: true });
     }
   }
 

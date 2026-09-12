@@ -11,7 +11,12 @@ export function exportShellEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): void {
   if (!env.SETUP_VP_ENV_FILE || value === undefined) return;
-  writeFileSync(env.SETUP_VP_ENV_FILE, `export ${name}=${shellQuote(value)}\n`, {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) throw new Error("Invalid environment variable name");
+  const line =
+    env.SETUP_VP_ENV_FORMAT === "powershell"
+      ? `$env:${name} = '${value.replaceAll("'", "''")}'\n`
+      : `export ${name}=${shellQuote(value)}\n`;
+  writeFileSync(env.SETUP_VP_ENV_FILE, line, {
     encoding: "utf8",
     flag: "a",
   });

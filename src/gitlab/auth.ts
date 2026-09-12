@@ -6,11 +6,12 @@ export function configureAuth(
   registryUrlInput: string,
   scopeInput: string,
   targetEnv: RuntimeEnv = process.env,
+  projectDir?: string,
 ): string | undefined {
   const exportVariable =
     targetEnv === process.env
       ? (name: string, value: string | undefined) => exportShellEnv(name, value, targetEnv)
       : undefined;
 
-  return configureAuthCore(registryUrlInput, scopeInput, targetEnv, exportVariable);
+  return configureAuthCore(registryUrlInput, scopeInput, targetEnv, exportVariable, projectDir);
 }

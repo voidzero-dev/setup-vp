@@ -16,14 +16,19 @@ describe("azure/setup-vp.yml", () => {
     }>;
     const byName = Object.fromEntries(parameters.map((entry) => [entry.name, entry]));
 
-    expect(byName.version).toMatchObject({ type: "string", default: "latest" });
+    expect(byName.version).toMatchObject({ type: "string", default: "" });
+    expect(byName.versionFile).toMatchObject({ type: "string", default: "" });
+    expect(byName.nodeVersionFile).toMatchObject({ type: "string", default: "" });
+    expect(byName.bootstrapNodeVersion).toMatchObject({ type: "string", default: "24.x" });
+    expect(byName.stepName).toMatchObject({ type: "string", default: "setupVp" });
     expect(byName.workingDirectory).toMatchObject({ type: "string", default: "." });
     expect(byName.runInstall).toMatchObject({ type: "object", default: true });
     expect(byName.sfw).toMatchObject({ type: "boolean", default: false });
     expect(byName.registryUrl).toMatchObject({ type: "string", default: "" });
+    expect(byName.authEnv).toMatchObject({ type: "object", default: {} });
     expect(byName.scope).toMatchObject({ type: "string", default: "" });
     expect(byName.setupRef).toMatchObject({ type: "string", default: "v1.20.0" });
-    expect(byName.nodeVersion).toMatchObject({ type: "string", default: "24.x" });
+    expect(byName.nodeVersion).toMatchObject({ type: "string", default: "" });
     expect(byName.packageManager).toMatchObject({ type: "object", default: "" });
     expect(byName.nodeManager).toMatchObject({ type: "string", default: "" });
     expect(byName.cache).toMatchObject({ type: "boolean", default: false });
@@ -56,6 +61,10 @@ describe("azure/setup-vp.yml", () => {
     expect(template).toContain("Windows_NT");
     expect(template).toContain("bootstrap.sh");
     expect(template).toContain("bootstrap.ps1");
+    expect(template).toContain("name: ${{ parameters.stepName }}Windows");
+    expect(template).toContain("name: ${{ parameters.stepName }}Unix");
+    expect(template.match(/\$\(SETUP_VP_BOOTSTRAP_NODE\)/g)).toHaveLength(2);
+    expect(template.split("${{ insert }}: ${{ parameters.authEnv }}")).toHaveLength(3);
   });
 
   it("selects the agent shell at runtime", () => {

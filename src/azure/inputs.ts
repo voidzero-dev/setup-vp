@@ -6,6 +6,9 @@ import type { RuntimeEnv } from "../ci/types.js";
 
 export interface AzureInputs {
   version: string;
+  versionFile?: string;
+  nodeVersion?: string;
+  nodeVersionFile?: string;
   workingDirectory: string;
   runInstall: string;
   sfw: boolean;
@@ -24,7 +27,10 @@ function parseBoolean(value: string | undefined): boolean {
 
 export function parseAzureInputs(env: RuntimeEnv): AzureInputs {
   return {
-    version: env.SETUP_VP_VERSION || "latest",
+    version: env.SETUP_VP_VERSION || "",
+    versionFile: env.SETUP_VP_VERSION_FILE || undefined,
+    nodeVersion: env.SETUP_VP_NODE_VERSION || undefined,
+    nodeVersionFile: env.SETUP_VP_NODE_VERSION_FILE || undefined,
     workingDirectory: env.SETUP_VP_WORKING_DIRECTORY || ".",
     runInstall: env.SETUP_VP_RUN_INSTALL ?? "true",
     sfw: parseBoolean(env.SETUP_VP_SFW),
