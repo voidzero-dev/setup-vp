@@ -43,7 +43,6 @@ export async function installVitePlus(
   options: {
     platform?: NodeJS.Platform;
     env?: NodeJS.ProcessEnv;
-    nodeManager?: boolean;
     prependPath?: (binDir: string) => void;
     sleep?: (ms: number) => Promise<void>;
     runInstall?: typeof runInstallCommand;
@@ -80,11 +79,6 @@ export async function installVitePlus(
   const prVersion = pkgPrNewCommitSha(version);
   if (prVersion) {
     env.VP_PR_VERSION = prVersion;
-  }
-
-  // Opt out after installation: VP_NODE_MANAGER=no also disables package-manager management in newer installers.
-  if (options.nodeManager === true) {
-    env.VP_NODE_MANAGER = "yes";
   }
 
   // Prefer the install script pinned to the requested version's git ref. Fall

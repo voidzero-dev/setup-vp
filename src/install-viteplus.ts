@@ -44,11 +44,6 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     delete env[VP_DIRS_FILE_ENV];
   }
 
-  // Opt out after installation: VP_NODE_MANAGER=no also disables package-manager management in newer installers.
-  if (inputs.nodeManager === true) {
-    env.VP_NODE_MANAGER = "yes";
-  }
-
   // For pkg.pr.new preview builds, tell the install script to fetch from
   // pkg.pr.new (bypassing the npm registry) instead of resolving VP_VERSION.
   const prVersion = pkgPrNewCommitSha(version);

@@ -62,7 +62,6 @@ export async function runPrepare(
 
   await ports.installVitePlus(inputs.version, {
     env,
-    nodeManager: inputs.nodeManager,
     prependPath: (binDir) => ports.prependPath(binDir),
     logWarningFn: ports.logWarning,
   });

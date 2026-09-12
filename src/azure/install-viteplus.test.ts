@@ -28,7 +28,6 @@ describe("installVitePlus", () => {
 
     await installVitePlus("latest", {
       platform: "win32",
-      nodeManager: false,
       env: { PATH: "" },
       prependPath: () => undefined,
       sleep: async () => undefined,
@@ -37,7 +36,6 @@ describe("installVitePlus", () => {
     });
     await installVitePlus("latest", {
       platform: "linux",
-      nodeManager: false,
       env: { PATH: "" },
       prependPath: () => undefined,
       sleep: async () => undefined,

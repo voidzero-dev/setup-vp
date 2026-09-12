@@ -183,11 +183,9 @@ SETUP_VP_VERSION="${SETUP_VP_VERSION:-latest}"
 SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1}"
 SETUP_VP_NODE_MANAGER="${SETUP_VP_NODE_MANAGER:-}"
 
-# Opt out in the runtime: VP_NODE_MANAGER=no also disables package-manager management in newer installers.
+# Validate before installation; environment modes are configured by the runtime.
 case "$SETUP_VP_NODE_MANAGER" in
-  true | True | TRUE) export VP_NODE_MANAGER="yes" ;;
-  false | False | FALSE) ;;
-  "") ;;
+  true | True | TRUE | false | False | FALSE | "") ;;
   *)
     echo "setup-vp: invalid node-manager value \"${SETUP_VP_NODE_MANAGER}\"; expected \"true\", \"false\", or empty." >&2
     return 1 2>/dev/null || exit 1

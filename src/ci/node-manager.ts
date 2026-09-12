@@ -1,6 +1,6 @@
 import { parseInstalledVpVersion } from "./version.js";
 
-// Unset lets the installer decide (enabled on CI); true force-enables it.
+// True and unset leave the installer default unchanged (enabled on CI).
 // False switches to system Node.js after installation via vp env off node
 // (vp env off before 0.3.1), without disabling package-manager management.
 // Accept the YAML 1.2 boolean forms (same set as @actions/core
