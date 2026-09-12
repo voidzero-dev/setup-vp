@@ -30,6 +30,10 @@ inputs:
   node-manager:
     description: "Control Vite+'s Node.js version manager. When unset, the Vite+ installer decides (enabled on CI). Set to `false` to keep the Node.js already on the runner (e.g. from actions/setup-node or the runner image): after installation, vp commands prefer the system Node.js. Set to `true` to leave the installer default unchanged. Cannot be `false` together with node-version or node-version-file."
     required: false
+  package-manager:
+    description: "Control Vite+ package-manager management (0.3.1+). Accepts true (default), false, or a YAML mapping of npm, pnpm, yarn, and bun to booleans. Unspecified managers default to true. False prefers the system package manager. Independent of node-manager."
+    required: false
+    default: "true"
   working-directory:
     description: "Project directory to use for relative paths, lockfile auto-detection, environment checks, and default `vp install` execution."
     required: false

@@ -1,6 +1,7 @@
 import { getInput, getBooleanInput } from "@actions/core";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod/mini";
+import { parsePackageManager } from "./ci/package-manager.js";
 import { parseNodeManager } from "./ci/node-manager.js";
 import type { Inputs, RunInstall } from "./types.js";
 import { RunInstallInputSchema } from "./types.js";
@@ -23,6 +24,7 @@ export function getInputs(): Inputs {
     nodeVersion,
     nodeVersionFile,
     nodeManager,
+    packageManager: parsePackageManager(getInput("package-manager")),
     workingDirectory: getInput("working-directory") || undefined,
     runInstall: parseRunInstall(getInput("run-install")),
     sfw: getBooleanInput("sfw"),

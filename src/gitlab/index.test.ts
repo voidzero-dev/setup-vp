@@ -2,7 +2,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { getCommandOutput } from "../ci/process.js";
-import { applyNodeManagerMode, isEntrypoint, main } from "./index.js";
+import { applyEnvironmentModes, isEntrypoint, main } from "./index.js";
 
 vi.mock("../ci/process.js", () => ({ getCommandOutput: vi.fn(), run: vi.fn() }));
 
@@ -19,14 +19,14 @@ describe("GitLab entrypoint", () => {
   });
 });
 
-describe("applyNodeManagerMode", () => {
+describe("applyEnvironmentModes", () => {
   it.each(["0.2.2", "0.3.0", "0.3.1", "0.4.0", "1.0.0"])(
     "disables only Node.js on Vite+ %s",
     (version) => {
       vi.mocked(getCommandOutput).mockReturnValue(`vp v${version}`);
       const runFn = vi.fn();
 
-      applyNodeManagerMode({ SETUP_VP_NODE_MANAGER: "false" }, runFn);
+      applyEnvironmentModes({ SETUP_VP_NODE_MANAGER: "false" }, runFn);
 
       expect(runFn).toHaveBeenCalledWith(
         "vp",
@@ -36,22 +36,60 @@ describe("applyNodeManagerMode", () => {
   );
 
   it.each([{ SETUP_VP_NODE_MANAGER: "true" }, { SETUP_VP_NODE_MANAGER: "" }, {}])(
-    "does nothing for %o",
+    "enables package managers without changing Node.js for %o",
     (env) => {
       const runFn = vi.fn();
+      vi.mocked(getCommandOutput).mockReturnValue("vp v0.3.1");
 
-      applyNodeManagerMode(env, runFn);
+      applyEnvironmentModes(env, runFn);
 
-      expect(runFn).not.toHaveBeenCalled();
+      expect(runFn.mock.calls).toEqual([["vp", ["env", "on", "pm"]]]);
     },
   );
 
   it("rejects invalid values", () => {
     const runFn = vi.fn();
 
-    expect(() => applyNodeManagerMode({ SETUP_VP_NODE_MANAGER: "off" }, runFn)).toThrow(
+    expect(() => applyEnvironmentModes({ SETUP_VP_NODE_MANAGER: "off" }, runFn)).toThrow(
       'Invalid node-manager input: "off"',
     );
+    expect(runFn).not.toHaveBeenCalled();
+  });
+});
+
+describe("package-manager modes", () => {
+  it.each([
+    [undefined, [["env", "on", "pm"]]],
+    ["true", [["env", "on", "pm"]]],
+    ["false", [["env", "off", "pm"]]],
+    [
+      "pnpm: true\nbun: false",
+      [
+        ["env", "on", "pm"],
+        ["env", "off", "bun"],
+      ],
+    ],
+    [
+      '{"npm":false,"yarn":false}',
+      [
+        ["env", "on", "pm"],
+        ["env", "off", "npm"],
+        ["env", "off", "yarn"],
+      ],
+    ],
+  ])("applies %s independently of Node.js", (input, expected) => {
+    vi.mocked(getCommandOutput).mockReturnValue("vp v0.3.1");
+    const runFn = vi.fn();
+    applyEnvironmentModes({ SETUP_VP_PACKAGE_MANAGER: input }, runFn);
+    expect(runFn.mock.calls).toEqual(expected.map((args) => ["vp", args]));
+  });
+
+  it.each(["true", "false", "bun: false"])("handles %s on older Vite+", (input) => {
+    vi.mocked(getCommandOutput).mockReturnValue("vp v0.3.0");
+    const runFn = vi.fn();
+    const apply = () => applyEnvironmentModes({ SETUP_VP_PACKAGE_MANAGER: input }, runFn);
+    if (input === "true") apply();
+    else expect(apply).toThrow("package-manager opt-outs require Vite+ 0.3.1 or newer");
     expect(runFn).not.toHaveBeenCalled();
   });
 });

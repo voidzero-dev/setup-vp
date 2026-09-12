@@ -1,3 +1,5 @@
+import { parsePackageManager } from "../ci/package-manager.js";
+import type { PackageManagerConfig } from "../ci/package-manager.js";
 import { parseNodeManager } from "../ci/node-manager.js";
 import { resolveProjectDirectory } from "../ci/project.js";
 import type { RuntimeEnv } from "../ci/types.js";
@@ -8,6 +10,7 @@ export interface AzureInputs {
   runInstall: string;
   sfw: boolean;
   nodeManager: boolean | undefined;
+  packageManager: PackageManagerConfig;
   registryUrl: string;
   scope: string;
   cache: boolean;
@@ -26,6 +29,7 @@ export function parseAzureInputs(env: RuntimeEnv): AzureInputs {
     runInstall: env.SETUP_VP_RUN_INSTALL ?? "true",
     sfw: parseBoolean(env.SETUP_VP_SFW),
     nodeManager: parseNodeManager(env.SETUP_VP_NODE_MANAGER),
+    packageManager: parsePackageManager(env.SETUP_VP_PACKAGE_MANAGER),
     registryUrl: env.SETUP_VP_REGISTRY_URL || "",
     scope: env.SETUP_VP_SCOPE || "",
     cache: parseBoolean(env.SETUP_VP_CACHE),

@@ -24,6 +24,7 @@ describe("azure/setup-vp.yml", () => {
     expect(byName.scope).toMatchObject({ type: "string", default: "" });
     expect(byName.setupRef).toMatchObject({ type: "string", default: "v1.19.0" });
     expect(byName.nodeVersion).toMatchObject({ type: "string", default: "24.x" });
+    expect(byName.packageManager).toMatchObject({ type: "object", default: true });
     expect(byName.nodeManager).toMatchObject({ type: "string", default: "" });
     expect(byName.cache).toMatchObject({ type: "boolean", default: false });
     expect(byName.cacheDependencyPath).toMatchObject({ type: "string", default: "" });
@@ -42,6 +43,9 @@ describe("azure/setup-vp.yml", () => {
 
   it("serializes runInstall with convertToJson and avoids main downloads", () => {
     expect(template).toContain("${{ convertToJson(parameters.runInstall) }}");
+    expect(
+      template.split("SETUP_VP_PACKAGE_MANAGER: ${{ convertToJson(parameters.packageManager) }}"),
+    ).toHaveLength(3);
     expect(template).not.toMatch(/setup-vp\/main\//);
     expect(template).toContain("$(SETUP_VP_LOCK_FILE)");
     expect(template).toContain("cacheHitVar: SETUP_VP_CACHE_HIT");
