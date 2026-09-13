@@ -854,6 +854,24 @@ jobs:
           fi
           echo "OK: composed sfw blocked lodahs (exit $CODE, block-line found)"
 
+  test-gitlab-cache-snapshot:
+    name: GitLab cache snapshot regression (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.15.0
+      - name: Verify repeated saves with Bun-style directory symlinks
+        run: node --test test/cache-snapshot.test.mjs
+
   test-azure-runtime:
     strategy:
       fail-fast: false
