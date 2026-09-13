@@ -1,8 +1,40 @@
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import type { CacheMetadata } from "./cache.js";
 import { isWithin } from "./project.js";
+
+function copyCacheDirectory(source: string, destination: string, overwrite: boolean): void {
+  cpSync(source, destination, {
+    recursive: true,
+    force: overwrite,
+    errorOnExist: false,
+    filter: (src, dest) => {
+      const destStat = lstatSync(dest, { throwIfNoEntry: false });
+      if (!destStat) return true;
+      const srcStat = lstatSync(src);
+      if (!overwrite) {
+        // cpSync's force:false does not skip existing symlinks. Only descend
+        // into real directories; retain all other entries in the warm store.
+        return srcStat.isDirectory() && destStat.isDirectory();
+      }
+      if (srcStat.isSymbolicLink() && destStat.isSymbolicLink()) {
+        // Node rejects identical directory-link targets (and dangling links)
+        // when merging. Remove only the destination link, never its target.
+        unlinkSync(dest);
+      }
+      return true;
+    },
+  });
+}
 
 /**
  * GitLab restores native caches before setup can ask vp for the package-manager
@@ -40,7 +72,7 @@ export function restoreCacheSnapshot(
   try {
     if (restore && existsSync(packages)) {
       mkdirSync(store, { recursive: true });
-      cpSync(packages, store, { recursive: true, force: false, errorOnExist: false });
+      copyCacheDirectory(packages, store, false);
       hit = readFileSync(manifest, "utf8") === hash;
     }
   } catch (error) {
@@ -52,7 +84,7 @@ export function restoreCacheSnapshot(
       try {
         if (!existsSync(store)) return;
         mkdirSync(directory, { recursive: true });
-        cpSync(store, packages, { recursive: true });
+        copyCacheDirectory(store, packages, true);
         writeFileSync(manifest, hash, "utf8");
       } catch (error) {
         warn(`setup-vp: could not save package-manager cache: ${String(error)}`);

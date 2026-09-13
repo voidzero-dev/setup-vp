@@ -1,4 +1,16 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+  lstatSync,
+  realpathSync,
+  symlinkSync,
+  unlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -9,7 +21,7 @@ afterEach(() => {
   for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 function fixture() {
-  const root = mkdtempSync(path.join(tmpdir(), "setup-vp-cache-"));
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), "setup-vp-cache-")));
   directories.push(root);
   const store = path.join(root, "store");
   const cache = path.join(root, "snapshot");
@@ -58,6 +70,79 @@ describe("GitLab cache snapshots", () => {
     rmSync(store, { recursive: true });
     restoreCacheSnapshot(metadata, cache);
     expect(readFileSync(path.join(store, "package"), "utf8")).toBe("after");
+  });
+
+  it.each(["absolute", "relative"])(
+    "saves and restores Bun-style %s directory symlinks repeatedly",
+    (targetKind) => {
+      const { store, cache, lockFile, metadata } = fixture();
+      metadata.lockType = "bun";
+      const packageDir = path.join(store, "sample@1.0.0@@@1");
+      const index = path.join(store, "sample");
+      const link = path.join(index, "1.0.0@@@1");
+      const cached = path.join(cache, process.platform, process.arch, "bun");
+      const cachedLink = path.join(cached, "packages", "sample", "1.0.0@@@1");
+      const warn = vi.fn();
+      mkdirSync(packageDir);
+      mkdirSync(index);
+      writeFileSync(path.join(packageDir, "package.json"), "before");
+      symlinkSync(
+        targetKind === "absolute" ? packageDir : path.relative(index, packageDir),
+        link,
+        process.platform === "win32" ? "junction" : "dir",
+      );
+
+      restoreCacheSnapshot(metadata, cache, warn).save();
+      writeFileSync(path.join(packageDir, "package.json"), "after");
+      writeFileSync(lockFile, "second lock");
+      restoreCacheSnapshot(metadata, cache, warn, false).save();
+
+      expect(warn).not.toHaveBeenCalled();
+      expect(readFileSync(path.join(cached, "lock-hash"), "utf8")).toBe(
+        createHash("sha256").update("second lock").digest("hex"),
+      );
+      expect(
+        readFileSync(path.join(cached, "packages", "sample@1.0.0@@@1", "package.json"), "utf8"),
+      ).toBe("after");
+      expect(lstatSync(cachedLink).isSymbolicLink()).toBe(true);
+      expect(realpathSync(cachedLink)).toBe(realpathSync(packageDir));
+
+      // A warm store must retain its current entries, including its symlinks.
+      writeFileSync(path.join(packageDir, "package.json"), "local");
+      expect(restoreCacheSnapshot(metadata, cache, warn).hit).toBe(true);
+      expect(readFileSync(path.join(packageDir, "package.json"), "utf8")).toBe("local");
+      expect(realpathSync(link)).toBe(realpathSync(packageDir));
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("replaces changed symlinks on save without dereferencing their targets", () => {
+    const { root, store, cache, metadata } = fixture();
+    const link = path.join(store, "link");
+    const oldTarget = path.join(root, "old-target");
+    const newTarget = path.join(root, "new-target");
+    const cachedLink = path.join(cache, process.platform, process.arch, "npm", "packages", "link");
+    const warn = vi.fn();
+    const linkType = process.platform === "win32" ? "junction" : "dir";
+    mkdirSync(oldTarget);
+    mkdirSync(newTarget);
+    symlinkSync(oldTarget, link, linkType);
+    restoreCacheSnapshot(metadata, cache, warn).save();
+
+    unlinkSync(link);
+    rmSync(oldTarget, { recursive: true });
+    symlinkSync(newTarget, link, linkType);
+    restoreCacheSnapshot(metadata, cache, warn, false).save();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(lstatSync(cachedLink).isSymbolicLink()).toBe(true);
+    expect(realpathSync(cachedLink)).toBe(realpathSync(newTarget));
+
+    // Restore must not replace an existing link, even if that link is dangling.
+    rmSync(newTarget, { recursive: true });
+    expect(restoreCacheSnapshot(metadata, cache, warn).hit).toBe(true);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("skips missing metadata and overlapping paths safely", () => {
