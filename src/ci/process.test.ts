@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -26,7 +26,9 @@ describe("portable process helpers", () => {
   it.skipIf(process.platform !== "win32").each(["bin with spaces", "node_modules/.bin"])(
     "runs a vp.cmd shim from %s through every helper",
     async (binName) => {
-      const root = mkdtempSync(path.join(tmpdir(), "setup-vp-cmd-"));
+      // Windows may expose TEMP through its short (8.3) path while where.exe
+      // returns the long path. Compare commands under the canonical fixture.
+      const root = realpathSync(mkdtempSync(path.join(tmpdir(), "setup-vp-cmd-")));
       directories.push(root);
       const bin = path.join(root, binName);
       const output = path.join(root, "arguments.json");
