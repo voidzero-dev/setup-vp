@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -26,9 +26,7 @@ describe("portable process helpers", () => {
   it.skipIf(process.platform !== "win32").each(["bin with spaces", "node_modules/.bin"])(
     "runs a vp.cmd shim from %s through every helper",
     async (binName) => {
-      // Windows may expose TEMP through its short (8.3) path while where.exe
-      // returns the long path. Compare commands under the canonical fixture.
-      const root = realpathSync(mkdtempSync(path.join(tmpdir(), "setup-vp-cmd-")));
+      const root = mkdtempSync(path.join(tmpdir(), "setup-vp-cmd-"));
       directories.push(root);
       const bin = path.join(root, binName);
       const output = path.join(root, "arguments.json");
@@ -64,7 +62,15 @@ process.exit(Number(process.env.SETUP_VP_TEST_EXIT || 0));
         'quoted"value',
         "trailing\\",
       ];
-      expect(commandPath("vp")?.toLowerCase()).toBe(path.join(bin, "vp.cmd").toLowerCase());
+      // where.exe can expand TEMP's 8.3 spelling. Check file identity rather
+      // than requiring the same spelling for equivalent Windows paths.
+      const resolvedPath = commandPath("vp");
+      expect(resolvedPath).toBeDefined();
+      const expectedFile = statSync(path.join(bin, "vp.cmd"), { bigint: true });
+      expect(statSync(resolvedPath!, { bigint: true })).toMatchObject({
+        dev: expectedFile.dev,
+        ino: expectedFile.ino,
+      });
       run("vp", args, { cwd: root });
       expect(JSON.parse(readFileSync(output, "utf8"))).toEqual(args);
       const result = await runWithOutput("vp", args, { cwd: root, env: { ...process.env } });
