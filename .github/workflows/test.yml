@@ -920,7 +920,7 @@ jobs:
         uses: ./
         with:
           node-version-file: .node-version
-      - name: Test native Windows command shims and cache links
+      - name: Test native Windows executables and cache links
         run: vp run test src/ci/process.test.ts src/ci/cache-snapshot.test.ts
 
   build:

@@ -156,6 +156,9 @@ printf 'installer completed\\n'
     expect(command.command).toBe("pwsh");
     expect(command.args[1]).toContain(". ([scriptblock]::Create");
     expect(command.args[1]).toContain("Join-Path $vpDir 'vp.exe'");
+    expect(command.args[1]).not.toContain("vp.cmd");
+    expect(command.args[1]).toContain("Test-Path -LiteralPath $vpPath -PathType Leaf");
+    expect(command.args[1]).toContain("setup-vp requires vp.exe in the installed bin directory");
     expect(command.args[1]).toContain("& $vpPath --version");
     expect(command.args[1]).toContain("$env:VP_DUMP_DIRS = '1'");
     expect(command.args[1]).toContain("Set-Content -LiteralPath $dirsFile -Encoding UTF8");

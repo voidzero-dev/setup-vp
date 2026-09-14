@@ -1,4 +1,12 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -23,25 +31,18 @@ describe("portable process helpers", () => {
     });
   });
 
-  it.skipIf(process.platform !== "win32").each(["bin with spaces", "node_modules/.bin"])(
-    "runs a vp.cmd shim from %s through every helper",
-    async (binName) => {
-      const root = mkdtempSync(path.join(tmpdir(), "setup-vp-cmd-"));
+  it.skipIf(process.platform !== "win32")(
+    "runs vp.exe from a directory with spaces through every helper",
+    async () => {
+      const root = mkdtempSync(path.join(tmpdir(), "setup-vp-exe-"));
       directories.push(root);
-      const bin = path.join(root, binName);
+      const bin = path.join(root, "bin with spaces");
       const output = path.join(root, "arguments.json");
       mkdirSync(bin, { recursive: true });
-      const invocation = `"${process.execPath}" "%~dp0record.cjs" %*`;
+      copyFileSync(process.execPath, path.join(bin, "vp.exe"));
+      const script = path.join(root, "record.cjs");
       writeFileSync(
-        path.join(bin, "vp.cmd"),
-        // npm/pnpm shims use a conditional block, which adds another cmd.exe
-        // parsing pass. Cover that layout as well as a plain standalone shim.
-        binName === "node_modules/.bin"
-          ? `@echo off\r\n@if exist "${process.execPath}" (\r\n  ${invocation}\r\n)\r\n`
-          : `@echo off\r\n${invocation}\r\n`,
-      );
-      writeFileSync(
-        path.join(bin, "record.cjs"),
+        script,
         `
 const fs = require('node:fs');
 fs.writeFileSync(process.env.SETUP_VP_TEST_ARGS, JSON.stringify(process.argv.slice(2)));
@@ -50,7 +51,7 @@ process.exit(Number(process.env.SETUP_VP_TEST_EXIT || 0));
 `,
       );
       vi.stubEnv("PATH", `${bin}${path.delimiter}${process.env.PATH || ""}`);
-      vi.stubEnv("PATHEXT", ".COM;.EXE;.BAT;.CMD");
+      vi.stubEnv("PATHEXT", ".COM;.EXE");
       vi.stubEnv("SETUP_VP_TEST_ARGS", output);
       vi.stubEnv("SETUP_VP_TEST_EXIT", "0");
       const args = [
@@ -62,27 +63,28 @@ process.exit(Number(process.env.SETUP_VP_TEST_EXIT || 0));
         'quoted"value',
         "trailing\\",
       ];
+      const commandArgs = [script, ...args];
       // where.exe can expand TEMP's 8.3 spelling. Check file identity rather
       // than requiring the same spelling for equivalent Windows paths.
       const resolvedPath = commandPath("vp");
       expect(resolvedPath).toBeDefined();
-      const expectedFile = statSync(path.join(bin, "vp.cmd"), { bigint: true });
+      const expectedFile = statSync(path.join(bin, "vp.exe"), { bigint: true });
       expect(statSync(resolvedPath!, { bigint: true })).toMatchObject({
         dev: expectedFile.dev,
         ino: expectedFile.ino,
       });
-      run("vp", args, { cwd: root });
+      run("vp", commandArgs, { cwd: root });
       expect(JSON.parse(readFileSync(output, "utf8"))).toEqual(args);
-      const result = await runWithOutput("vp", args, { cwd: root, env: { ...process.env } });
+      const result = await runWithOutput("vp", commandArgs, { cwd: root, env: { ...process.env } });
       expect(result.exitCode).toBe(0);
       expect(JSON.parse(readFileSync(output, "utf8"))).toEqual(args);
-      expect(getCommandOutput("vp", args, { cwd: root })).toBe("vp v0.3.1");
+      expect(getCommandOutput("vp", commandArgs, { cwd: root })).toBe("vp v0.3.1");
       expect(JSON.parse(readFileSync(output, "utf8"))).toEqual(args);
 
       vi.stubEnv("SETUP_VP_TEST_EXIT", "7");
-      expect(() => run("vp", [], { cwd: root })).toThrow("exited with code 7");
-      expect((await runWithOutput("vp", [], { cwd: root })).exitCode).toBe(7);
-      expect(getCommandOutput("vp", [], { cwd: root })).toBeUndefined();
+      expect(() => run("vp", [script], { cwd: root })).toThrow("exited with code 7");
+      expect((await runWithOutput("vp", [script], { cwd: root })).exitCode).toBe(7);
+      expect(getCommandOutput("vp", [script], { cwd: root })).toBeUndefined();
     },
   );
 });

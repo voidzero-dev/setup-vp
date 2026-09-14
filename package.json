@@ -17,12 +17,10 @@
     "@actions/core": "^3.0.0",
     "@actions/exec": "^3.0.0",
     "@actions/glob": "^0.7.0",
-    "cross-spawn": "^7.0.6",
     "yaml": "^2.8.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@types/cross-spawn": "^6.0.6",
     "@types/node": "^24.0.0",
     "typescript": "^7.0.0",
     "vite": "catalog:",

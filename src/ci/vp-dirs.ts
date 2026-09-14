@@ -131,16 +131,14 @@ $vpDir = if ($script:ShimDir) {
   Join-Path $env:USERPROFILE '.vite-plus\\bin'
 }
 $vpPath = Join-Path $vpDir 'vp.exe'
-if (-not (Test-Path -LiteralPath $vpPath)) {
-  $vpPath = Join-Path $vpDir 'vp.cmd'
+if (-not (Test-Path -LiteralPath $vpPath -PathType Leaf)) {
+  throw "setup-vp requires vp.exe in the installed bin directory: $vpDir"
 }
-if (Test-Path -LiteralPath $vpPath) {
-  & $vpPath --version | Set-Content -LiteralPath $dirsFile -Encoding UTF8
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  $env:VP_DUMP_DIRS = '1'
-  & $vpPath | Add-Content -LiteralPath $dirsFile -Encoding UTF8
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-}
+& $vpPath --version | Set-Content -LiteralPath $dirsFile -Encoding UTF8
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$env:VP_DUMP_DIRS = '1'
+& $vpPath | Add-Content -LiteralPath $dirsFile -Encoding UTF8
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 `.trim();
     return { command: "pwsh", args: ["-Command", script] };
   }
