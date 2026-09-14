@@ -3,9 +3,13 @@ import { basename } from "node:path";
 import { resolvePath } from "./project.js";
 import type { ResolutionContext } from "./resolution.js";
 
+export interface NodeVersionResolver {
+  resolveNodeVersionFile: (filePath: string, baseDir?: string) => string;
+}
+
 export function createNodeVersionResolver(
   context: Pick<ResolutionContext, "getWorkspaceDir" | "info">,
-) {
+): NodeVersionResolver {
   const { getWorkspaceDir, info } = context;
   /**
    * Resolve a Node.js version from a version file.

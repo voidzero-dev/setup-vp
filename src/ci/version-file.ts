@@ -12,7 +12,14 @@ interface Inputs {
   readonly cacheDependencyPath?: string;
 }
 
-export function createVersionResolver(context: ResolutionContext) {
+export interface VersionResolver {
+  resolveVitePlusVersion: (inputs: Inputs, projectDir: string) => string;
+  resolveVitePlusVersionFile: (filePath: string, baseDir?: string) => string;
+  tryResolveVitePlusVersionFile: (filePath: string, baseDir?: string) => string | undefined;
+  tryResolveVitePlusVersionFromProject: (projectDir: string) => string | undefined;
+}
+
+export function createVersionResolver(context: ResolutionContext): VersionResolver {
   const { getWorkspaceDir, info, debug, warning } = context;
   const { tryResolveVitePlusVersionFromLockfile } = createLockfileResolver(context);
   const CATALOG_PREFIX = "catalog:";

@@ -1,8 +1,7 @@
 import { createWriteStream, existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
-import { get as httpGet } from "node:http";
-import { get as httpsGet } from "node:https";
+import type { get as httpGet } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { commandPath } from "./process.js";
@@ -103,7 +102,6 @@ export function downloadFile(
     return Promise.resolve();
   }
 
-  const client = clientOverride || (url.startsWith("https:") ? httpsGet : httpGet);
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (error?: Error): void => {
@@ -117,7 +115,7 @@ export function downloadFile(
       }
     };
 
-    const request = client(url, (response) => {
+    const request = clientOverride(url, (response) => {
       const statusCode = response.statusCode ?? 0;
       const location = response.headers.location;
       if (statusCode >= 300 && statusCode < 400 && location) {
@@ -184,13 +182,10 @@ export async function setupSfw(
     return "sfw";
   }
 
-  let asset: string | undefined;
+  let asset: string;
   try {
     asset = getSfwAssetName(platform, arch, isMusl);
   } catch {
-    asset = undefined;
-  }
-  if (!asset) {
     console.error(
       `setup-vp: sfw has no published binary for this runner's platform/architecture (process.platform=${platform}, process.arch=${arch}, musl=${isMusl}) and none was found on PATH; falling back to plain vp install.`,
     );
@@ -204,12 +199,12 @@ export async function setupSfw(
   await mkdir(sfwDir, { recursive: true });
   const sfwBin = path.join(sfwDir, platform === "win32" ? "sfw.exe" : "sfw");
   const sfwUrl = `${SFW_RELEASE_BASE}/${asset}`;
-  const activate = (): InstallCommand => {
+  function activate(): InstallCommand {
     const pathSeparator = platform === "win32" ? ";" : ":";
     env.PATH = `${sfwDir}${pathSeparator}${env.PATH || ""}`;
     options.exportVariable?.("PATH", env.PATH);
     return "sfw";
-  };
+  }
   if (
     await stat(sfwBin).then(
       (file) => file.isFile() && file.size > 0,

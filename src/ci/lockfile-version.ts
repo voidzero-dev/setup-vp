@@ -1,13 +1,21 @@
-import { detectLockFile } from "./cache.js";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { detectLockFile } from "./cache.js";
 import { DISPLAY_NAME, PACKAGE_NAME, LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
 import { isWithin } from "./project.js";
 import type { ResolutionContext } from "./resolution.js";
 
-export function createLockfileResolver(context: ResolutionContext) {
+export interface LockfileResolver {
+  tryResolveVitePlusVersionFromLockfile: (
+    projectDir: string,
+    cacheDependencyPath?: string,
+  ) => string | undefined;
+  parseVitePlusVersionFromLockfile: (lock: LockFileInfo, subPath?: string) => string | undefined;
+}
+
+export function createLockfileResolver(context: ResolutionContext): LockfileResolver {
   const { getWorkspaceDir, info, debug } = context;
   // Lockfiles always record fully-resolved versions, so a valid result starts with
   // major.minor.patch; use this to sanity-check extracted values.

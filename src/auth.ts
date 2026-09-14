@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { EOL } from "node:os";
 import { join, resolve } from "node:path";
 import { debug, exportVariable, info } from "@actions/core";
+import { analyzeProjectNpmrc } from "./ci/npmrc.js";
 
 // Literal written into `.npmrc`; pnpm/npm expand it against the env at install time.
 const NODE_AUTH_TOKEN_REF = "${NODE_AUTH_TOKEN}";
@@ -166,4 +167,3 @@ export function propagateProjectNpmrcAuth(projectDir: string): void {
     exportVariable(name, process.env[name]!);
   }
 }
-import { analyzeProjectNpmrc } from "./ci/npmrc.js";

@@ -98,7 +98,7 @@ export async function installVitePlus(
   let failureReason = "";
   let attempt = 0;
 
-  const tryUrls = async (urls: string[]): Promise<boolean> => {
+  async function tryUrls(urls: string[]): Promise<boolean> {
     for (let round = 0; round < INSTALL_MAX_ROUNDS; round += 1) {
       for (const url of urls) {
         attempt += 1;
@@ -119,9 +119,9 @@ export async function installVitePlus(
       }
     }
     return false;
-  };
+  }
 
-  const ensureBinInPath = (): void => {
+  function ensureBinInPath(): void {
     const binDir = resolveVitePlusBinDir(
       version,
       dirsFile,
@@ -132,7 +132,7 @@ export async function installVitePlus(
       targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
       prependPath?.(binDir);
     }
-  };
+  }
 
   try {
     if (pinned.length > 0) {

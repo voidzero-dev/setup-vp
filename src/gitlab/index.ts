@@ -1,6 +1,6 @@
+import { copyFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { copyFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createVersionResolver } from "../ci/version-file.js";
 import { createNodeVersionResolver } from "../ci/node-version-file.js";
 import { resolutionContext } from "../ci/resolution.js";
@@ -47,24 +47,19 @@ export function applyEnvironmentModes(
 export async function main(phase = "setup"): Promise<void> {
   const env = process.env;
   const workspaceRoot = env.CI_PROJECT_DIR || process.cwd();
+  const cacheRoot = path.join(workspaceRoot, ".setup-vp-cache");
+  const cacheStateFile = path.join(workspaceRoot, ".setup-vp-cache-state.json");
   if (phase === "save-cache") {
-    const metadata = JSON.parse(
-      readFileSync(path.join(workspaceRoot, ".setup-vp-cache-state.json"), "utf8"),
-    ) as CacheMetadata;
+    const metadata = JSON.parse(readFileSync(cacheStateFile, "utf8")) as CacheMetadata;
     // Do not restore the pre-install snapshot over files populated by job scripts.
-    restoreCacheSnapshot(
-      metadata,
-      path.join(workspaceRoot, ".setup-vp-cache"),
-      console.warn,
-      false,
-    ).save();
+    restoreCacheSnapshot(metadata, cacheRoot, console.warn, false).save();
     return;
   }
   if (phase !== "setup") throw new Error(`Invalid GitLab phase: ${phase}`);
   const projectDir = resolveProjectDir(env);
   // An opt-out or failed setup must not reuse state from a previous shell-runner job.
-  rmSync(path.join(workspaceRoot, ".setup-vp-cache-state.json"), { force: true });
-  const context = resolutionContext(env.CI_PROJECT_DIR || process.cwd());
+  rmSync(cacheStateFile, { force: true });
+  const context = resolutionContext(workspaceRoot);
   const nodeManager = parseNodeManager(env.SETUP_VP_NODE_MANAGER);
   // Validate configuration before invoking the installer.
   parsePackageManager(env.SETUP_VP_PACKAGE_MANAGER);
@@ -96,7 +91,6 @@ export async function main(phase = "setup"): Promise<void> {
 
   configureAuth(env.SETUP_VP_REGISTRY_URL || "", env.SETUP_VP_SCOPE || "", env, projectDir);
 
-  const cacheRoot = path.join(context.getWorkspaceDir(), ".setup-vp-cache");
   env.SETUP_VP_SFW_CACHE_DIR = path.join(cacheRoot, "sfw");
   const cacheEnabled = env.SETUP_VP_CACHE?.toLowerCase() === "true";
   const metadata = cacheEnabled
@@ -107,18 +101,15 @@ export async function main(phase = "setup"): Promise<void> {
       })
     : { ready: false };
   const cache = restoreCacheSnapshot(metadata, cacheRoot);
-  if (metadata.ready && env.SETUP_VP_CACHE_SAVE?.toLowerCase() !== "false") {
-    writeFileSync(
-      path.join(workspaceRoot, ".setup-vp-cache-state.json"),
-      JSON.stringify(metadata),
-      { mode: 0o600 },
-    );
+  const cacheSaveEnabled = env.SETUP_VP_CACHE_SAVE?.toLowerCase() !== "false";
+  if (metadata.ready && cacheSaveEnabled) {
+    writeFileSync(cacheStateFile, JSON.stringify(metadata), { mode: 0o600 });
     copyFileSync(process.argv[1]!, path.join(workspaceRoot, ".setup-vp-runtime.mjs"));
   }
 
   const installCommand = await setupSfw(runInstallEntries);
   await runInstall(runInstallEntries, projectDir, installCommand);
-  if (env.SETUP_VP_CACHE_SAVE?.toLowerCase() !== "false") cache.save();
+  if (cacheSaveEnabled) cache.save();
 
   const output = getCommandOutput("vp", ["--version"], { cwd: projectDir }) || "";
   console.log(output);
@@ -132,7 +123,7 @@ export async function main(phase = "setup"): Promise<void> {
   }
   // Only non-secret outputs belong in a GitLab dotenv artifact.
   writeFileSync(
-    path.join(context.getWorkspaceDir(), ".setup-vp-outputs.env"),
+    path.join(workspaceRoot, ".setup-vp-outputs.env"),
     Object.entries(outputs)
       .map(([name, value]) => `${name}=${value}\n`)
       .join(""),

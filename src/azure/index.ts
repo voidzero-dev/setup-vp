@@ -1,6 +1,6 @@
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { mkdirSync } from "node:fs";
 import { packageManagerArgs } from "../ci/package-manager.js";
 import { createVersionResolver } from "../ci/version-file.js";
 import { createNodeVersionResolver } from "../ci/node-version-file.js";
@@ -164,11 +164,10 @@ export async function runFinalize(
     inputs.scope,
     env,
     (name, value) => {
-      if (name === "NODE_AUTH_TOKEN") return;
-      if (value !== undefined)
-        ports.setVariable(name, value, {
-          isSecret: name !== "NPM_CONFIG_USERCONFIG" && name !== "PNPM_CONFIG_USERCONFIG",
-        });
+      if (name === "NODE_AUTH_TOKEN" || value === undefined) return;
+      ports.setVariable(name, value, {
+        isSecret: name !== "NPM_CONFIG_USERCONFIG" && name !== "PNPM_CONFIG_USERCONFIG",
+      });
     },
     projectDir,
   );

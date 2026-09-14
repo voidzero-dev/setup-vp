@@ -15,6 +15,18 @@ function readNpmrc(file: string): string {
   }
 }
 
+function readUserConfigLines(env: RuntimeEnv, replacedKeys: Set<string>): string[] {
+  const homeDir = env.HOME || env.USERPROFILE;
+  const file =
+    env.NPM_CONFIG_USERCONFIG ||
+    env.PNPM_CONFIG_USERCONFIG ||
+    (homeDir && path.join(homeDir, ".npmrc"));
+  const contents = file ? readNpmrc(file) : "";
+  return contents
+    .split(/\r?\n/)
+    .filter((line) => !replacedKeys.has(line.split("=")[0]!.trim().toLowerCase()));
+}
+
 export function isReservedAuthVariable(name: string): boolean {
   if (["GITHUB_TOKEN", "CI_JOB_TOKEN", "SYSTEM_ACCESSTOKEN"].includes(name)) return false;
   return (
@@ -45,14 +57,6 @@ export function configureAuth(
   exportVariable?: ExportVariable,
   projectDir?: string,
 ): string | undefined {
-  const existingConfig = () => {
-    const homeDir = targetEnv.HOME || targetEnv.USERPROFILE;
-    const file =
-      targetEnv.NPM_CONFIG_USERCONFIG ||
-      targetEnv.PNPM_CONFIG_USERCONFIG ||
-      (homeDir && path.join(homeDir, ".npmrc"));
-    return file ? readNpmrc(file) : "";
-  };
   if (!registryUrlInput) {
     if (!projectDir) return;
     const { registriesNeedingAuth, envVarRefs } = analyzeProjectNpmrc(
@@ -65,9 +69,7 @@ export function configureAuth(
           (url.replace(/^\w+:/, "") + ":_authtoken").toLowerCase(),
         ),
       );
-      const lines = existingConfig()
-        .split(/\r?\n/)
-        .filter((line) => !authKeys.has(line.split("=")[0]!.trim().toLowerCase()));
+      const lines = readUserConfigLines(targetEnv, authKeys);
       lines.push(
         ...registriesNeedingAuth.map(
           (url) => url.replace(/^\w+:/, "") + ":_authToken=" + NODE_AUTH_TOKEN_REF,
@@ -98,9 +100,7 @@ export function configureAuth(
 
   const authUrl = registryUrl.replace(/^\w+:/, "").toLowerCase();
   const replacedKeys = new Set([`${scopePrefix}registry`, `${authUrl}:_authtoken`]);
-  const lines = existingConfig()
-    .split(/\r?\n/)
-    .filter((line) => !replacedKeys.has(line.split("=")[0]!.trim().toLowerCase()));
+  const lines = readUserConfigLines(targetEnv, replacedKeys);
   lines.push(
     `${authUrl}:_authToken=${NODE_AUTH_TOKEN_REF}`,
     `${scopePrefix}registry=${registryUrl}`,

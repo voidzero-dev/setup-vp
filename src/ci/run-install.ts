@@ -1,7 +1,7 @@
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { runWithOutput } from "./process.js";
-import type { InstallCommand, RunInstallEntry } from "./types.js";
+import type { InstallCommand, RunInstallEntry, RunInstallInput } from "./types.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -36,7 +36,7 @@ function validateRunInstallEntry(value: unknown): RunInstallEntry {
   return entry;
 }
 
-function validateRunInstallInput(value: unknown): import("./types.js").RunInstallInput {
+function validateRunInstallInput(value: unknown): RunInstallInput {
   if (value === null || typeof value === "boolean") return value;
   if (Array.isArray(value)) return value.map(validateRunInstallEntry);
   return validateRunInstallEntry(value);
@@ -53,7 +53,8 @@ export function parseFlowArray(value: string): string[] {
 export function parseRunInstall(value: string): RunInstallEntry[] {
   const parsed = validateRunInstallInput(parseYaml(value) ?? null);
   if (!parsed) return [];
-  return parsed === true ? [{}] : Array.isArray(parsed) ? parsed : [parsed];
+  if (parsed === true) return [{}];
+  return Array.isArray(parsed) ? parsed : [parsed];
 }
 
 // Retain the adapter export for consumers of the previous subset parser.
