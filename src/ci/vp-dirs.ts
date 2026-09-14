@@ -147,11 +147,21 @@ if (Test-Path -LiteralPath $vpPath) {
 
   // Upstream installers read optional positional arguments without defaults.
   // Do not inherit nounset from a caller that exports SHELLOPTS.
+  const download = `
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL ${CURL_TIMEOUT_FLAGS} "${url}"${detectDirs ? ' -o "$installer_file"' : ""}
+elif command -v wget >/dev/null 2>&1; then
+  wget -q -T 15 -t 1 -O ${detectDirs ? '"$installer_file"' : "-"} "${url}"
+else
+  echo "setup-vp: curl or wget is required to download the installer." >&2
+  exit 127
+fi
+`.trim();
   if (!detectDirs) {
     const script = `
 set +u
 set -o pipefail
-curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} | bash
+${download} | bash
 `.trim();
     return { command: "bash", args: ["-c", script] };
   }
@@ -162,7 +172,7 @@ set -eo pipefail
 installer_file="$(mktemp "\${TMPDIR:-/tmp}/setup-vp-install.XXXXXX")"
 trap 'rm -f "$installer_file"' EXIT
 : > "$${VP_DIRS_FILE_ENV}"
-curl -fsSL ${CURL_TIMEOUT_FLAGS} ${url} -o "$installer_file"
+${download}
 source "$installer_file"
 vp_dir="\${SHIM_DIR:-\${INSTALL_DIR:-\${VP_HOME:-$HOME/.vite-plus}}/bin}"
 if [ -x "$vp_dir/vp" ]; then

@@ -89,10 +89,13 @@ export async function runInstall(
         installCommand === "sfw" &&
         isSfwVpNotFoundFlake(result.stdout, result.stderr)
       ) {
+        const isWindows = (options.platform ?? process.platform) === "win32";
         console.warn(
-          "setup-vp: sfw could not resolve vp; warming the PowerShell command cache and retrying once.",
+          isWindows
+            ? "setup-vp: sfw could not resolve vp; warming the PowerShell command cache and retrying once."
+            : "setup-vp: sfw could not resolve vp; retrying once.",
         );
-        if ((options.platform ?? process.platform) === "win32") {
+        if (isWindows) {
           try {
             await execute("powershell.exe", ["-NoProfile", "-Command", "Get-Command vp"], {
               cwd,

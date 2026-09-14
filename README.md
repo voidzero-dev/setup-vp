@@ -563,6 +563,7 @@ test:
 | `node-version-file`     | Read Node.js from `.nvmrc`, `.node-version`, `.tool-versions`, or `package.json`                                                                                                                            |                       |
 | `cache-dependency-path` | Lock file relative to `working-directory`; otherwise auto-detect                                                                                                                                            |                       |
 | `cache-policy`          | Native policy for `.setup-vp-cached`: `pull-push` or restore-only `pull`                                                                                                                                    | `pull-push`           |
+| `cache-namespace`       | Cache partition; set an OS/architecture label to share across compatible runners                                                                                                                            | `$CI_RUNNER_ID`       |
 | `working-directory`     | Project directory used for relative paths and default `vp install` execution                                                                                                                                | `.`                   |
 | `run-install`           | String input for `vp install` after setup. Use `"true"`/`"false"` or a YAML object/list with `cwd`/`args`                                                                                                   | `true`                |
 | `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free)                                                                                                            | `false`               |
@@ -579,6 +580,8 @@ These additions require a template and matching `setup-ref` that contain the cha
 Extend `.setup-vp-cached` to restore and save dependency data and the pinned `sfw` binary through GitLab's native cache. The runtime copies restored data from `.setup-vp-cache/` into the directory reported by `vp pm cache dir`. It saves a snapshot after setup and again in `after_script`, so packages added by later job scripts are included.
 
 Set the include input `cache-policy: pull` to restore without uploading a cache. GitLab restores before setup, so this policy must be set in YAML, not changed during a script. Cache snapshots separate OS, architecture, and package manager; the exact lock-file hash determines `SETUP_VP_CACHE_HIT`. A compatible snapshot from an older lock file can still supply packages on a miss.
+
+By default, you get a separate cache key for each runner. Set the include input `cache-namespace: linux-amd64` to share caches across runners with that OS and architecture. Use distinct labels for other platforms. Keep the default if you cannot guarantee that runners in a shared namespace use compatible platforms. Set this input in YAML; a script runs after cache restoration.
 
 ```yaml
 test:

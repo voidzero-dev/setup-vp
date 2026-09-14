@@ -24,7 +24,7 @@ function fixture() {
     setupSfw: vi.fn(async () => "vp" as const),
     parseRunInstall,
     runInstall: vi.fn(),
-    getCommandOutput: vi.fn(() => "vp v0.3.1"),
+    getCommandOutput: vi.fn((): string | undefined => "vp v0.3.1"),
     run: vi.fn(),
     parseInstalledVpVersion: vi.fn(() => "0.3.1"),
     prependPath: vi.fn(),
@@ -99,4 +99,31 @@ describe("Azure parity", () => {
       expect.stringMatching(/^v1\.15\.1-sfw-free-/),
     );
   });
+
+  it.each(["$(CUSTOM_TOKEN)", "$(MISSING_SECRET)"])(
+    "removes an unresolved custom auth macro %s before install",
+    async (value) => {
+      const { project, env, ports } = fixture();
+      writeFileSync(
+        path.join(project, ".npmrc"),
+        "//registry.example/:_authToken=${CUSTOM_TOKEN}\n",
+      );
+      const target = { ...env, CUSTOM_TOKEN: value, UNRELATED_VALUE: "$(keep-me)" };
+      await runFinalize(target, ports);
+      expect(target.CUSTOM_TOKEN).toBeUndefined();
+      expect(target.UNRELATED_VALUE).toBe("$(keep-me)");
+      expect(ports.setVariable.mock.calls.some(([name]) => name === "CUSTOM_TOKEN")).toBe(false);
+      expect(ports.runInstall).toHaveBeenCalledWith(expect.anything(), project, "vp", target);
+    },
+  );
+
+  it.each([undefined, ""])(
+    "fails the final version check without publishing success outputs (%s)",
+    async (output) => {
+      const { env, ports } = fixture();
+      ports.getCommandOutput.mockReturnValue(output);
+      await expect(runFinalize(env, ports)).rejects.toThrow("Failed to verify Vite+ installation");
+      expect(ports.setVariable).not.toHaveBeenCalled();
+    },
+  );
 });

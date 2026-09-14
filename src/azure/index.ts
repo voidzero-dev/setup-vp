@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { packageManagerArgs } from "../ci/package-manager.js";
@@ -6,7 +6,8 @@ import { createVersionResolver } from "../ci/version-file.js";
 import { createNodeVersionResolver } from "../ci/node-version-file.js";
 import { resolutionContext } from "../ci/resolution.js";
 import { nodeManagerOffArgs } from "../ci/node-manager.js";
-import { configureAuth } from "../ci/auth.js";
+import { configureAuth, isReservedAuthVariable } from "../ci/auth.js";
+import { analyzeProjectNpmrc } from "../ci/npmrc.js";
 import { prepareCacheMetadata } from "../ci/cache.js";
 import { getSfwAssetName, isMuslLinux, setupSfw, SFW_VERSION } from "../ci/install-sfw.js";
 import { getCommandOutput, run } from "../ci/process.js";
@@ -156,8 +157,19 @@ export async function runFinalize(
 ): Promise<void> {
   const inputs = parseAzureInputs(env);
   const projectDir = resolveProjectDirFromInputs(inputs);
-  // Azure leaves an undefined macro unexpanded when it is mapped into env.
-  if (env.NODE_AUTH_TOKEN === "$(NODE_AUTH_TOKEN)") delete env.NODE_AUTH_TOKEN;
+  // Azure leaves undefined macros unexpanded, including aliases supplied via
+  // authEnv. Normalize only credentials, not unrelated task environment values.
+  let npmrc = "";
+  try {
+    npmrc = readFileSync(path.join(projectDir, ".npmrc"), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const authVariables = analyzeProjectNpmrc(npmrc).envVarRefs;
+  authVariables.add("NODE_AUTH_TOKEN");
+  for (const name of authVariables) {
+    if (!isReservedAuthVariable(name) && /^\$\([^)]+\)$/.test(env[name] || "")) delete env[name];
+  }
 
   ports.configureAuth(
     inputs.registryUrl,
@@ -186,7 +198,11 @@ export async function runFinalize(
     await ports.runInstall(runInstallEntries, projectDir, installCommand, env);
   }
 
-  const versionOutput = ports.getCommandOutput("vp", ["--version"], { cwd: projectDir }) || "";
+  const versionOutput = ports.getCommandOutput("vp", ["--version"], { cwd: projectDir });
+  if (!versionOutput)
+    throw new Error(
+      "Failed to verify Vite+ installation: vp --version failed or returned no output.",
+    );
   ports.logInfo(versionOutput);
   const installedVersion = ports.parseInstalledVpVersion(versionOutput);
   ports.setVariable("SETUP_VP_INSTALLED_VERSION", installedVersion);

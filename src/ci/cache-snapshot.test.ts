@@ -8,6 +8,8 @@ import {
   existsSync,
   lstatSync,
   realpathSync,
+  readlinkSync,
+  renameSync,
   symlinkSync,
   unlinkSync,
 } from "node:fs";
@@ -105,7 +107,9 @@ describe("GitLab cache snapshots", () => {
         readFileSync(path.join(cached, "packages", "sample@1.0.0@@@1", "package.json"), "utf8"),
       ).toBe("after");
       expect(lstatSync(cachedLink).isSymbolicLink()).toBe(true);
-      expect(realpathSync(cachedLink)).toBe(realpathSync(packageDir));
+      expect(realpathSync(cachedLink)).toBe(
+        realpathSync(path.join(cached, "packages", "sample@1.0.0@@@1")),
+      );
 
       // A warm store must retain its current entries, including its symlinks.
       writeFileSync(path.join(packageDir, "package.json"), "local");
@@ -115,6 +119,45 @@ describe("GitLab cache snapshots", () => {
       expect(warn).not.toHaveBeenCalled();
     },
   );
+
+  it.each(["absolute", "relative"])(
+    "relocates %s links when snapshot and store roots both change",
+    (targetKind) => {
+      const { root, store, cache, metadata } = fixture();
+      const packageDir = path.join(store, "package");
+      const index = path.join(store, "index");
+      mkdirSync(packageDir);
+      mkdirSync(index);
+      writeFileSync(path.join(packageDir, "value"), "cached package");
+      symlinkSync(
+        targetKind === "absolute" ? packageDir : "../package",
+        path.join(index, "link"),
+        process.platform === "win32" ? "junction" : "dir",
+      );
+      const warn = vi.fn();
+      restoreCacheSnapshot(metadata, cache, warn).save();
+      const movedCache = path.join(root, "another-runner-snapshot");
+      const movedStore = path.join(root, "another-runner-store");
+      renameSync(cache, movedCache);
+      rmSync(store, { recursive: true });
+      expect(
+        restoreCacheSnapshot({ ...metadata, cachePath: movedStore }, movedCache, warn).hit,
+      ).toBe(true);
+      const restoredLink = path.join(movedStore, "index/link");
+      expect(readFileSync(path.join(restoredLink, "value"), "utf8")).toBe("cached package");
+      expect(readlinkSync(restoredLink)).toBe(path.join("..", "package"));
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("hashes the current lockfile when saving the setup-phase snapshot", () => {
+    const { store, cache, lockFile, metadata } = fixture();
+    writeFileSync(path.join(store, "package"), "cached");
+    const snapshot = restoreCacheSnapshot(metadata, cache);
+    writeFileSync(lockFile, "changed during install");
+    snapshot.save();
+    expect(restoreCacheSnapshot(metadata, cache).hit).toBe(true);
+  });
 
   it("replaces changed symlinks on save without dereferencing their targets", () => {
     const { root, store, cache, metadata } = fixture();

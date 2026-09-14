@@ -1,6 +1,6 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { installVitePlus } from "../ci/install-viteplus.js";
@@ -95,6 +95,18 @@ describe("GitLab setup parity", () => {
     await expect(main()).rejects.toThrow("cannot be used with node-manager");
     expect(installVitePlus).not.toHaveBeenCalled();
   });
+
+  it.each([undefined, ""])(
+    "fails the final version check without writing successful outputs (%s)",
+    async (output) => {
+      const root = fixture();
+      writeFileSync(path.join(root, ".setup-vp-outputs.env"), "SETUP_VP_INSTALLED_VERSION=stale\n");
+      vi.mocked(getCommandOutput).mockReturnValue(output);
+      await expect(main()).rejects.toThrow("Failed to verify Vite+ installation");
+      expect(existsSync(path.join(root, ".setup-vp-outputs.env"))).toBe(false);
+      expect(process.env.SETUP_VP_INSTALLED_VERSION).toBe("");
+    },
+  );
 });
 
 describe("GitLab entrypoint", () => {

@@ -909,6 +909,20 @@ jobs:
           [scriptblock]::Create((Get-Content -Raw azure/bootstrap.ps1)) > $null
           [scriptblock]::Create((Get-Content -Raw gitlab/bootstrap.ps1)) > $null
 
+  test-portable-process:
+    name: Portable Windows command and cache regressions
+    runs-on: windows-latest
+    env:
+      VP_PR_VERSION: ""
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - name: Setup Vite+ and test dependencies
+        uses: ./
+        with:
+          node-version-file: .node-version
+      - name: Test native Windows command shims and cache links
+        run: vp run test src/ci/process.test.ts src/ci/cache-snapshot.test.ts
+
   build:
     runs-on: ubuntu-latest
     # This job verifies the action's own artifacts (dist/ committed and up to

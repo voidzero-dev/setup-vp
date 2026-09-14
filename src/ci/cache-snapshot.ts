@@ -5,6 +5,9 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
+  statSync,
+  symlinkSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -13,23 +16,39 @@ import type { CacheMetadata } from "./cache.js";
 import { isWithin } from "./project.js";
 
 function copyCacheDirectory(source: string, destination: string, overwrite: boolean): void {
+  source = path.resolve(source);
+  destination = path.resolve(destination);
   cpSync(source, destination, {
     recursive: true,
     force: overwrite,
     errorOnExist: false,
     filter: (src, dest) => {
       const destStat = lstatSync(dest, { throwIfNoEntry: false });
-      if (!destStat) return true;
       const srcStat = lstatSync(src);
-      if (!overwrite) {
+      if (destStat && !overwrite) {
         // cpSync's force:false does not skip existing symlinks. Only descend
         // into real directories; retain all other entries in the warm store.
         return srcStat.isDirectory() && destStat.isDirectory();
       }
-      if (srcStat.isSymbolicLink() && destStat.isSymbolicLink()) {
-        // Node rejects identical directory-link targets (and dangling links)
-        // when merging. Remove only the destination link, never its target.
-        unlinkSync(dest);
+      if (srcStat.isSymbolicLink()) {
+        const target = path.resolve(path.dirname(src), readlinkSync(src));
+        // Store-local links must remain valid after both the snapshot and the
+        // store move to another runner. cpSync otherwise makes relative links
+        // absolute, retaining the original runner's paths.
+        const relocated = isWithin(target, source)
+          ? path.relative(
+              path.dirname(dest),
+              path.join(destination, path.relative(source, target)),
+            ) || "."
+          : target;
+        if (destStat?.isSymbolicLink()) unlinkSync(dest);
+        mkdirSync(path.dirname(dest), { recursive: true });
+        symlinkSync(
+          relocated,
+          dest,
+          statSync(src, { throwIfNoEntry: false })?.isDirectory() ? "dir" : "file",
+        );
+        return false;
       }
       return true;
     },
@@ -61,9 +80,11 @@ export function restoreCacheSnapshot(
   const directory = path.join(cacheRoot, process.platform, process.arch, metadata.lockType);
   const packages = path.join(directory, "packages");
   const manifest = path.join(directory, "lock-hash");
+  const lockFile = metadata.lockFile;
+  const hashLockFile = () => createHash("sha256").update(readFileSync(lockFile)).digest("hex");
   let hash: string;
   try {
-    hash = createHash("sha256").update(readFileSync(metadata.lockFile)).digest("hex");
+    hash = hashLockFile();
   } catch (error) {
     warn(`setup-vp: could not read cache lock file: ${String(error)}`);
     return { hit: false, save: () => {} };
@@ -83,9 +104,10 @@ export function restoreCacheSnapshot(
     save: () => {
       try {
         if (!existsSync(store)) return;
+        const savedHash = hashLockFile();
         mkdirSync(directory, { recursive: true });
         copyCacheDirectory(store, packages, true);
-        writeFileSync(manifest, hash, "utf8");
+        writeFileSync(manifest, savedHash, "utf8");
       } catch (error) {
         warn(`setup-vp: could not save package-manager cache: ${String(error)}`);
       }

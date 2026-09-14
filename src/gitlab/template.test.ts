@@ -62,6 +62,13 @@ describe("GitLab native templates", () => {
       expect(cached.variables.SETUP_VP_CACHE).toBe("true");
       expect(cached.cache.paths).toEqual([".setup-vp-cache/"]);
       expect(cached.cache.policy).toBe("$[[ inputs.cache-policy ]]");
+      expect(inputs["cache-namespace"].default).toBe("$CI_RUNNER_ID");
+      expect(cached.cache.key).toBe(
+        "setup-vp-v2-$[[ inputs.cache-namespace ]]-$CI_JOB_NAME_SLUG-$CI_COMMIT_REF_SLUG",
+      );
+      expect(cached.cache.fallback_keys).toEqual([
+        "setup-vp-v2-$[[ inputs.cache-namespace ]]-$CI_JOB_NAME_SLUG-$CI_DEFAULT_BRANCH",
+      ]);
       expect(cached.after_script.join("\n")).toContain("save-cache");
       expect(cached.cache.paths.join("\n")).not.toContain("env");
     },

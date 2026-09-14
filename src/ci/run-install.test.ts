@@ -36,4 +36,26 @@ describe("portable installs", () => {
     ).rejects.toThrow(/cwd:.*a[\s\S]*cwd:.*b/);
     expect(execute).toHaveBeenCalledTimes(2);
   });
+
+  it.each(["linux", "darwin"] as const)(
+    "does not claim PowerShell warm-up on %s",
+    async (platform) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const execute = vi
+          .fn()
+          .mockResolvedValueOnce({
+            exitCode: 1,
+            stdout: "",
+            stderr: "Command 'vp' not found in PATH",
+          })
+          .mockResolvedValueOnce({ exitCode: 0, stdout: "", stderr: "" });
+        await runInstall([{}], "/project", "sfw", {}, { platform, execute });
+        expect(execute.mock.calls.map(([command]) => command)).toEqual(["sfw", "sfw"]);
+        expect(warn).toHaveBeenCalledWith("setup-vp: sfw could not resolve vp; retrying once.");
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
 });

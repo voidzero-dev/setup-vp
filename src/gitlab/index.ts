@@ -49,6 +49,7 @@ export async function main(phase = "setup"): Promise<void> {
   const workspaceRoot = env.CI_PROJECT_DIR || process.cwd();
   const cacheRoot = path.join(workspaceRoot, ".setup-vp-cache");
   const cacheStateFile = path.join(workspaceRoot, ".setup-vp-cache-state.json");
+  const outputsFile = path.join(workspaceRoot, ".setup-vp-outputs.env");
   if (phase === "save-cache") {
     const metadata = JSON.parse(readFileSync(cacheStateFile, "utf8")) as CacheMetadata;
     // Do not restore the pre-install snapshot over files populated by job scripts.
@@ -59,6 +60,7 @@ export async function main(phase = "setup"): Promise<void> {
   const projectDir = resolveProjectDir(env);
   // An opt-out or failed setup must not reuse state from a previous shell-runner job.
   rmSync(cacheStateFile, { force: true });
+  rmSync(outputsFile, { force: true });
   const context = resolutionContext(workspaceRoot);
   const nodeManager = parseNodeManager(env.SETUP_VP_NODE_MANAGER);
   // Validate configuration before invoking the installer.
@@ -111,7 +113,11 @@ export async function main(phase = "setup"): Promise<void> {
   await runInstall(runInstallEntries, projectDir, installCommand);
   if (cacheSaveEnabled) cache.save();
 
-  const output = getCommandOutput("vp", ["--version"], { cwd: projectDir }) || "";
+  const output = getCommandOutput("vp", ["--version"], { cwd: projectDir });
+  if (!output)
+    throw new Error(
+      "Failed to verify Vite+ installation: vp --version failed or returned no output.",
+    );
   console.log(output);
   const outputs = {
     SETUP_VP_INSTALLED_VERSION: parseInstalledVpVersion(output),
@@ -123,7 +129,7 @@ export async function main(phase = "setup"): Promise<void> {
   }
   // Only non-secret outputs belong in a GitLab dotenv artifact.
   writeFileSync(
-    path.join(workspaceRoot, ".setup-vp-outputs.env"),
+    outputsFile,
     Object.entries(outputs)
       .map(([name, value]) => `${name}=${value}\n`)
       .join(""),

@@ -83,4 +83,23 @@ describe("portable CI bundles", () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('invalid phase "invalid-phase"');
   }, 15_000);
+
+  it("fails standalone Azure finalize when vp is unavailable", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "setup-vp-missing-command-"));
+    try {
+      const result = spawnSync(process.execPath, [azureDist, "finalize"], {
+        cwd: root,
+        env: { PATH: root, SYSTEM_DEFAULTWORKINGDIRECTORY: root, SETUP_VP_RUN_INSTALL: "false" },
+        encoding: "utf8",
+        timeout: 10_000,
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("Failed to verify Vite+ installation");
+      expect(result.stdout).not.toContain("variable=version");
+      expect(result.stdout).not.toContain("unknown");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
