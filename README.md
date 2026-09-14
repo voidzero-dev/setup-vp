@@ -763,7 +763,13 @@ Releases are published as git tags; there is no npm package, but the `package.js
 
 To cut a release:
 
-1. Open and merge a PR that bumps the upcoming version in `package.json`, the README examples, and the `setup-ref` / `setupRef` defaults in `gitlab/setup-vp.yml` and `azure/setup-vp.yml` (with the matching assertion in `src/azure/template.test.ts`).
+1. Open a release PR. Set the upcoming version in `package.json`; this is the source of truth for the release version. Update the README examples and all of these defaults to `v` followed by that version:
+
+   - The `setup-ref` inputs and inline bootstrap fallbacks in `gitlab/setup-vp.yml` and `gitlab/setup-vp-windows.yml`.
+   - The `setupRef` parameter in `azure/setup-vp.yml`.
+   - The `SETUP_VP_SETUP_REF` fallbacks in `gitlab/bootstrap.sh`, `gitlab/bootstrap.ps1`, `azure/bootstrap.sh`, and `azure/bootstrap.ps1`.
+
+   Run `vp run test` before merging the release PR. The bootstrap and template tests compare these defaults with `package.json.version`, so an omitted update fails CI. Merge all version changes before creating the tag; do not resolve `latest` at runtime or reuse the frozen `v1` tag.
 
 2. Update `main` and confirm `dist/index.mjs` is in sync (the working tree must stay clean after building):
 

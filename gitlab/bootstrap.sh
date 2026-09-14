@@ -18,7 +18,7 @@ setup_vp_download() {
     return 127
   fi
 }
-SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1}"
+SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1.20.0}"
 setup_vp_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/setup-vp-gitlab-runtime.XXXXXX")"
 setup_vp_runtime_tmp="$setup_vp_runtime_dir/index.mjs"
 trap 'rm -f "$setup_vp_runtime_tmp"; rmdir "$setup_vp_runtime_dir"' EXIT

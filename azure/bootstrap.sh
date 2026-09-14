@@ -19,7 +19,7 @@ setup_vp_download() {
   fi
 }
 
-SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1}"
+SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1.20.0}"
 SETUP_VP_RUNTIME_OUT="${SETUP_VP_RUNTIME_OUT:-${TMPDIR:-/tmp}/setup-vp-azure/dist/azure/index.mjs}"
 setup_vp_runtime_dir="$(dirname "$SETUP_VP_RUNTIME_OUT")"
 setup_vp_chunk_dir="$(dirname "$setup_vp_runtime_dir")"

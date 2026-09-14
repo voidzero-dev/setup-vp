@@ -2,6 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
 import { parseAllDocuments } from "yaml";
 
+const { version } = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+) as { version: string };
+const releaseRef = `v${version}`;
+
 function readTemplate(name: string) {
   const text = readFileSync(new URL("../../gitlab/" + name, import.meta.url), "utf8");
   const docs = parseAllDocuments(text, {
@@ -12,6 +17,22 @@ function readTemplate(name: string) {
 }
 
 describe("GitLab native templates", () => {
+  it.each(["setup-vp.yml", "setup-vp-windows.yml"])(
+    "%s defaults to the package.json release",
+    (name) => {
+      const { inputs, jobs } = readTemplate(name);
+      expect(inputs["setup-ref"].default).toBe(releaseRef);
+      const bootstrap = jobs[".setup-vp-bootstrap"].before_script[0];
+      if (name === "setup-vp.yml") {
+        expect(bootstrap).toContain(`SETUP_VP_SETUP_REF="\${SETUP_VP_SETUP_REF:-${releaseRef}}"`);
+      } else {
+        expect(bootstrap).toContain(
+          `if (-not $env:SETUP_VP_SETUP_REF) { $env:SETUP_VP_SETUP_REF = '${releaseRef}' }`,
+        );
+      }
+    },
+  );
+
   it("keeps the Unix and Windows input contracts identical", () => {
     const unix = readTemplate("setup-vp.yml");
     const windows = readTemplate("setup-vp-windows.yml");

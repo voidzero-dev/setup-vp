@@ -6,6 +6,9 @@ import { parse as parseYaml } from "yaml";
 const templatePath = fileURLToPath(new URL("../../azure/setup-vp.yml", import.meta.url));
 const template = readFileSync(templatePath, "utf8");
 const docs = parseYaml(template);
+const { version } = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+) as { version: string };
 
 describe("azure/setup-vp.yml", () => {
   it("declares the documented parameters with defaults", () => {
@@ -27,7 +30,7 @@ describe("azure/setup-vp.yml", () => {
     expect(byName.registryUrl).toMatchObject({ type: "string", default: "" });
     expect(byName.authEnv).toMatchObject({ type: "object", default: {} });
     expect(byName.scope).toMatchObject({ type: "string", default: "" });
-    expect(byName.setupRef).toMatchObject({ type: "string", default: "v1.20.0" });
+    expect(byName.setupRef).toMatchObject({ type: "string", default: `v${version}` });
     expect(byName.nodeVersion).toMatchObject({ type: "string", default: "" });
     expect(byName.packageManager).toMatchObject({ type: "object", default: "" });
     expect(byName.nodeManager).toMatchObject({ type: "string", default: "" });
