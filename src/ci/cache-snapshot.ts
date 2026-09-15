@@ -46,10 +46,13 @@ function copyCacheDirectory(source: string, destination: string, overwrite: bool
           relocated = path.relative(path.dirname(dest), destinationTarget) || ".";
         }
         mkdirSync(path.dirname(dest), { recursive: true });
+        // Archive extraction can create a Windows file link before its directory
+        // target exists. Stat the target itself: following that link raises EPERM
+        // even after artifacts have restored the target directory.
         symlinkSync(
           relocated,
           dest,
-          statSync(src, { throwIfNoEntry: false })?.isDirectory() ? "dir" : "file",
+          statSync(target, { throwIfNoEntry: false })?.isDirectory() ? "dir" : "file",
         );
         return false;
       }

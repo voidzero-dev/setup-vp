@@ -10,6 +10,7 @@ import {
   realpathSync,
   readlinkSync,
   renameSync,
+  statSync,
   symlinkSync,
   unlinkSync,
 } from "node:fs";
@@ -18,8 +19,14 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { restoreCacheSnapshot } from "./cache-snapshot.js";
 
+vi.mock("node:fs", async (importOriginal) => {
+  const fs = await importOriginal<typeof import("node:fs")>();
+  return { ...fs, statSync: vi.fn(fs.statSync) };
+});
+
 const directories: string[] = [];
 afterEach(() => {
+  vi.mocked(statSync).mockReset();
   for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 function fixture() {
@@ -158,6 +165,70 @@ describe("GitLab cache snapshots", () => {
     snapshot.save();
     expect(restoreCacheSnapshot(metadata, cache).hit).toBe(true);
   });
+
+  it("restores links whose target is readable but following the cached link fails", async () => {
+    const { root, store, cache, metadata } = fixture();
+    const target = path.join(root, "project");
+    const link = path.join(store, "project-link");
+    const cachedLink = path.join(
+      cache,
+      process.platform,
+      process.arch,
+      "npm/packages/project-link",
+    );
+    mkdirSync(target);
+    writeFileSync(path.join(target, "value"), "project data");
+    writeFileSync(path.join(store, "package"), "cached package");
+    symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+    const warn = vi.fn();
+    restoreCacheSnapshot(metadata, cache, warn).save();
+    rmSync(store, { recursive: true });
+
+    const fs = await vi.importActual<typeof import("node:fs")>("node:fs");
+    vi.mocked(statSync).mockImplementation((file, options) => {
+      if (file === cachedLink) {
+        throw Object.assign(new Error("operation not permitted, stat cached link"), {
+          code: "EPERM",
+        });
+      }
+      return fs.statSync(file, options);
+    });
+
+    expect(restoreCacheSnapshot(metadata, cache, warn).hit).toBe(true);
+    expect(readFileSync(path.join(link, "value"), "utf8")).toBe("project data");
+    expect(readFileSync(path.join(store, "package"), "utf8")).toBe("cached package");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.skipIf(process.platform !== "win32")(
+    "repairs a directory link extracted as a file link before its target exists",
+    () => {
+      const { root, store, cache, metadata } = fixture();
+      const target = path.join(root, "project-from-artifacts");
+      const cachedLink = path.join(
+        cache,
+        process.platform,
+        process.arch,
+        "npm/packages/project-link",
+      );
+      const warn = vi.fn();
+      writeFileSync(path.join(store, "package"), "cached package");
+      restoreCacheSnapshot(metadata, cache, warn).save();
+      rmSync(store, { recursive: true });
+
+      // Cache extraction precedes artifacts. A missing directory target can
+      // cause an extractor to create a file symlink, which Windows cannot follow.
+      symlinkSync(target, cachedLink, "file");
+      mkdirSync(target);
+      writeFileSync(path.join(target, "value"), "project data");
+      expect(() => statSync(cachedLink)).toThrow(expect.objectContaining({ code: "EPERM" }));
+
+      expect(restoreCacheSnapshot(metadata, cache, warn).hit).toBe(true);
+      expect(readFileSync(path.join(store, "project-link/value"), "utf8")).toBe("project data");
+      expect(readFileSync(path.join(store, "package"), "utf8")).toBe("cached package");
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(["file", "directory"])("replaces a cached %s with a symlink on save", (entryKind) => {
     const { store, cache, lockFile, metadata } = fixture();
