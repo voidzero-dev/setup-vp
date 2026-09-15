@@ -4,6 +4,21 @@ on:
   workflow_run:
     workflows: [GitLab E2E request]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      setup_ref:
+        description: "Enter an exact setup-vp commit SHA or release tag. If empty, the workflow uses this commit."
+        required: false
+        default: ""
+      suite:
+        description: "Select the GitLab test suite."
+        type: choice
+        options: [full, required]
+        default: full
+      vite_plus_version:
+        description: "Vite+ version or dist-tag to install."
+        required: false
+        default: latest
 
 permissions:
   contents: read
@@ -13,10 +28,11 @@ jobs:
   gitlab-e2e:
     name: GitLab E2E
     if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.path == '.github/workflows/e2e-request.yml'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.path == '.github/workflows/e2e-request.yml')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     outputs:
@@ -38,6 +54,9 @@ jobs:
           REQUEST_ACTOR: ${{ github.event.workflow_run.actor.login }}
           REQUEST_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           REQUEST_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          MANUAL_SETUP_REF: ${{ inputs.setup_ref }}
+          MANUAL_SUITE: ${{ inputs.suite }}
+          MANUAL_VITE_PLUS_VERSION: ${{ inputs.vite_plus_version }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -47,7 +66,7 @@ jobs:
           suite=full
           vite_plus_version=latest
           report_pr_number=""
-          skip_reason='Only a successful run-e2e label request for a PR can approve a GitLab E2E run.'
+          skip_reason='GitLab E2E requires a successful run-e2e label request for a PR or a manual workflow_dispatch run.'
 
           resolve_pr_request() {
             local request_pattern='^PR #([1-9][0-9]*): labeled run-e2e at ([0-9a-f]{40})$'
@@ -103,7 +122,14 @@ jobs:
             report_pr_number="$pr_number"
           }
 
-          resolve_pr_request
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            should_run=true
+            setup_vp_ref="${MANUAL_SETUP_REF:-$GITHUB_SHA}"
+            suite="${MANUAL_SUITE:-full}"
+            vite_plus_version="${MANUAL_VITE_PLUS_VERSION:-latest}"
+          else
+            resolve_pr_request
+          fi
 
           {
             echo "should_run=$should_run"

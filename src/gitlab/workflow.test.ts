@@ -81,6 +81,9 @@ esac
       REQUEST_ACTOR: "reviewer",
       REQUEST_HEAD_SHA: headSha,
       REQUEST_HEAD_REPOSITORY: "contributor/setup-vp",
+      MANUAL_SETUP_REF: "",
+      MANUAL_SUITE: "",
+      MANUAL_VITE_PLUS_VERSION: "",
       MOCK_GH_CALLS: calls,
       MOCK_GH_FAILURE: "",
       MOCK_PERMISSION: "write",
@@ -103,7 +106,7 @@ esac
 }
 
 describe("GitLab E2E workflow", () => {
-  it("only accepts PR label requests and never checks out PR code", () => {
+  it("only accepts PR label requests or manual runs and never checks out PR code", () => {
     expect(requestWorkflow.on).toEqual({
       pull_request: { branches: ["main"], types: ["labeled"] },
     });
@@ -114,12 +117,24 @@ describe("GitLab E2E workflow", () => {
         workflows: [requestWorkflow.name],
         types: ["completed"],
       },
+      workflow_dispatch: {
+        inputs: {
+          setup_ref: expect.objectContaining({ required: false, default: "" }),
+          suite: expect.objectContaining({
+            type: "choice",
+            options: ["full", "required"],
+            default: "full",
+          }),
+          vite_plus_version: expect.objectContaining({ required: false, default: "latest" }),
+        },
+      },
     });
-    expect(workflow.jobs["gitlab-e2e"].if).toBe(
-      "github.event_name == 'workflow_run' && " +
+    expect(workflow.jobs["gitlab-e2e"].if.replace(/\s+/g, " ")).toBe(
+      "github.event_name == 'workflow_dispatch' || " +
+        "(github.event_name == 'workflow_run' && " +
         "github.event.workflow_run.event == 'pull_request' && " +
         "github.event.workflow_run.conclusion == 'success' && " +
-        "github.event.workflow_run.path == '.github/workflows/e2e-request.yml'",
+        "github.event.workflow_run.path == '.github/workflows/e2e-request.yml')",
     );
     expect(requestWorkflow["run-name"]).toBe(
       "PR #${{ github.event.pull_request.number }}: ${{ github.event.action }} ${{ github.event.label.name }} at ${{ github.event.pull_request.head.sha }}",
@@ -128,9 +143,40 @@ describe("GitLab E2E workflow", () => {
     expect(steps.every((step) => !step.uses && !step.run.includes("${{"))).toBe(true);
     expect(parameters.env?.REQUEST_HEAD_SHA).toBe("${{ github.event.workflow_run.head_sha }}");
     expect(parameters.env?.REQUEST_ACTOR).toBe("${{ github.event.workflow_run.actor.login }}");
+    expect(parameters.env?.MANUAL_SETUP_REF).toBe("${{ inputs.setup_ref }}");
+    expect(parameters.env?.MANUAL_SUITE).toBe("${{ inputs.suite }}");
+    expect(parameters.env?.MANUAL_VITE_PLUS_VERSION).toBe("${{ inputs.vite_plus_version }}");
     for (const step of steps.slice(1)) {
       expect(step.if).toBe("steps.parameters.outputs.should_run == 'true'");
     }
+  });
+
+  it.each([
+    ["defaults", {}, baseSha, "full", "latest"],
+    [
+      "overrides",
+      {
+        MANUAL_SETUP_REF: headSha,
+        MANUAL_SUITE: "required",
+        MANUAL_VITE_PLUS_VERSION: "0.3.1",
+      },
+      headSha,
+      "required",
+      "0.3.1",
+    ],
+    ["release tag", { MANUAL_SETUP_REF: "v1.20.0" }, "v1.20.0", "full", "latest"],
+  ])("preserves manual run %s", (_name, env, ref, suite, version) => {
+    const result = resolveParameters({ EVENT_NAME: "workflow_dispatch", ...env });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.outputs).toEqual({
+      should_run: "true",
+      setup_vp_ref: ref,
+      suite,
+      vite_plus_version: version,
+      pr_number: "",
+    });
+    expect(result.calls).toBe("");
+    expect(result.summary).toBe("");
   });
 });
 
@@ -238,7 +284,7 @@ describe.each(["upstream/setup-vp", "contributor/setup-vp"])(
       expect(result.calls).not.toContain("/pulls/");
     });
 
-    it.each(["pull_request", "push", "merge_group", "workflow_dispatch"])(
+    it.each(["pull_request", "push", "merge_group"])(
       "skips %s events even when the PR has the approval label",
       (event) => {
         const result = resolveRequest({ EVENT_NAME: event });
@@ -247,7 +293,7 @@ describe.each(["upstream/setup-vp", "contributor/setup-vp"])(
         expect(result.outputs.setup_vp_ref).toBe("");
         expect(result.outputs.pr_number).toBe("");
         expect(result.calls).toBe("");
-        expect(result.summary).toContain("Only a successful run-e2e label request for a PR");
+        expect(result.summary).toContain("GitLab E2E requires a successful run-e2e label request");
       },
     );
   },
