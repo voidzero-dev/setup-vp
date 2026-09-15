@@ -52,13 +52,15 @@ Use the shared primitives under [`src/ci/`](src/ci/) for portable runtime behavi
 
 ## GitLab End-to-End Tests
 
-Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. The [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) covers same-repository pull requests, approved fork pull requests, merge queue commits, merges, and releases. The pipeline loads the template, bootstrap script, and compiled runtime from the exact setup-vp commit or release tag under test.
+Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. GitLab CI has limited capacity, so the [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) runs only for pull requests approved with the `run-e2e` label. The pipeline loads the template, bootstrap script, and compiled runtime from the exact approved PR commit.
 
-### Fork Pull Requests
+### Request a Run
 
-After reviewing the commit, a maintainer with write access can add `run-e2e` to run the full GitLab suite. Approve the Actions run if prompted.
+After reviewing the commit, a maintainer with write access can add `run-e2e` to run the full GitLab suite. This applies to both same-repository and fork PRs. Approve the Actions run if prompted.
 
 For each new commit, review the changes and remove and re-add `run-e2e`. Read the PR result comment for the status and GitLab pipeline link after each run.
+
+Pushes, merge queue commits, merges, and release tags do not start GitLab pipelines. For a release, request a run on the final release PR commit before merging.
 
 ## Dependency Updates
 
@@ -85,7 +87,7 @@ Publish releases as Git tags, not as an npm package. Keep `package.json.version`
    git status --short   # must be empty
    ```
 
-3. Confirm that the release commit on `main` passes the full GitLab E2E workflow.
+3. Confirm that the final release PR commit passed the full GitLab E2E workflow through the `run-e2e` label before it was merged.
 
 4. Create the new annotated version tag and push it. For example:
 

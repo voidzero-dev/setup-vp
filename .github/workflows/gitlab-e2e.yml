@@ -1,30 +1,9 @@
 name: GitLab E2E
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
-  pull_request:
-    branches: [main]
   workflow_run:
     workflows: [GitLab E2E request]
     types: [completed]
-  merge_group:
-  workflow_dispatch:
-    inputs:
-      setup_ref:
-        description: "Enter an exact setup-vp commit SHA or release tag. If empty, the workflow uses this commit."
-        required: false
-        default: ""
-      suite:
-        description: "Select the GitLab test suite."
-        type: choice
-        options: [full, required]
-        default: full
-      vite_plus_version:
-        description: "Vite+ version or dist-tag to install."
-        required: false
-        default: latest
 
 permissions:
   contents: read
@@ -34,11 +13,10 @@ jobs:
   gitlab-e2e:
     name: GitLab E2E
     if: >-
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.path == '.github/workflows/e2e-request.yml' &&
-       github.event.workflow_run.head_repository.full_name != github.repository)
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.path == '.github/workflows/e2e-request.yml'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     outputs:
@@ -53,8 +31,6 @@ jobs:
         id: parameters
         env:
           EVENT_NAME: ${{ github.event_name }}
-          EVENT_REF: ${{ github.ref }}
-          EVENT_REF_NAME: ${{ github.ref_name }}
           REQUEST_EVENT: ${{ github.event.workflow_run.event }}
           REQUEST_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           REQUEST_PATH: ${{ github.event.workflow_run.path }}
@@ -62,30 +38,22 @@ jobs:
           REQUEST_ACTOR: ${{ github.event.workflow_run.actor.login }}
           REQUEST_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           REQUEST_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
-          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          MANUAL_SETUP_REF: ${{ inputs.setup_ref }}
-          MANUAL_SUITE: ${{ inputs.suite }}
-          MANUAL_VITE_PLUS_VERSION: ${{ inputs.vite_plus_version }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          should_run=true
-          setup_vp_ref="$GITHUB_SHA"
-          suite=required
+          should_run=false
+          setup_vp_ref=""
+          suite=full
           vite_plus_version=latest
           report_pr_number=""
-          skip_reason=""
+          skip_reason='Only a successful run-e2e label request for a PR can approve a GitLab E2E run.'
 
-          resolve_fork_request() {
-            should_run=false
-            skip_reason='Only a successful run-e2e label request for a fork PR can approve a GitLab E2E run.'
+          resolve_pr_request() {
             local request_pattern='^PR #([1-9][0-9]*): labeled run-e2e at ([0-9a-f]{40})$'
-            if [ "$REQUEST_EVENT" != "pull_request" ] || [ "$REQUEST_CONCLUSION" != "success" ] ||
+            if [ "$EVENT_NAME" != "workflow_run" ] || [ "$REQUEST_EVENT" != "pull_request" ] ||
+              [ "$REQUEST_CONCLUSION" != "success" ] ||
               [ "$REQUEST_PATH" != ".github/workflows/e2e-request.yml" ] ||
-              [ "$REQUEST_HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ] ||
               ! [[ "$REQUEST_TITLE" =~ $request_pattern ]]; then
               return
             fi
@@ -114,7 +82,7 @@ jobs:
             trusted_blob="$(gh api "${workflow_url}?ref=${GITHUB_SHA}" --jq '.sha')"
             if ! request_blob="$(gh api "${workflow_url}?ref=${REQUEST_HEAD_SHA}" --jq '.sha')" ||
               [ "$request_blob" != "$trusted_blob" ]; then
-              echo "::error::The fork must include e2e-request.yml unchanged from main. Update the branch, then remove and re-add run-e2e."
+              echo "::error::The PR must include e2e-request.yml unchanged from main. Update the branch, then remove and re-add run-e2e."
               exit 1
             fi
 
@@ -132,40 +100,10 @@ jobs:
 
             should_run=true
             setup_vp_ref="$REQUEST_HEAD_SHA"
-            suite=full
             report_pr_number="$pr_number"
           }
 
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            if [ "$PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
-              should_run=false
-              skip_reason='A maintainer with write access can review this fork PR and add the run-e2e label to test its current commit. New commits require removing and re-adding the label. The merge queue also tests the reviewed merge commit.'
-            else
-              setup_vp_ref="$PR_HEAD_SHA"
-              report_pr_number="$PR_NUMBER"
-              while IFS= read -r changed_path; do
-                case "$changed_path" in
-                  gitlab/* | src/gitlab/* | src/ci/* | dist/gitlab/* | .github/workflows/gitlab-e2e.yml | vite.config.ts | package.json | pnpm-lock.yaml | pnpm-workspace.yaml)
-                    suite=full
-                    break
-                    ;;
-                esac
-              done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
-            fi
-          elif [ "$EVENT_NAME" = "workflow_run" ]; then
-            resolve_fork_request
-          elif [ "$EVENT_NAME" = "merge_group" ]; then
-            suite=full
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            setup_vp_ref="${MANUAL_SETUP_REF:-$GITHUB_SHA}"
-            suite="${MANUAL_SUITE:-full}"
-            vite_plus_version="${MANUAL_VITE_PLUS_VERSION:-latest}"
-          elif [ "$EVENT_NAME" = "push" ] && [[ "$EVENT_REF" == refs/tags/* ]]; then
-            setup_vp_ref="$EVENT_REF_NAME"
-            suite=full
-          elif [ "$EVENT_NAME" = "push" ]; then
-            suite=full
-          fi
+          resolve_pr_request
 
           {
             echo "should_run=$should_run"
