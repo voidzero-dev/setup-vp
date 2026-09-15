@@ -281,7 +281,7 @@ steps:
 
 `sfw` is only applied when `run-install` is enabled; other `vp` commands (e.g. `vp env use`, `vp --version`) run unwrapped.
 
-The action pins the `sfw` version it downloads so a re-run of the same commit gets the same binary; [Renovate](https://docs.renovatebot.com/) opens a PR whenever SocketDev publishes a new `sfw-free` release (see [`.github/renovate.json`](.github/renovate.json)).
+The action pins the `sfw` version it downloads so a re-run of the same commit gets the same binary.
 
 #### Advanced: stricter supply chain via `socketdev/action`
 
@@ -432,10 +432,6 @@ Disabling cache saving doesn't change the `cache-hit` output, which continues to
 ## GitLab CI/CD
 
 setup-vp also provides a GitLab CI/CD remote template hosted from this GitHub repository. Because this repository is not a GitLab CI/CD component project, GitLab users should load it with `include:remote` instead of `include:component`.
-
-See [GitLab integration notes](rfcs/gitlab-integration.md) for the design background, constraints, and follow-up work.
-
-The dedicated [GitLab end-to-end test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) tests same-repository pull requests, approved fork pull requests, merge queue commits, merges, and releases. The pipeline loads the template, bootstrap script, and compiled runtime from the exact setup-vp commit or release tag that it tests.
 
 ### Basic GitLab Usage
 
@@ -608,16 +604,13 @@ Include `gitlab/setup-vp-windows.yml` instead of `gitlab/setup-vp.yml` on a Powe
 - Quote GitLab string inputs such as `run-install: "false"`; unquoted booleans are rejected by GitLab before the setup runtime can parse them.
 - GitLab 17.9+ users can add `integrity` to pin the remote file hash.
 - The template expects a Unix-like runner image with Node.js, `bash`, and either `curl` or `wget`.
-- The GitLab runtime source is TypeScript under `src/gitlab/`, but the template downloads and runs the `vp pack` generated JavaScript bundle from `dist/gitlab/index.mjs`.
 - Node.js must be available to start the bootstrap. Set `node-version` or `node-version-file` to select the project runtime with `vp env use`. Neither can be combined with `node-manager: "false"`; omit both to retain Vite+'s normal project-based resolution.
 - Vite+ version precedence matches GitHub Actions: explicit `version`, explicit `version-file`, project package/catalog pin, lockfile, then `latest`. Paths are relative to `working-directory`. An unresolvable explicit `version-file` warns and falls back to `latest`.
 - Without `registry-url`, an existing project `.npmrc` is inspected for registry auth. Missing token entries use `NODE_AUTH_TOKEN` when available; existing entries and referenced token variables are preserved.
 
 ## Azure Pipelines
 
-setup-vp also provides an Azure Pipelines step template hosted from this GitHub repository. Azure cannot execute the GitHub Action bundle directly, so the template downloads a compiled runtime (`dist/azure/index.mjs`) and runs it in `prepare` and `finalize` phases around Azure's native `Cache@2` task.
-
-See [Azure Pipelines integration notes](rfcs/azure-pipelines-integration.md) for the design background, parity table, and cache semantics.
+setup-vp also provides an Azure Pipelines step template hosted from this GitHub repository.
 
 ### Basic Azure Usage
 
@@ -722,74 +715,9 @@ jobs:
       - run: vp run test
 ```
 
-## Development
+## Contributing
 
-### Install Vite+ CLI
-
-- **Linux / macOS:** `curl -fsSL https://viteplus.dev/install.sh | bash`
-- **Windows:** `irm https://viteplus.dev/install.ps1 | iex`
-
-### Setup
-
-```bash
-git clone https://github.com/voidzero-dev/setup-vp.git
-cd setup-vp
-vp install
-```
-
-### Available Commands
-
-| Command             | Description              |
-| ------------------- | ------------------------ |
-| `vp run build`      | Build (outputs to dist/) |
-| `vp run test`       | Run tests                |
-| `vp run test:watch` | Run tests in watch mode  |
-| `vp run typecheck`  | Type check               |
-| `vp run check`      | Lint + format check      |
-| `vp run check:fix`  | Auto-fix lint/format     |
-
-### Before Committing
-
-- Run `vp run check:fix` and `vp run build`
-- Generated files under `dist/` must be committed, including `dist/index.mjs` for the GitHub Action, `dist/gitlab/index.mjs` for the GitLab template, and `dist/azure/index.mjs` for the Azure Pipelines runtime
-- Pre-commit hooks (via husky + lint-staged) will automatically run `vp check --fix` on staged files via `vpx lint-staged`
-
-### GitLab E2E for Fork Pull Requests
-
-After reviewing the commit, a maintainer with write access can add `run-e2e` to run the full GitLab suite. Approve the Actions run if prompted.
-
-For new commits, review the changes and remove and re-add `run-e2e`. Results and the GitLab pipeline link appear in a PR comment, which is updated after each run.
-
-### Releasing
-
-Releases are published as git tags; there is no npm package, but the `package.json` version tracks the latest release. Consumers pin an exact version tag such as `voidzero-dev/setup-vp@v1.20.0` or a commit SHA. The `v1` major tag is frozen at v1.15.0 and is never moved (an org-level ruleset rejects tag force-pushes).
-
-To cut a release:
-
-1. Open a release PR. Set the upcoming version in `package.json`; this is the source of truth for the release version. Update the README examples and all of these defaults to `v` followed by that version:
-
-   - The `setup-ref` inputs and inline bootstrap fallbacks in `gitlab/setup-vp.yml` and `gitlab/setup-vp-windows.yml`.
-   - The `setupRef` parameter in `azure/setup-vp.yml`.
-   - The `SETUP_VP_SETUP_REF` fallbacks in `gitlab/bootstrap.sh`, `gitlab/bootstrap.ps1`, `azure/bootstrap.sh`, and `azure/bootstrap.ps1`.
-
-   Run `vp run test` before merging the release PR. The bootstrap and template tests compare these defaults with `package.json.version`, so an omitted update fails CI. Merge all version changes before creating the tag; do not resolve `latest` at runtime or reuse the frozen `v1` tag.
-
-2. Update `main` and confirm `dist/index.mjs` is in sync (the working tree must stay clean after building):
-
-   ```bash
-   git checkout main && git pull --ff-only
-   vp run build
-   git status --short   # must be empty
-   ```
-
-3. Confirm that the release commit on `main` passes the full GitLab E2E workflow.
-
-4. Create the new annotated version tag and push it. For example:
-
-   ```bash
-   git tag -a v1.20.0 -m "v1.20.0"
-   git push origin v1.20.0
-   ```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, tests, integration design, and release instructions.
 
 ## Feedback
 
