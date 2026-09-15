@@ -4,16 +4,22 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { installVitePlus } from "../ci/install-viteplus.js";
+import { setupSfw } from "../ci/install-sfw.js";
 import { run } from "../ci/process.js";
 import { getCommandOutput } from "../ci/process.js";
 import { applyEnvironmentModes, isEntrypoint, main } from "./index.js";
 
 vi.mock("../ci/process.js", () => ({
+  commandPath: vi.fn(),
   getCommandOutput: vi.fn(),
   run: vi.fn(),
-  runWithOutput: vi.fn(),
+  runWithOutput: vi.fn(async () => ({ exitCode: 0, stdout: "", stderr: "" })),
 }));
 vi.mock("../ci/install-viteplus.js", () => ({ installVitePlus: vi.fn(async () => {}) }));
+vi.mock("../ci/install-sfw.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../ci/install-sfw.js")>();
+  return { ...actual, setupSfw: vi.fn(actual.setupSfw) };
+});
 
 const directories: string[] = [];
 afterEach(() => {
@@ -26,6 +32,7 @@ describe("GitLab setup parity", () => {
   function fixture() {
     const root = mkdtempSync(path.join(tmpdir(), "setup-vp-gitlab-lifecycle-"));
     directories.push(root);
+    vi.stubEnv("PATH", process.env.PATH);
     mkdirSync(path.join(root, "app"));
     for (const name of [
       "VERSION",
@@ -95,6 +102,42 @@ describe("GitLab setup parity", () => {
     await expect(main()).rejects.toThrow("cannot be used with node-manager");
     expect(installVitePlus).not.toHaveBeenCalled();
   });
+
+  it.each(["true", "false", ""])(
+    "uses persistent sfw storage only when GitLab caching is enabled (%s)",
+    async (cacheEnabled) => {
+      const root = fixture();
+      vi.stubEnv("SETUP_VP_CACHE", cacheEnabled);
+      vi.stubEnv("SETUP_VP_SFW", "true");
+      vi.stubEnv("SETUP_VP_RUN_INSTALL", "true");
+      // A reused runner can still have the path from a previous cached job.
+      vi.stubEnv("SETUP_VP_SFW_CACHE_DIR", path.join(root, ".setup-vp-cache", "sfw"));
+      const download = vi.fn(async (_url: string, file: string) => {
+        directories.push(path.dirname(path.dirname(file)));
+        writeFileSync(file, "sfw binary");
+      });
+      vi.mocked(setupSfw).mockImplementationOnce(async (entries, options) => {
+        const actual =
+          await vi.importActual<typeof import("../ci/install-sfw.js")>("../ci/install-sfw.js");
+        return actual.setupSfw(entries, {
+          ...options,
+          platform: "linux",
+          arch: "x64",
+          isMusl: false,
+          download,
+        });
+      });
+
+      await main();
+
+      expect(download).toHaveBeenCalledOnce();
+      expect(existsSync(path.join(root, ".setup-vp-cache"))).toBe(cacheEnabled === "true");
+      const cacheDir = process.env.SETUP_VP_SFW_CACHE_DIR;
+      expect(cacheDir).toBe(
+        cacheEnabled === "true" ? path.join(root, ".setup-vp-cache", "sfw") : undefined,
+      );
+    },
+  );
 
   it.each([undefined, ""])(
     "fails the final version check without writing successful outputs (%s)",

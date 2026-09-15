@@ -6,9 +6,9 @@ import {
   mkdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   statSync,
   symlinkSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -30,6 +30,11 @@ function copyCacheDirectory(source: string, destination: string, overwrite: bool
         // into real directories; retain all other entries in the warm store.
         return srcStat.isDirectory() && destStat.isDirectory();
       }
+      if (destStat && (destStat.isSymbolicLink() || srcStat.isSymbolicLink())) {
+        // Replace the entry itself, without copying through an old link or
+        // leaving a file/directory in the way of a new link.
+        rmSync(dest, { recursive: true, force: true });
+      }
       if (srcStat.isSymbolicLink()) {
         const target = path.resolve(path.dirname(src), readlinkSync(src));
         // Store-local links must remain valid after both the snapshot and the
@@ -41,7 +46,6 @@ function copyCacheDirectory(source: string, destination: string, overwrite: bool
               path.join(destination, path.relative(source, target)),
             ) || "."
           : target;
-        if (destStat?.isSymbolicLink()) unlinkSync(dest);
         mkdirSync(path.dirname(dest), { recursive: true });
         symlinkSync(
           relocated,

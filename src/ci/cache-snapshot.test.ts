@@ -159,6 +159,85 @@ describe("GitLab cache snapshots", () => {
     expect(restoreCacheSnapshot(metadata, cache).hit).toBe(true);
   });
 
+  it.each(["file", "directory"])("replaces a cached %s with a symlink on save", (entryKind) => {
+    const { store, cache, lockFile, metadata } = fixture();
+    const entry = path.join(store, "entry");
+    const target = path.join(store, "target");
+    const cached = path.join(cache, process.platform, process.arch, "npm");
+    const warn = vi.fn();
+    mkdirSync(target);
+    writeFileSync(path.join(target, "value"), "new value");
+    if (entryKind === "directory") {
+      mkdirSync(entry);
+      writeFileSync(path.join(entry, "old"), "old value");
+    } else {
+      writeFileSync(entry, "old value");
+    }
+    restoreCacheSnapshot(metadata, cache, warn).save();
+
+    rmSync(entry, { recursive: true });
+    symlinkSync(target, entry, process.platform === "win32" ? "junction" : "dir");
+    writeFileSync(lockFile, "second lock");
+    restoreCacheSnapshot(metadata, cache, warn, false).save();
+
+    expect(warn).not.toHaveBeenCalled();
+    const cachedEntry = path.join(cached, "packages", "entry");
+    expect(lstatSync(cachedEntry).isSymbolicLink()).toBe(true);
+    expect(readFileSync(path.join(cachedEntry, "value"), "utf8")).toBe("new value");
+    expect(readFileSync(path.join(cached, "lock-hash"), "utf8")).toBe(
+      createHash("sha256").update("second lock").digest("hex"),
+    );
+    rmSync(store, { recursive: true });
+    expect(restoreCacheSnapshot(metadata, cache, warn).hit).toBe(true);
+    expect(lstatSync(entry).isSymbolicLink()).toBe(true);
+    expect(readFileSync(path.join(entry, "value"), "utf8")).toBe("new value");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each(["file", "directory"])(
+    "replaces a cached symlink with a %s without modifying its external target",
+    (entryKind) => {
+      const { root, store, cache, lockFile, metadata } = fixture();
+      const entry = path.join(store, "entry");
+      const target = path.join(root, "external-target");
+      const cached = path.join(cache, process.platform, process.arch, "npm");
+      const warn = vi.fn();
+      if (entryKind === "directory") {
+        mkdirSync(target);
+        writeFileSync(path.join(target, "value"), "external value");
+      } else {
+        writeFileSync(target, "external value");
+      }
+      symlinkSync(
+        target,
+        entry,
+        entryKind === "file" ? "file" : process.platform === "win32" ? "junction" : "dir",
+      );
+      restoreCacheSnapshot(metadata, cache, warn).save();
+
+      unlinkSync(entry);
+      if (entryKind === "directory") mkdirSync(entry);
+      const valuePath = entryKind === "file" ? entry : path.join(entry, "value");
+      const externalValuePath = entryKind === "file" ? target : path.join(target, "value");
+      writeFileSync(valuePath, "new value");
+      writeFileSync(lockFile, "second lock");
+      restoreCacheSnapshot(metadata, cache, warn, false).save();
+
+      expect(warn).not.toHaveBeenCalled();
+      expect(readFileSync(externalValuePath, "utf8")).toBe("external value");
+      const cachedEntry = path.join(cached, "packages", "entry");
+      expect(lstatSync(cachedEntry).isSymbolicLink()).toBe(false);
+      expect(readFileSync(path.join(cached, "lock-hash"), "utf8")).toBe(
+        createHash("sha256").update("second lock").digest("hex"),
+      );
+      rmSync(store, { recursive: true });
+      expect(restoreCacheSnapshot(metadata, cache, warn).hit).toBe(true);
+      expect(readFileSync(valuePath, "utf8")).toBe("new value");
+      expect(readFileSync(externalValuePath, "utf8")).toBe("external value");
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
   it("replaces changed symlinks on save without dereferencing their targets", () => {
     const { root, store, cache, metadata } = fixture();
     const link = path.join(store, "link");

@@ -93,8 +93,9 @@ export async function main(phase = "setup"): Promise<void> {
 
   configureAuth(env.SETUP_VP_REGISTRY_URL || "", env.SETUP_VP_SCOPE || "", env, projectDir);
 
-  env.SETUP_VP_SFW_CACHE_DIR = path.join(cacheRoot, "sfw");
   const cacheEnabled = env.SETUP_VP_CACHE?.toLowerCase() === "true";
+  if (cacheEnabled) env.SETUP_VP_SFW_CACHE_DIR = path.join(cacheRoot, "sfw");
+  else delete env.SETUP_VP_SFW_CACHE_DIR;
   const metadata = cacheEnabled
     ? prepareCacheMetadata({
         projectDir,
