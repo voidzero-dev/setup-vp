@@ -40,12 +40,11 @@ function copyCacheDirectory(source: string, destination: string, overwrite: bool
         // Store-local links must remain valid after both the snapshot and the
         // store move to another runner. cpSync otherwise makes relative links
         // absolute, retaining the original runner's paths.
-        const relocated = isWithin(target, source)
-          ? path.relative(
-              path.dirname(dest),
-              path.join(destination, path.relative(source, target)),
-            ) || "."
-          : target;
+        let relocated = target;
+        if (isWithin(target, source)) {
+          const destinationTarget = path.join(destination, path.relative(source, target));
+          relocated = path.relative(path.dirname(dest), destinationTarget) || ".";
+        }
         mkdirSync(path.dirname(dest), { recursive: true });
         symlinkSync(
           relocated,
@@ -85,7 +84,9 @@ export function restoreCacheSnapshot(
   const packages = path.join(directory, "packages");
   const manifest = path.join(directory, "lock-hash");
   const lockFile = metadata.lockFile;
-  const hashLockFile = () => createHash("sha256").update(readFileSync(lockFile)).digest("hex");
+  function hashLockFile(): string {
+    return createHash("sha256").update(readFileSync(lockFile)).digest("hex");
+  }
   let hash: string;
   try {
     hash = hashLockFile();

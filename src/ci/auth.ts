@@ -1,19 +1,10 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { analyzeProjectNpmrc } from "./npmrc.js";
+import { analyzeProjectNpmrc, readNpmrc } from "./npmrc.js";
 import type { ExportVariable, RuntimeEnv } from "./types.js";
 
 const NODE_AUTH_TOKEN_REF = "${NODE_AUTH_TOKEN}";
-
-function readNpmrc(file: string): string {
-  try {
-    return readFileSync(file, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "";
-    throw error;
-  }
-}
 
 function readUserConfigLines(env: RuntimeEnv, replacedKeys: Set<string>): string[] {
   const homeDir = env.HOME || env.USERPROFILE;

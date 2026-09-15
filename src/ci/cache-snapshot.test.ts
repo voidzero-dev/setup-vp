@@ -205,14 +205,11 @@ describe("GitLab cache snapshots", () => {
       if (entryKind === "directory") {
         mkdirSync(target);
         writeFileSync(path.join(target, "value"), "external value");
+        symlinkSync(target, entry, process.platform === "win32" ? "junction" : "dir");
       } else {
         writeFileSync(target, "external value");
+        symlinkSync(target, entry, "file");
       }
-      symlinkSync(
-        target,
-        entry,
-        entryKind === "file" ? "file" : process.platform === "win32" ? "junction" : "dir",
-      );
       restoreCacheSnapshot(metadata, cache, warn).save();
 
       unlinkSync(entry);

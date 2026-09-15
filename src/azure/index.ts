@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { packageManagerArgs } from "../ci/package-manager.js";
@@ -7,7 +7,7 @@ import { createNodeVersionResolver } from "../ci/node-version-file.js";
 import { resolutionContext } from "../ci/resolution.js";
 import { nodeManagerOffArgs } from "../ci/node-manager.js";
 import { configureAuth, isReservedAuthVariable } from "../ci/auth.js";
-import { analyzeProjectNpmrc } from "../ci/npmrc.js";
+import { analyzeProjectNpmrc, readNpmrc } from "../ci/npmrc.js";
 import { prepareCacheMetadata } from "../ci/cache.js";
 import { getSfwAssetName, isMuslLinux, setupSfw, SFW_VERSION } from "../ci/install-sfw.js";
 import { getCommandOutput, run } from "../ci/process.js";
@@ -159,12 +159,7 @@ export async function runFinalize(
   const projectDir = resolveProjectDirFromInputs(inputs);
   // Azure leaves undefined macros unexpanded, including aliases supplied via
   // authEnv. Normalize only credentials, not unrelated task environment values.
-  let npmrc = "";
-  try {
-    npmrc = readFileSync(path.join(projectDir, ".npmrc"), "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
+  const npmrc = readNpmrc(path.join(projectDir, ".npmrc"));
   const authVariables = analyzeProjectNpmrc(npmrc).envVarRefs;
   authVariables.add("NODE_AUTH_TOKEN");
   for (const name of authVariables) {

@@ -60,16 +60,17 @@ export function createVersionResolver(context: ResolutionContext): VersionResolv
       return tryResolveVitePlusVersionFile(inputs.versionFile, projectDir) ?? "latest";
     }
 
+    const projectVersion = tryResolveVitePlusVersionFromProject(projectDir);
+    if (projectVersion !== undefined) return projectVersion;
+
+    // Consult the lockfile only when the project declares a direct vite-plus
+    // dependency the lockfile can legitimately resolve to a published version,
+    // so a transitive/other-workspace entry or a non-registry spec isn't
+    // mistaken for this project's pin.
+    if (!shouldConsultLockfile(projectDir)) return "latest";
+
     return (
-      tryResolveVitePlusVersionFromProject(projectDir) ??
-      // Consult the lockfile only when the project declares a direct vite-plus
-      // dependency the lockfile can legitimately resolve to a published version,
-      // so a transitive/other-workspace entry or a non-registry spec isn't
-      // mistaken for this project's pin.
-      (shouldConsultLockfile(projectDir)
-        ? tryResolveVitePlusVersionFromLockfile(projectDir, inputs.cacheDependencyPath)
-        : undefined) ??
-      "latest"
+      tryResolveVitePlusVersionFromLockfile(projectDir, inputs.cacheDependencyPath) ?? "latest"
     );
   }
 

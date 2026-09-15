@@ -1,3 +1,14 @@
+import { readFileSync } from "node:fs";
+
+export function readNpmrc(file: string): string {
+  try {
+    return readFileSync(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "";
+    throw error;
+  }
+}
+
 function authKeyFor(registryUrl: string): string {
   return (registryUrl.replace(/^\w+:/, "") + ":_authtoken").toLowerCase();
 }
