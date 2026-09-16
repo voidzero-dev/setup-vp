@@ -152,6 +152,8 @@ function makeInputs(overrides: Partial<Inputs> = {}): Inputs {
 }
 
 describe("setupSfw", () => {
+  const previewVersion = "0.0.0-commit.7d848b3da1987fa60b4cf18487fcc36a2a697e94";
+
   beforeEach(() => {
     vi.resetAllMocks();
     stubPlatform("linux", "x64");
@@ -177,12 +179,11 @@ describe("setupSfw", () => {
     async (platform) => {
       stubPlatform(platform, "x64");
       vi.mocked(execFileSync).mockReturnValue("/usr/bin/sfw\n");
-      const version = "0.0.0-commit.7d848b3da1987fa60b4cf18487fcc36a2a697e94";
 
-      expect(await setupSfw(makeInputs({ version }))).toBe(false);
+      expect(await setupSfw(makeInputs({ version: previewVersion }))).toBe(false);
 
       expect(warning).toHaveBeenCalledExactlyOnceWith(
-        `sfw was requested but is automatically disabled for Vite+ preview build ${version}; Socket Firewall Free will not be used.`,
+        `sfw was requested but is automatically disabled for Vite+ preview build ${previewVersion}; Socket Firewall Free will not be used.`,
       );
       expect(execFileSync).not.toHaveBeenCalled();
       expect(restoreCache).not.toHaveBeenCalled();
@@ -192,8 +193,7 @@ describe("setupSfw", () => {
   );
 
   it("does not warn about preview builds when sfw is already disabled", async () => {
-    const version = "0.0.0-commit.7d848b3da1987fa60b4cf18487fcc36a2a697e94";
-    expect(await setupSfw(makeInputs({ sfw: false, version }))).toBe(false);
+    expect(await setupSfw(makeInputs({ sfw: false, version: previewVersion }))).toBe(false);
     expect(warning).not.toHaveBeenCalled();
   });
 

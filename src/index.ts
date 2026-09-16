@@ -64,9 +64,7 @@ export async function runMain(inputs: Inputs): Promise<void> {
   }
 
   // Step 6: Install Socket Firewall Free if requested (must run before vp install).
-  // setupSfw centralizes all the decision branches: preview build, run-install disabled, sfw
-  // already on PATH (e.g. via socketdev/action@<sha>), supported platform
-  // (downloads our pinned binary), unsupported platform (falls back).
+  // Use the resolved version so preview pins in files also disable sfw.
   const effectiveSfw = await setupSfw({ ...inputs, version });
 
   // Step 7: Run vp install if requested

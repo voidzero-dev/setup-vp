@@ -170,15 +170,12 @@ export async function setupSfw(
   const isMusl = options.isMusl ?? isMuslLinux();
   const download = options.download ?? downloadFile;
 
-  if (
-    !resolveSfwEnabled(
-      sfwEnabled,
-      options.vitePlusVersion ?? "",
-      options.logWarning ?? console.warn,
-    )
-  ) {
-    return "vp";
-  }
+  const effectiveSfw = resolveSfwEnabled(
+    sfwEnabled,
+    options.vitePlusVersion ?? "",
+    options.logWarning ?? console.warn,
+  );
+  if (!effectiveSfw) return "vp";
 
   if (runInstallEntries.length === 0) {
     console.log(

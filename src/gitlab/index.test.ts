@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { installVitePlus } from "../ci/install-viteplus.js";
 import { setupSfw } from "../ci/install-sfw.js";
-import { run } from "../ci/process.js";
-import { commandPath, getCommandOutput, runWithOutput } from "../ci/process.js";
+import { commandPath, getCommandOutput, run, runWithOutput } from "../ci/process.js";
 import { applyEnvironmentModes, isEntrypoint, main } from "./index.js";
 
 vi.mock("../ci/process.js", () => ({
@@ -102,12 +101,14 @@ describe("GitLab setup parity", () => {
     async (source) => {
       const root = fixture();
       const version = "0.0.0-commit.7d848b3da1987fa60b4cf18487fcc36a2a697e94";
-      if (source === "explicit") vi.stubEnv("SETUP_VP_VERSION", version);
-      else
+      if (source === "explicit") {
+        vi.stubEnv("SETUP_VP_VERSION", version);
+      } else {
         writeFileSync(
           path.join(root, "app/package.json"),
           JSON.stringify({ devDependencies: { "vite-plus": version } }),
         );
+      }
       vi.stubEnv("SETUP_VP_SFW", "true");
       vi.stubEnv("SETUP_VP_RUN_INSTALL", "true");
       vi.mocked(commandPath).mockReturnValue("/bin/sfw");

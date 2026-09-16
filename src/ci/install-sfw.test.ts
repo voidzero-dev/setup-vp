@@ -24,17 +24,16 @@ describe("portable sfw preview handling", () => {
       const logWarning = vi.fn();
       const env = { SETUP_VP_SFW: "true", PATH: "/bin" };
 
-      expect(
-        await setupSfw([{}], {
-          env,
-          vitePlusVersion,
-          platform,
-          download,
-          exportVariable,
-          logWarning,
-        }),
-      ).toBe("vp");
+      const installCommand = await setupSfw([{}], {
+        env,
+        vitePlusVersion,
+        platform,
+        download,
+        exportVariable,
+        logWarning,
+      });
 
+      expect(installCommand).toBe("vp");
       expect(logWarning).toHaveBeenCalledExactlyOnceWith(
         `sfw was requested but is automatically disabled for Vite+ preview build ${vitePlusVersion}; Socket Firewall Free will not be used.`,
       );

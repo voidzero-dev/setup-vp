@@ -107,8 +107,9 @@ describe("Azure parity", () => {
       const { project, env, ports } = fixture();
       const version = "0.0.0-commit.7d848b3da1987fa60b4cf18487fcc36a2a697e94";
       const target: NodeJS.ProcessEnv = { ...env, SETUP_VP_SFW: "true" };
-      if (source === "explicit") target.SETUP_VP_VERSION = version;
-      else if (source === "version-file") {
+      if (source === "explicit") {
+        target.SETUP_VP_VERSION = version;
+      } else if (source === "version-file") {
         writeFileSync(
           path.join(project, "pnpm-workspace.yaml"),
           `catalog:\n  vite-plus: ${version}\n`,
