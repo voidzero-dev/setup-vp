@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { configureAuth } from "../ci/auth.js";
+import { setupSfw } from "../ci/install-sfw.js";
 import { parseRunInstall } from "../ci/run-install.js";
 import { runPrepare, runFinalize } from "./index.js";
 import type { AzurePorts } from "./index.js";
@@ -21,7 +22,7 @@ function fixture() {
     installVitePlus: vi.fn(async () => {}),
     prepareCacheMetadata: vi.fn(() => ({ ready: false })),
     configureAuth: vi.fn(configureAuth),
-    setupSfw: vi.fn(async () => "vp" as const),
+    setupSfw: vi.fn<typeof setupSfw>().mockResolvedValue("vp"),
     parseRunInstall,
     runInstall: vi.fn(),
     getCommandOutput: vi.fn((): string | undefined => "vp v0.3.1"),
@@ -99,6 +100,49 @@ describe("Azure parity", () => {
       expect.stringMatching(/^v1\.15\.1-sfw-free-/),
     );
   });
+
+  it.each(["explicit", "package.json", "version-file"])(
+    "disables sfw and its cache for a preview resolved from %s",
+    async (source) => {
+      const { project, env, ports } = fixture();
+      const version = "0.0.0-commit.7d848b3da1987fa60b4cf18487fcc36a2a697e94";
+      const target: NodeJS.ProcessEnv = { ...env, SETUP_VP_SFW: "true" };
+      if (source === "explicit") {
+        target.SETUP_VP_VERSION = version;
+      } else if (source === "version-file") {
+        writeFileSync(
+          path.join(project, "pnpm-workspace.yaml"),
+          `catalog:\n  vite-plus: ${version}\n`,
+        );
+        target.SETUP_VP_VERSION_FILE = "pnpm-workspace.yaml";
+      } else {
+        writeFileSync(
+          path.join(project, "package.json"),
+          JSON.stringify({ devDependencies: { "vite-plus": version } }),
+        );
+      }
+      // Azure carries task.setvariable values into the following task's environment.
+      ports.setVariable.mockImplementation((name, value) => {
+        target[name] = value;
+      });
+      ports.setupSfw.mockImplementation(setupSfw);
+
+      await runPrepare(target, ports);
+
+      expect(ports.installVitePlus).toHaveBeenCalledWith(version, expect.any(Object));
+      expect(target.SETUP_VP_SFW_READY).toBe("false");
+      expect(target.SETUP_VP_SFW_CACHE_DIR).toBeUndefined();
+      expect(target.SETUP_VP_RESOLVED_VERSION).toBe(version);
+      // Finalize has the original sfw input but does not receive version-file from the template.
+      delete target.SETUP_VP_VERSION_FILE;
+      await runFinalize(target, ports);
+
+      expect(ports.runInstall).toHaveBeenCalledWith([{}], project, "vp", target);
+      expect(ports.logWarning).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining(`automatically disabled for Vite+ preview build ${version}`),
+      );
+    },
+  );
 
   it.each(["$(CUSTOM_TOKEN)", "$(MISSING_SECRET)"])(
     "removes an unresolved custom auth macro %s before install",

@@ -281,6 +281,8 @@ steps:
 
 `sfw` is only applied when `run-install` is enabled; other `vp` commands (e.g. `vp env use`, `vp --version`) run unwrapped.
 
+For Vite+ preview builds (`0.0.0-commit.<40-character SHA>`), setup-vp automatically disables `sfw`, even when it is enabled, and logs a warning. Dependency installation runs with plain `vp install`. This applies to GitHub Actions, GitLab CI/CD, and Azure Pipelines, including when `sfw` is already on `PATH`.
+
 The action pins the `sfw` version it downloads so a re-run of the same commit gets the same binary.
 
 #### Advanced: stricter supply chain via `socketdev/action`

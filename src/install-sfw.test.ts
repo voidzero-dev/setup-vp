@@ -152,6 +152,8 @@ function makeInputs(overrides: Partial<Inputs> = {}): Inputs {
 }
 
 describe("setupSfw", () => {
+  const previewVersion = "0.0.0-commit.7d848b3da1987fa60b4cf18487fcc36a2a697e94";
+
   beforeEach(() => {
     vi.resetAllMocks();
     stubPlatform("linux", "x64");
@@ -171,6 +173,38 @@ describe("setupSfw", () => {
     expect(info).not.toHaveBeenCalled();
     expect(warning).not.toHaveBeenCalled();
   });
+
+  it.each(["linux", "darwin", "win32"] as const)(
+    "disables sfw for preview builds on %s even when sfw is on PATH",
+    async (platform) => {
+      stubPlatform(platform, "x64");
+      vi.mocked(execFileSync).mockReturnValue("/usr/bin/sfw\n");
+
+      expect(await setupSfw(makeInputs({ version: previewVersion }))).toBe(false);
+
+      expect(warning).toHaveBeenCalledExactlyOnceWith(
+        `sfw was requested but is automatically disabled for Vite+ preview build ${previewVersion}; Socket Firewall Free will not be used.`,
+      );
+      expect(execFileSync).not.toHaveBeenCalled();
+      expect(restoreCache).not.toHaveBeenCalled();
+      expect(exec).not.toHaveBeenCalled();
+      expect(addPath).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not warn about preview builds when sfw is already disabled", async () => {
+    expect(await setupSfw(makeInputs({ sfw: false, version: previewVersion }))).toBe(false);
+    expect(warning).not.toHaveBeenCalled();
+  });
+
+  it.each(["0.3.2", "0.3.3-alpha.1", "latest", "next"])(
+    "keeps sfw enabled for %s",
+    async (version) => {
+      vi.mocked(execFileSync).mockReturnValue("/usr/bin/sfw\n");
+      expect(await setupSfw(makeInputs({ version }))).toBe(true);
+      expect(warning).not.toHaveBeenCalled();
+    },
+  );
 
   it("returns false with an info log when run-install is empty", async () => {
     expect(await setupSfw(makeInputs({ runInstall: [] }))).toBe(false);

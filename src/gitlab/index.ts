@@ -110,7 +110,7 @@ export async function main(phase = "setup"): Promise<void> {
     copyFileSync(process.argv[1]!, path.join(workspaceRoot, ".setup-vp-runtime.mjs"));
   }
 
-  const installCommand = await setupSfw(runInstallEntries);
+  const installCommand = await setupSfw(runInstallEntries, env, version);
   await runInstall(runInstallEntries, projectDir, installCommand);
   if (cacheSaveEnabled) cache.save();
 
