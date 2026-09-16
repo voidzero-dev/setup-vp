@@ -706,6 +706,9 @@ jobs:
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
   test-sfw-blocks-malicious:
+    # Temporarily skip while Socket alert lookups fail. Restore in #161:
+    # https://github.com/voidzero-dev/setup-vp/issues/161
+    if: ${{ false }}
     # Verifies sfw actually intercepts a known-malicious package, not just
     # that it wraps the install. Uses `lodahs` (lodash typosquat), the same
     # canary SocketDev's own workflows use:
@@ -830,6 +833,9 @@ jobs:
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
       - name: Assert composed sfw blocks malicious package (lodahs)
+        # Temporarily skip while Socket alert lookups fail. Restore in #161:
+        # https://github.com/voidzero-dev/setup-vp/issues/161
+        if: ${{ false }}
         shell: bash
         working-directory: ${{ runner.temp }}/test-project
         # Proves the composition path actually enforces, not just that sfw is
