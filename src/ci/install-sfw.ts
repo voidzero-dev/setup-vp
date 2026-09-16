@@ -5,7 +5,8 @@ import type { get as httpGet } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { commandPath } from "./process.js";
-import type { ExportVariable, InstallCommand, RunInstallEntry } from "./types.js";
+import { resolveSfwEnabled } from "./sfw.js";
+import type { ExportVariable, InstallCommand, LogFn, RunInstallEntry } from "./types.js";
 
 export const SFW_VERSION = "v1.15.1";
 const SFW_RELEASE_BASE = `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}`;
@@ -152,6 +153,8 @@ export async function setupSfw(
   options: {
     env?: NodeJS.ProcessEnv;
     sfwEnabled?: boolean;
+    vitePlusVersion?: string;
+    logWarning?: LogFn;
     exportVariable?: ExportVariable;
     platform?: NodeJS.Platform;
     arch?: string;
@@ -167,7 +170,15 @@ export async function setupSfw(
   const isMusl = options.isMusl ?? isMuslLinux();
   const download = options.download ?? downloadFile;
 
-  if (!sfwEnabled) return "vp";
+  if (
+    !resolveSfwEnabled(
+      sfwEnabled,
+      options.vitePlusVersion ?? "",
+      options.logWarning ?? console.warn,
+    )
+  ) {
+    return "vp";
+  }
 
   if (runInstallEntries.length === 0) {
     console.log(

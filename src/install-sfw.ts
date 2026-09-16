@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { resolveSfwEnabled } from "./ci/sfw.js";
 import type { Inputs } from "./types.js";
 
 // Pin sfw so a re-run of the same commit gets the same binary. Renovate
@@ -183,7 +184,7 @@ export function findSfwOnPath(): string | null {
 // fail the handshake; that's a documented requirement, not something we guard
 // against here.
 export async function setupSfw(inputs: Inputs): Promise<boolean> {
-  if (!inputs.sfw) return false;
+  if (!resolveSfwEnabled(inputs.sfw, inputs.version, warning)) return false;
 
   if (inputs.runInstall.length === 0) {
     info("sfw was requested but `run-install` is disabled; sfw will not be invoked.");

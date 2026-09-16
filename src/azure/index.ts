@@ -6,6 +6,7 @@ import { createVersionResolver } from "../ci/version-file.js";
 import { createNodeVersionResolver } from "../ci/node-version-file.js";
 import { resolutionContext } from "../ci/resolution.js";
 import { nodeManagerOffArgs } from "../ci/node-manager.js";
+import { pkgPrNewCommitSha } from "../ci/install-script-urls.js";
 import { configureAuth, isReservedAuthVariable } from "../ci/auth.js";
 import { analyzeProjectNpmrc, readNpmrc } from "../ci/npmrc.js";
 import { prepareCacheMetadata } from "../ci/cache.js";
@@ -92,6 +93,8 @@ export async function runPrepare(
     prependPath: (binDir) => ports.prependPath(binDir),
     logWarningFn: ports.logWarning,
   });
+  // Finalize must use the resolved version, including pins from files or lockfiles.
+  ports.setVariable("SETUP_VP_RESOLVED_VERSION", version);
 
   const versionOutput =
     inputs.nodeManager === false || inputs.packageManager !== undefined
@@ -113,7 +116,11 @@ export async function runPrepare(
   const runtimePath = path.resolve(process.argv[1] || "");
   ports.setVariable("SETUP_VP_RUNTIME_PATH", runtimePath);
 
-  if (inputs.sfw && ports.parseRunInstall(inputs.runInstall).length > 0) {
+  if (
+    inputs.sfw &&
+    !pkgPrNewCommitSha(version) &&
+    ports.parseRunInstall(inputs.runInstall).length > 0
+  ) {
     try {
       const asset = getSfwAssetName(process.platform, process.arch, isMuslLinux());
       const sfwCache = path.join(env.PIPELINE_WORKSPACE || inputs.workspaceRoot, ".setup-vp-sfw");
@@ -183,6 +190,8 @@ export async function runFinalize(
   const installCommand = await ports.setupSfw(runInstallEntries, {
     env,
     sfwEnabled: inputs.sfw,
+    vitePlusVersion: env.SETUP_VP_RESOLVED_VERSION || inputs.version,
+    logWarning: ports.logWarning,
     exportVariable: (name, value) => {
       if (value === undefined) return;
       if (name === "PATH") ports.prependPath(value.split(path.delimiter)[0]!);

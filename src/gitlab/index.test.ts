@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { installVitePlus } from "../ci/install-viteplus.js";
 import { setupSfw } from "../ci/install-sfw.js";
 import { run } from "../ci/process.js";
-import { getCommandOutput } from "../ci/process.js";
+import { commandPath, getCommandOutput, runWithOutput } from "../ci/process.js";
 import { applyEnvironmentModes, isEntrypoint, main } from "./index.js";
 
 vi.mock("../ci/process.js", () => ({
@@ -25,6 +25,8 @@ const directories: string[] = [];
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
+  vi.mocked(commandPath).mockReset();
+  vi.restoreAllMocks();
   for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -94,6 +96,38 @@ describe("GitLab setup parity", () => {
     expect(installVitePlus).toHaveBeenCalledWith("0.3.2", expect.any(Object));
     expect(run).toHaveBeenCalledWith("vp", ["env", "use", "22"], expect.any(Object));
   });
+
+  it.each(["explicit", "package.json"])(
+    "disables sfw for a preview resolved from %s and warns once",
+    async (source) => {
+      const root = fixture();
+      const version = "0.0.0-commit.7d848b3da1987fa60b4cf18487fcc36a2a697e94";
+      if (source === "explicit") vi.stubEnv("SETUP_VP_VERSION", version);
+      else
+        writeFileSync(
+          path.join(root, "app/package.json"),
+          JSON.stringify({ devDependencies: { "vite-plus": version } }),
+        );
+      vi.stubEnv("SETUP_VP_SFW", "true");
+      vi.stubEnv("SETUP_VP_RUN_INSTALL", "true");
+      vi.mocked(commandPath).mockReturnValue("/bin/sfw");
+      vi.mocked(getCommandOutput).mockReturnValue(`vp v${version}`);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      await main();
+
+      expect(installVitePlus).toHaveBeenCalledWith(version, expect.any(Object));
+      expect(commandPath).not.toHaveBeenCalled();
+      expect(runWithOutput).toHaveBeenCalledExactlyOnceWith(
+        "vp",
+        ["install"],
+        expect.objectContaining({ cwd: path.join(root, "app") }),
+      );
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining(`automatically disabled for Vite+ preview build ${version}`),
+      );
+    },
+  );
 
   it("rejects Node opt-out conflicts before installation", async () => {
     fixture();

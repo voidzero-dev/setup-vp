@@ -13,9 +13,11 @@ export { downloadFile, getSfwAssetName, isMuslLinux, SFW_VERSION };
 export async function setupSfw(
   runInstallEntries: RunInstallEntry[],
   env: NodeJS.ProcessEnv = process.env,
+  vitePlusVersion = "",
 ): Promise<InstallCommand> {
   return setupSfwCore(runInstallEntries, {
     env,
+    vitePlusVersion,
     exportVariable: (name, value) => exportShellEnv(name, value, env),
   });
 }
