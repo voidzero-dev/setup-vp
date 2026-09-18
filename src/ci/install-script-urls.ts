@@ -1,3 +1,5 @@
+import { isWindows } from "./platform.js";
+
 // The install script changes with the CLI: a script from main can install an
 // older CLI incorrectly. Example: the XDG directory-layout switch in
 // voidzero-dev/vite-plus#2346 changes where fresh installs land. When the
@@ -52,7 +54,7 @@ export function getInstallScriptUrls(
   version: string,
   platform: NodeJS.Platform = process.platform,
 ): InstallScriptUrls {
-  const script = platform === "win32" ? "install.ps1" : "install.sh";
+  const script = isWindows(platform) ? "install.ps1" : "install.sh";
   const ref = installScriptRef(version);
   return {
     pinned: ref

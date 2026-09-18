@@ -1,5 +1,6 @@
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
+import { isWindows } from "./platform.js";
 import { runWithOutput } from "./process.js";
 import type { InstallCommand, RunInstallEntry, RunInstallInput } from "./types.js";
 
@@ -89,13 +90,13 @@ export async function runInstall(
         installCommand === "sfw" &&
         isSfwVpNotFoundFlake(result.stdout, result.stderr)
       ) {
-        const isWindows = (options.platform ?? process.platform) === "win32";
+        const windows = isWindows(options.platform);
         console.warn(
-          isWindows
+          windows
             ? "setup-vp: sfw could not resolve vp; warming the PowerShell command cache and retrying once."
             : "setup-vp: sfw could not resolve vp; retrying once.",
         );
-        if (isWindows) {
+        if (windows) {
           try {
             await execute("powershell.exe", ["-NoProfile", "-Command", "Get-Command vp"], {
               cwd,

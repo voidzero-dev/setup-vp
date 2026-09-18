@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { isWindows } from "./ci/platform.js";
 import { resolveSfwEnabled } from "./ci/sfw.js";
 import type { Inputs } from "./types.js";
 
@@ -71,7 +72,7 @@ export function getSfwAssetName(platform: NodeJS.Platform, arch: string, isMusl:
     if (arch === "x64") {
       return isMusl ? "sfw-free-musl-linux-x86_64" : "sfw-free-linux-x86_64";
     }
-  } else if (platform === "win32") {
+  } else if (isWindows(platform)) {
     if (arch === "arm64") return "sfw-free-windows-arm64.exe";
     if (arch === "x64") return "sfw-free-windows-x86_64.exe";
   }
@@ -89,7 +90,7 @@ export async function installSfw(): Promise<void> {
   const url = `${SFW_RELEASE_BASE}/${assetName}`;
   const binDir = getSfwBinDir();
   mkdirSync(binDir, { recursive: true });
-  const binPath = join(binDir, process.platform === "win32" ? "sfw.exe" : "sfw");
+  const binPath = join(binDir, isWindows() ? "sfw.exe" : "sfw");
 
   // Try the GHA cache first so we don't redownload ~130 MB on every run and
   // we get a fallback when the GitHub releases CDN flakes. Key includes the
@@ -100,7 +101,7 @@ export async function installSfw(): Promise<void> {
   try {
     const matchedKey = await restoreCache([binDir], cacheKey);
     if (matchedKey && existsSync(binPath)) {
-      if (process.platform !== "win32") {
+      if (!isWindows()) {
         chmodSync(binPath, 0o755);
       }
       addPath(binDir);
@@ -121,7 +122,7 @@ export async function installSfw(): Promise<void> {
     try {
       const exitCode = await runDownloadCommand(url, binPath);
       if (exitCode === 0 && existsSync(binPath)) {
-        if (process.platform !== "win32") {
+        if (!isWindows()) {
           chmodSync(binPath, 0o755);
         }
         addPath(binDir);
@@ -161,7 +162,7 @@ export async function installSfw(): Promise<void> {
 // Used to detect when the user composed `socketdev/action@<sha>` (or
 // installed sfw via some other means) before invoking this action.
 export function findSfwOnPath(): string | null {
-  const lookupCmd = process.platform === "win32" ? "where" : "which";
+  const lookupCmd = isWindows() ? "where" : "which";
   try {
     const stdout = execFileSync(lookupCmd, ["sfw"], {
       encoding: "utf8",
@@ -215,7 +216,7 @@ export async function setupSfw(inputs: Inputs): Promise<boolean> {
 
 async function runDownloadCommand(url: string, outPath: string): Promise<number> {
   const options = { ignoreReturnCode: true };
-  if (process.platform === "win32") {
+  if (isWindows()) {
     return exec(
       "pwsh",
       [

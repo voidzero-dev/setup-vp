@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import type { SpawnOptions, SpawnSyncOptions } from "node:child_process";
+import { isWindows } from "./platform.js";
 
 export function run(command: string, args: string[], options: SpawnSyncOptions = {}): void {
   const result = spawnSync(command, args, { stdio: "inherit", ...options });
@@ -32,7 +33,7 @@ export function runWithOutput(
 }
 
 export function commandPath(command: string): string | undefined {
-  if (process.platform === "win32") {
+  if (isWindows()) {
     const result = spawnSync("where", [command], { encoding: "utf8" });
     if (result.status === 0) {
       const line = result.stdout.trim().split(/\r?\n/)[0]?.trim();

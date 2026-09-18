@@ -6,9 +6,10 @@ import { isAbsolute, join, basename, relative, sep } from "node:path";
 import type { Inputs } from "./types.js";
 import { LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
+import { isWindows } from "./ci/platform.js";
 
 export function getVitePlusHome(): string {
-  const home = process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME;
+  const home = isWindows() ? process.env.USERPROFILE : process.env.HOME;
   return join(home || homedir(), ".vite-plus");
 }
 

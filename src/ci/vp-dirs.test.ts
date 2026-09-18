@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isWindows } from "./platform.js";
 import { getInstallScriptCommand, parseVitePlusDirs, supportsVitePlusDirs } from "./vp-dirs.js";
 
 describe("Vite+ directory resolution", () => {
@@ -66,7 +67,7 @@ describe("Vite+ directory resolution", () => {
     expect(command.args[1]).toContain('>> "$SETUP_VP_DIRS_FILE"');
   });
 
-  it.skipIf(process.platform === "win32").each([true, false])(
+  it.skipIf(isWindows()).each([true, false])(
     "isolates inherited nounset and preserves installer failures (detectDirs: %s)",
     (detectDirs) => {
       const fixture = mkdtempSync(join(tmpdir(), "setup-vp-shell-options-"));
@@ -165,7 +166,7 @@ printf 'installer completed\\n'
     expect(command.args[1]).toContain("Add-Content -LiteralPath $dirsFile -Encoding UTF8");
   });
 
-  it.skipIf(process.platform === "win32").each([true, false])(
+  it.skipIf(isWindows()).each([true, false])(
     "installs with wget and no curl, preserving download failures (detectDirs: %s)",
     (detectDirs) => {
       const root = mkdtempSync(join(tmpdir(), "setup-vp-wget-"));
