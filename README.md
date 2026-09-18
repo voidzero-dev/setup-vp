@@ -18,7 +18,7 @@ GitHub Action, GitLab CI/CD remote template, and Azure Pipelines step template t
 Reference this action with an exact release tag, or a commit SHA:
 
 ```yaml
-- uses: voidzero-dev/setup-vp@v1.20.0
+- uses: voidzero-dev/setup-vp@v1.21.0
 ```
 
 Releases are listed on the [tags page](https://github.com/voidzero-dev/setup-vp/tags). [Renovate](https://docs.renovatebot.com/) and Dependabot can keep a pinned tag up to date.
@@ -33,7 +33,7 @@ Releases are listed on the [tags page](https://github.com/voidzero-dev/setup-vp/
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
 ```
 
 ### With Node.js Version
@@ -41,7 +41,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       node-version: "lts"
 ```
@@ -51,7 +51,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       node-version-file: ".node-version"
 ```
@@ -68,7 +68,7 @@ steps:
   - uses: actions/setup-node@v5
     with:
       node-version: 24
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       node-manager: false
 ```
@@ -78,7 +78,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       working-directory: web
       node-version-file: ".nvmrc"
@@ -91,7 +91,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       node-version: "lts"
       cache: true
@@ -103,7 +103,7 @@ steps:
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       version: "1.2.3"
       node-version: "lts"
@@ -119,7 +119,7 @@ If your project uses an older Vite+ version, upgrade Vite+ to v0.3.1 or later.
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
   - run: pnpm --version
 ```
 
@@ -140,7 +140,7 @@ to `latest` only when nothing pins a resolvable version. So a project that pins
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       cache: true
 ```
@@ -153,7 +153,7 @@ worth watching for, since it means the pinned version was not applied:
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       version-file: package.json
       cache: true
@@ -213,7 +213,7 @@ action warns and falls back to `latest`. (Auto-detection instead resolves a
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       node-version: "lts"
       cache: true
@@ -238,7 +238,7 @@ minimal:
 
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       node-version: "lts"
     env:
@@ -255,7 +255,7 @@ read the repo `.npmrc` per its own config resolution):
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       node-version: "lts"
       registry-url: "https://npm.pkg.github.com"
@@ -273,7 +273,7 @@ Set `sfw: true` to wrap `vp install` with [Socket Firewall Free](https://docs.so
 ```yaml
 steps:
   - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       sfw: true
       run-install: true
@@ -296,7 +296,7 @@ steps:
   - uses: socketdev/action@<sha>
     with:
       mode: firewall-free
-  - uses: voidzero-dev/setup-vp@v1.20.0
+  - uses: voidzero-dev/setup-vp@v1.21.0
     with:
       sfw: true
       run-install: true
@@ -320,7 +320,7 @@ jobs:
     steps:
       - run: apk add --no-cache bash curl gcompat libstdc++
       - uses: actions/checkout@v7
-      - uses: voidzero-dev/setup-vp@v1.20.0
+      - uses: voidzero-dev/setup-vp@v1.21.0
 ```
 
 ### Matrix Testing with Multiple Node.js Versions
@@ -334,7 +334,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: voidzero-dev/setup-vp@v1.20.0
+      - uses: voidzero-dev/setup-vp@v1.21.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: true
@@ -371,7 +371,7 @@ Omitting both `node-version` and `node-version-file` leaves the session without 
 `package-manager` controls Vite+'s package-manager management independently of `node-manager`. When omitted, it leaves the installer default unchanged (enabled on CI) and runs no environment-mode commands. Set it to `false` to run `vp env off pm` and prefer system package managers, or provide a mapping:
 
 ```yaml
-- uses: voidzero-dev/setup-vp@v1.20.0
+- uses: voidzero-dev/setup-vp@v1.21.0
   with:
     node-manager: false
     package-manager: |
@@ -423,7 +423,7 @@ Set `cache-save: false` to restore an existing dependency cache without writing 
 For example, this workflow restores caches on every run but saves them only from the `main` branch:
 
 ```yaml
-- uses: voidzero-dev/setup-vp@v1.20.0
+- uses: voidzero-dev/setup-vp@v1.21.0
   with:
     cache: true
     cache-save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -441,9 +441,9 @@ Use an exact release tag in the `include:remote` URL, and pin `setup-ref` to the
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.20.0/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.21.0/gitlab/setup-vp.yml"
     inputs:
-      setup-ref: "v1.20.0"
+      setup-ref: "v1.21.0"
 
 test:
   extends: .setup-vp
@@ -456,9 +456,9 @@ test:
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.20.0/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.21.0/gitlab/setup-vp.yml"
     inputs:
-      setup-ref: "v1.20.0"
+      setup-ref: "v1.21.0"
       version: "latest"
       working-directory: "web"
       run-install: "true"
@@ -476,14 +476,14 @@ GitLab replaces array keywords such as `before_script` when a job uses `extends`
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.20.0/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.21.0/gitlab/setup-vp.yml"
 
 test:
   image: node:24
   variables:
     SETUP_VP_VERSION: "latest"
     SETUP_VP_RUN_INSTALL: "true"
-    SETUP_VP_SETUP_REF: "v1.20.0"
+    SETUP_VP_SETUP_REF: "v1.21.0"
   before_script:
     - !reference [.setup-vp-bootstrap, before_script]
     - npm config set //registry.example.com/:_authToken "$NODE_AUTH_TOKEN"
@@ -498,9 +498,9 @@ Use the same pattern when the project has `default:before_script`; put the share
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.20.0/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.21.0/gitlab/setup-vp.yml"
     inputs:
-      setup-ref: "v1.20.0"
+      setup-ref: "v1.21.0"
       run-install: |
         - cwd: ./packages/app
           args: ['--frozen-lockfile']
@@ -517,9 +517,9 @@ test:
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.20.0/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.21.0/gitlab/setup-vp.yml"
     inputs:
-      setup-ref: "v1.20.0"
+      setup-ref: "v1.21.0"
       sfw: true
       run-install: "true"
 
@@ -536,9 +536,9 @@ Pass `NODE_AUTH_TOKEN` as a GitLab CI/CD variable and set `registry-url` when th
 
 ```yaml
 include:
-  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.20.0/gitlab/setup-vp.yml"
+  - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.21.0/gitlab/setup-vp.yml"
     inputs:
-      setup-ref: "v1.20.0"
+      setup-ref: "v1.21.0"
       registry-url: "https://npm.pkg.github.com"
       scope: "@myorg"
 
@@ -569,11 +569,11 @@ test:
 | `package-manager`       | String input: `"true"`, `"false"`, or a YAML mapping of npm, pnpm, yarn, and bun to booleans (Vite+ 0.3.1+)                                                                                                 | Unset (enabled on CI) |
 | `registry-url`          | Optional registry URL to write to a temporary `.npmrc`                                                                                                                                                      |                       |
 | `scope`                 | Optional scope for authenticating against scoped registries                                                                                                                                                 |                       |
-| `setup-ref`             | setup-vp ref used to download the GitLab bootstrap and compiled runtime. Always set it to the same tag as the remote URL; the default is the latest release when the template was published                 | `v1.20.0`             |
+| `setup-ref`             | setup-vp ref used to download the GitLab bootstrap and compiled runtime. Always set it to the same tag as the remote URL; the default is the latest release when the template was published                 | `v1.21.0`             |
 
 ### GitLab Caching and Outputs
 
-These additions require a template and matching `setup-ref` that contain the changes. Pin an immutable commit while testing unreleased functionality; `v1.20.0` predates the new interfaces.
+GitLab caching and outputs require `v1.21.0` or newer. Use the same version for the remote template and `setup-ref`.
 
 Extend `.setup-vp-cached` to restore and save dependency data and the pinned `sfw` binary through GitLab's native cache. The runtime copies restored data from `.setup-vp-cache/` into the directory reported by `vp pm cache dir`. It saves a snapshot after setup and again in `after_script`, so packages added by later job scripts are included.
 
@@ -601,7 +601,7 @@ Include `gitlab/setup-vp-windows.yml` instead of `gitlab/setup-vp.yml` on a Powe
 
 ### GitLab Notes
 
-- Use an exact release tag such as `v1.20.0` in the remote URL. Do not use `main` (mutable) or `v1` (frozen at v1.15.0, no longer updated).
+- Use an exact release tag such as `v1.21.0` in the remote URL. Do not use `main` (mutable) or `v1` (frozen at v1.15.0, no longer updated).
 - Always pin `setup-ref` to the same tag or commit SHA as the remote URL, so the compiled runtime matches the included template.
 - Quote GitLab string inputs such as `run-install: "false"`; unquoted booleans are rejected by GitLab before the setup runtime can parse them.
 - GitLab 17.9+ users can add `integrity` to pin the remote file hash.
@@ -625,7 +625,7 @@ resources:
       type: github
       endpoint: github
       name: voidzero-dev/setup-vp
-      ref: refs/tags/v1.20.0
+      ref: refs/tags/v1.21.0
 
 pool:
   vmImage: ubuntu-latest
@@ -635,7 +635,7 @@ steps:
 
   - template: azure/setup-vp.yml@setupVp
     parameters:
-      setupRef: v1.20.0
+      setupRef: v1.21.0
       nodeVersion: 24.x
       cache: true
       runInstall: true
@@ -660,7 +660,7 @@ Pin `ref` and `setupRef` to the same exact tag or commit SHA. Do not use the `v1
 | `authEnv`              | `{}`                  | Extra environment mappings for custom registry secrets, such as `{ PRIVATE_TOKEN: "$(PRIVATE_TOKEN)" }`.                                                                      |
 | `registryUrl`          |                       | Optional registry URL for a temporary `.npmrc`.                                                                                                                               |
 | `scope`                |                       | Optional npm registry scope.                                                                                                                                                  |
-| `setupRef`             | `v1.20.0`             | Ref used to download bootstrap scripts and `dist/azure/index.mjs`. Always set it to the same tag as `ref`; the default is the latest release when the template was published. |
+| `setupRef`             | `v1.21.0`             | Ref used to download bootstrap scripts and `dist/azure/index.mjs`. Always set it to the same tag as `ref`; the default is the latest release when the template was published. |
 | `nodeVersion`          |                       | Select Node.js with `vp env use`; takes precedence over `nodeVersionFile`.                                                                                                    |
 | `nodeManager`          |                       | Control Vite+'s Node.js manager: `false` keeps the agent's Node.js (e.g. from `UseNode@1`); `true` leaves the installer default unchanged; empty lets the installer decide.   |
 | `packageManager`       | Unset (enabled on CI) | Boolean or object mapping npm, pnpm, yarn, and bun to booleans (Vite+ 0.3.1+). Only false entries change modes.                                                               |
@@ -707,7 +707,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: voidzero-dev/setup-vp@v1.20.0
+      - uses: voidzero-dev/setup-vp@v1.21.0
         with:
           node-version: "lts"
           cache: true

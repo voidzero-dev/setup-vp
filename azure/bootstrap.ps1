@@ -13,7 +13,7 @@ function Setup-VpDownload {
   Invoke-WebRequest -Uri $Url -OutFile $OutFile -TimeoutSec 60
 }
 
-$setupRef = if ($env:SETUP_VP_SETUP_REF) { $env:SETUP_VP_SETUP_REF } else { 'v1.20.0' }
+$setupRef = if ($env:SETUP_VP_SETUP_REF) { $env:SETUP_VP_SETUP_REF } else { 'v1.21.0' }
 $runtimeOut = if ($env:SETUP_VP_RUNTIME_OUT) {
   $env:SETUP_VP_RUNTIME_OUT
 } else {
