@@ -3,6 +3,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pkgPrNewCommitSha } from "./install-script-urls.js";
+import { isWindows } from "./platform.js";
 import { parseInstalledVpVersion } from "./version.js";
 
 // Keep installer network calls bounded so a hung source fails over quickly.
@@ -108,7 +109,7 @@ export function getInstallScriptCommand(
   platform: NodeJS.Platform = process.platform,
   detectDirs = true,
 ): { command: string; args: string[] } {
-  if (platform === "win32") {
+  if (isWindows(platform)) {
     if (!detectDirs) {
       return {
         command: "pwsh",

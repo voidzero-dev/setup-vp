@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import type { get as httpGet } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { isWindows } from "./platform.js";
 import { commandPath } from "./process.js";
 import { resolveSfwEnabled } from "./sfw.js";
 import type { ExportVariable, InstallCommand, LogFn, RunInstallEntry } from "./types.js";
@@ -42,7 +43,7 @@ export function getSfwAssetName(platform: NodeJS.Platform, arch: string, isMusl:
     if (arch === "x64") {
       return isMusl ? "sfw-free-musl-linux-x86_64" : "sfw-free-linux-x86_64";
     }
-  } else if (platform === "win32") {
+  } else if (isWindows(platform)) {
     if (arch === "arm64") return "sfw-free-windows-arm64.exe";
     if (arch === "x64") return "sfw-free-windows-x86_64.exe";
   }
@@ -205,10 +206,10 @@ export async function setupSfw(
     ? path.join(cacheDirectory, SFW_VERSION, asset)
     : await mkdtemp(path.join(tmpdir(), "setup-vp-sfw-"));
   await mkdir(sfwDir, { recursive: true });
-  const sfwBin = path.join(sfwDir, platform === "win32" ? "sfw.exe" : "sfw");
+  const sfwBin = path.join(sfwDir, isWindows(platform) ? "sfw.exe" : "sfw");
   const sfwUrl = `${SFW_RELEASE_BASE}/${asset}`;
   function activate(): InstallCommand {
-    const pathSeparator = platform === "win32" ? ";" : ":";
+    const pathSeparator = isWindows(platform) ? ";" : ":";
     env.PATH = `${sfwDir}${pathSeparator}${env.PATH || ""}`;
     options.exportVariable?.("PATH", env.PATH);
     return "sfw";

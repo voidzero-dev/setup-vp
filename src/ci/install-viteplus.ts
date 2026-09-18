@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { spawnSync } from "node:child_process";
 import { getInstallScriptUrls, pkgPrNewCommitSha } from "./install-script-urls.js";
+import { isWindows } from "./platform.js";
 import {
   createVitePlusDirsFile,
   getInstallScriptCommand,
@@ -19,7 +20,7 @@ export function getVitePlusHome(
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const home = platform === "win32" ? env.USERPROFILE || homedir() : env.HOME || homedir();
+  const home = isWindows(platform) ? env.USERPROFILE || homedir() : env.HOME || homedir();
   return join(home, ".vite-plus");
 }
 
@@ -37,7 +38,7 @@ function runInstallCommand(
   // GitLab PowerShell Desktop runners need not have PowerShell Core installed.
   // Only fall back when the executable is missing, not when an installer fails.
   if (
-    platform === "win32" &&
+    isWindows(platform) &&
     (result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
   ) {
     result = spawnSync("powershell.exe", args, spawnOptions);
@@ -127,7 +128,7 @@ export async function installVitePlus(
       dirsFile,
       join(getVitePlusHome(platform, targetEnv), "bin"),
     );
-    const separator = platform === "win32" ? ";" : ":";
+    const separator = isWindows(platform) ? ";" : ":";
     if (!targetEnv.PATH?.split(separator).includes(binDir)) {
       targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
       prependPath?.(binDir);

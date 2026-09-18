@@ -2,6 +2,7 @@ import { startGroup, endGroup, setFailed, info, warning, error as logError } fro
 import { getExecOutput } from "@actions/exec";
 import type { Inputs } from "./types.js";
 import { getConfiguredProjectDir, getInstallCwd } from "./utils.js";
+import { isWindows } from "./ci/platform.js";
 
 const MAX_ERROR_TAIL = 4000;
 
@@ -22,7 +23,7 @@ export function isSfwVpNotFoundFlake(stdout: string, stderr: string): boolean {
 // 10s-limited resolution runs against warm caches. Best effort: a failure
 // here must not block the retry.
 async function warmPowerShellCommandCache(): Promise<void> {
-  if (process.platform !== "win32") return;
+  if (!isWindows()) return;
   try {
     await getExecOutput("powershell.exe", ["-NoProfile", "-Command", "Get-Command vp"], {
       ignoreReturnCode: true,
