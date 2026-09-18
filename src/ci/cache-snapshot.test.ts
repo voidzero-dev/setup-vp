@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { restoreCacheSnapshot } from "./cache-snapshot.js";
+import { isWindows } from "./platform.js";
 
 vi.mock("node:fs", async (importOriginal) => {
   const fs = await importOriginal<typeof import("node:fs")>();
@@ -98,7 +99,7 @@ describe("GitLab cache snapshots", () => {
       symlinkSync(
         targetKind === "absolute" ? packageDir : path.relative(index, packageDir),
         link,
-        process.platform === "win32" ? "junction" : "dir",
+        isWindows() ? "junction" : "dir",
       );
 
       restoreCacheSnapshot(metadata, cache, warn).save();
@@ -139,7 +140,7 @@ describe("GitLab cache snapshots", () => {
       symlinkSync(
         targetKind === "absolute" ? packageDir : "../package",
         path.join(index, "link"),
-        process.platform === "win32" ? "junction" : "dir",
+        isWindows() ? "junction" : "dir",
       );
       const warn = vi.fn();
       restoreCacheSnapshot(metadata, cache, warn).save();
@@ -179,7 +180,7 @@ describe("GitLab cache snapshots", () => {
     mkdirSync(target);
     writeFileSync(path.join(target, "value"), "project data");
     writeFileSync(path.join(store, "package"), "cached package");
-    symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+    symlinkSync(target, link, isWindows() ? "junction" : "dir");
     const warn = vi.fn();
     restoreCacheSnapshot(metadata, cache, warn).save();
     rmSync(store, { recursive: true });
@@ -200,7 +201,7 @@ describe("GitLab cache snapshots", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it.skipIf(process.platform !== "win32")(
+  it.skipIf(!isWindows())(
     "repairs a directory link extracted as a file link before its target exists",
     () => {
       const { root, store, cache, metadata } = fixture();
@@ -247,7 +248,7 @@ describe("GitLab cache snapshots", () => {
     restoreCacheSnapshot(metadata, cache, warn).save();
 
     rmSync(entry, { recursive: true });
-    symlinkSync(target, entry, process.platform === "win32" ? "junction" : "dir");
+    symlinkSync(target, entry, isWindows() ? "junction" : "dir");
     writeFileSync(lockFile, "second lock");
     restoreCacheSnapshot(metadata, cache, warn, false).save();
 
@@ -276,7 +277,7 @@ describe("GitLab cache snapshots", () => {
       if (entryKind === "directory") {
         mkdirSync(target);
         writeFileSync(path.join(target, "value"), "external value");
-        symlinkSync(target, entry, process.platform === "win32" ? "junction" : "dir");
+        symlinkSync(target, entry, isWindows() ? "junction" : "dir");
       } else {
         writeFileSync(target, "external value");
         symlinkSync(target, entry, "file");
@@ -313,7 +314,7 @@ describe("GitLab cache snapshots", () => {
     const newTarget = path.join(root, "new-target");
     const cachedLink = path.join(cache, process.platform, process.arch, "npm", "packages", "link");
     const warn = vi.fn();
-    const linkType = process.platform === "win32" ? "junction" : "dir";
+    const linkType = isWindows() ? "junction" : "dir";
     mkdirSync(oldTarget);
     mkdirSync(newTarget);
     symlinkSync(oldTarget, link, linkType);

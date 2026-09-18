@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { isWindows } from "./platform.js";
 import { commandPath, getCommandOutput, run, runWithOutput } from "./process.js";
 
 const directories: string[] = [];
@@ -31,7 +32,7 @@ describe("portable process helpers", () => {
     });
   });
 
-  it.skipIf(process.platform !== "win32")(
+  it.skipIf(!isWindows())(
     "runs vp.exe from a directory with spaces through every helper",
     async () => {
       const root = mkdtempSync(path.join(tmpdir(), "setup-vp-exe-"));
