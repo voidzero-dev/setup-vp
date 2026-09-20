@@ -3,14 +3,16 @@ import { execFileSync } from "node:child_process";
 import { accessSync, constants, existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
-import { isAbsolute, join, relative, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { pkgPrNewCommitSha } from "./ci/install-script-urls.js";
+import { supportsScopedEnv } from "./ci/node-manager.js";
 import { parseInstalledVpVersion } from "./ci/version.js";
 import { parseVitePlusDirs, supportsVitePlusDirs } from "./ci/vp-dirs.js";
 import type { VitePlusDirs } from "./ci/vp-dirs.js";
 
 const EXACT_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
-const NODE_SHIMS = ["node", "npm", "npx", "corepack", "vpx", "vpr"];
+const COMMON_SHIMS = ["vp", "node", "npm", "npx", "vpx", "vpr"];
+const PACKAGE_MANAGER_SHIMS = ["pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"];
 
 interface PackageJson {
   name?: string;
@@ -46,8 +48,10 @@ export function findReusableVitePlus(
     if (!existsSync(binary)) continue;
 
     try {
-      const versionDir = realpathSync(join(dataDir, version));
-      if (realpathSync(join(dataDir, "current")) !== versionDir) continue;
+      // Native reinstalls can select a version+force.* directory. Validate the
+      // active payload's metadata instead of assuming its directory name.
+      const versionDir = realpathSync(join(dataDir, "current"));
+      if (dirname(versionDir) !== realpathSync(dataDir)) continue;
       if (!hasDependencies(versionDir, version)) continue;
 
       // Query the payload, not a PATH command or a Windows trampoline that
@@ -66,10 +70,9 @@ export function findReusableVitePlus(
       if (!dirs || !Object.values(dirs).every(isAbsolute)) continue;
       if (!layout) continue;
       if (realpathSync(dirs.data) !== realpathSync(dataDir)) continue;
-      if (!hasShimsAndConfig(dirs, binary, platform, layout)) continue;
-      if (parseInstalledVpVersion(execFileSync(binary, ["--version"], options)) !== version) {
-        continue;
-      }
+      const versionOutput = execFileSync(binary, ["--version"], options);
+      if (parseInstalledVpVersion(versionOutput) !== version) continue;
+      if (!hasShimsAndConfig(dirs, binary, platform, layout, versionOutput)) continue;
 
       return dirs.bin;
     } catch (error) {
@@ -140,6 +143,7 @@ function hasShimsAndConfig(
   binary: string,
   platform: NodeJS.Platform,
   layout: string,
+  versionOutput: string,
 ): boolean {
   const configFile = join(dirs.config, "config.json");
   const config = existsSync(configFile)
@@ -159,7 +163,12 @@ function hasShimsAndConfig(
   if (modes.some((mode) => mode !== undefined && mode !== "managed")) return false;
   if (!statSync(join(dirs.config, platform === "win32" ? "env.ps1" : "env")).isFile()) return false;
 
-  const tools = ["vp", ...NODE_SHIMS];
+  // 0.3.1 introduced scoped package-manager modes and their own shims,
+  // replacing Corepack. Requiring the old shim rejects complete installations.
+  const tools = [
+    ...COMMON_SHIMS,
+    ...(supportsScopedEnv(versionOutput) ? PACKAGE_MANAGER_SHIMS : ["corepack"]),
+  ];
   if (platform === "win32") {
     const trampoline = readFileSync(join(binary, "..", "vp-shim.exe"));
     if (!statSync(join(dirs.bin, "vp-use.cmd")).isFile()) return false;

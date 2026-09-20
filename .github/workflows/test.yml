@@ -49,14 +49,20 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         layout: [home, split]
+        version: ["0.3.0", "0.3.3"]
         include:
           - os: ubuntu-latest
             layout: xdg
+            version: "0.3.0"
+          - os: ubuntu-latest
+            layout: xdg
+            version: "0.3.3"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     env:
       VP_PR_VERSION: ""
       REUSE_LAYOUT: ${{ matrix.layout }}
+      REUSE_VERSION: ${{ matrix.version }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -64,7 +70,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/reuse-project" "$RUNNER_TEMP/reuse-curl"
-          echo '{"name":"reuse-project","private":true,"devDependencies":{"vite-plus":"0.3.0"}}' > "$RUNNER_TEMP/reuse-project/package.json"
+          printf '{"name":"reuse-project","private":true,"devDependencies":{"vite-plus":"%s"}}\n' "$REUSE_VERSION" > "$RUNNER_TEMP/reuse-project/package.json"
           reuse_root="$RUNNER_TEMP/setup-vp-reuse"
           # The Windows installer passes this path to cmd.exe for mklink.
           if [ "$RUNNER_OS" = "Windows" ]; then reuse_root="$(cygpath -w "$reuse_root")"; fi
@@ -87,24 +93,8 @@ jobs:
                 echo "SETUP_VP_REUSE_DATA=$reuse_root-xdg/vite-plus"
                 ;;
             esac
-            echo "SETUP_VP_REUSE_CURL=$(command -v curl)"
-            echo "SETUP_VP_REUSE_DOWNLOADS=$RUNNER_TEMP/setup-vp-reuse-downloads.log"
           } >> "$GITHUB_ENV"
-          : > "$RUNNER_TEMP/setup-vp-reuse-downloads.log"
-          cat > "$RUNNER_TEMP/reuse-curl/curl" <<'EOF'
-          #!/bin/bash
-          set -euo pipefail
-          for arg in "$@"; do
-            case "$arg" in
-              */vite-plus-cli-*.tgz)
-                printf '%s\n' "$arg" >> "$SETUP_VP_REUSE_DOWNLOADS"
-                ;;
-            esac
-          done
-          exec "$SETUP_VP_REUSE_CURL" "$@"
-          EOF
-          chmod +x "$RUNNER_TEMP/reuse-curl/curl"
-          echo "$RUNNER_TEMP/reuse-curl" >> "$GITHUB_PATH"
+          bash test/record-cli-downloads.sh
 
       - name: Setup Vite+ for the first time
         id: first-setup
@@ -121,19 +111,18 @@ jobs:
         env:
           INSTALLED_VERSION: ${{ steps.first-setup.outputs.version }}
         run: |
-          test "$INSTALLED_VERSION" = "0.3.0"
+          test "$INSTALLED_VERSION" = "$REUSE_VERSION"
           binary=vp
           if [ "$RUNNER_OS" = "Windows" ]; then binary=vp.exe; fi
           test -x "$SETUP_VP_REUSE_DATA/current/bin/$binary"
-          test -f "$SETUP_VP_REUSE_DATA/0.3.0/node_modules/vite-plus/package.json"
+          test -f "$SETUP_VP_REUSE_DATA/$REUSE_VERSION/node_modules/vite-plus/package.json"
           test "$(node --version)" = "v22.23.1"
           # Check that the recorder sees real downloads before relying on it.
-          # Windows downloads through PowerShell; install.log covers that path.
+          # Windows downloads through PowerShell; file snapshots cover that path.
           if [ "$RUNNER_OS" != "Windows" ]; then test -s "$SETUP_VP_REUSE_DOWNLOADS"; fi
           echo "CLI downloads during the first setup:"
           cat "$SETUP_VP_REUSE_DOWNLOADS"
-          # The installer truncates this log when it runs its own vp install.
-          python -c 'import os, sys; print(os.stat(sys.argv[1]).st_mtime_ns)' "$SETUP_VP_REUSE_DATA/0.3.0/install.log" > "$RUNNER_TEMP/reuse-install-log-before"
+          node "$GITHUB_WORKSPACE/test/reuse-installation-snapshot.mjs" "$SETUP_VP_REUSE_DATA/current" > "$RUNNER_TEMP/reuse-before.json"
           : > "$SETUP_VP_REUSE_DOWNLOADS"
 
       - name: Setup the same Vite+ version again
@@ -151,7 +140,7 @@ jobs:
         env:
           INSTALLED_VERSION: ${{ steps.second-setup.outputs.version }}
         run: |
-          test "$INSTALLED_VERSION" = "0.3.0"
+          test "$INSTALLED_VERSION" = "$REUSE_VERSION"
           test "$(node --version)" = "v22.23.1"
           failed=0
           if [ -s "$SETUP_VP_REUSE_DOWNLOADS" ]; then
@@ -159,13 +148,90 @@ jobs:
             cat "$SETUP_VP_REUSE_DOWNLOADS"
             failed=1
           fi
-          python -c 'import os, sys; print(os.stat(sys.argv[1]).st_mtime_ns)' "$SETUP_VP_REUSE_DATA/0.3.0/install.log" > "$RUNNER_TEMP/reuse-install-log-after"
-          if ! cmp -s "$RUNNER_TEMP/reuse-install-log-before" "$RUNNER_TEMP/reuse-install-log-after"; then
-            echo "::error::The second setup rewrote install.log by running the wrapper install again (issue #145)."
-            diff -u "$RUNNER_TEMP/reuse-install-log-before" "$RUNNER_TEMP/reuse-install-log-after" || true
+          node "$GITHUB_WORKSPACE/test/reuse-installation-snapshot.mjs" "$SETUP_VP_REUSE_DATA/current" > "$RUNNER_TEMP/reuse-after.json"
+          if ! cmp -s "$RUNNER_TEMP/reuse-before.json" "$RUNNER_TEMP/reuse-after.json"; then
+            echo "::error::The second setup changed the installed version tree (issue #145)."
+            diff -u "$RUNNER_TEMP/reuse-before.json" "$RUNNER_TEMP/reuse-after.json" || true
             failed=1
           fi
           exit "$failed"
+
+  test-reuse-restored-prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VP_PR_VERSION: ""
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - name: Select the installation directory and record downloads
+        run: |
+          echo "VP_HOME=$RUNNER_TEMP/setup-vp-restored" >> "$GITHUB_ENV"
+          bash test/record-cli-downloads.sh
+      - name: Install from the user's version-file inputs
+        uses: ./
+        with:
+          working-directory: test/reuse-project
+          version-file: package.json
+          node-version-file: package.json
+          cache: false
+          run-install: false
+      - name: Save the complete installation
+        run: |
+          test -s "$SETUP_VP_REUSE_DOWNLOADS"
+          test ! -e "$VP_HOME/bin/corepack"
+          node test/reuse-installation-snapshot.mjs "$VP_HOME/current" > "$RUNNER_TEMP/reuse-before.json"
+          # Preserve symlinks, permissions, and nanosecond timestamps across jobs.
+          tar --format=posix -czf "$RUNNER_TEMP/reuse-installation.tar.gz" -C "$VP_HOME" .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: reuse-installation
+          path: |
+            ${{ runner.temp }}/reuse-installation.tar.gz
+            ${{ runner.temp }}/reuse-before.json
+          compression-level: 0
+          retention-days: 1
+
+  test-reuse-restored-version:
+    needs: test-reuse-restored-prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VP_PR_VERSION: ""
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: reuse-installation
+          path: ${{ runner.temp }}
+      - name: Restore the installation on a fresh runner
+        run: |
+          export VP_HOME="$RUNNER_TEMP/setup-vp-restored"
+          echo "VP_HOME=$VP_HOME" >> "$GITHUB_ENV"
+          test ! -e "$VP_HOME"
+          mkdir -p "$VP_HOME"
+          tar -xzf "$RUNNER_TEMP/reuse-installation.tar.gz" -C "$VP_HOME"
+          node test/reuse-installation-snapshot.mjs "$VP_HOME/current" > "$RUNNER_TEMP/reuse-restored.json"
+          cmp "$RUNNER_TEMP/reuse-before.json" "$RUNNER_TEMP/reuse-restored.json"
+          bash test/record-cli-downloads.sh
+      - name: Reuse the restored installation
+        id: setup
+        uses: ./
+        with:
+          working-directory: test/reuse-project
+          version-file: package.json
+          node-version-file: package.json
+          cache: false
+          run-install: false
+      - name: Verify versions and zero installation work
+        env:
+          INSTALLED_VERSION: ${{ steps.setup.outputs.version }}
+        run: |
+          test "$INSTALLED_VERSION" = "0.3.3"
+          test "$(node --version)" = "v22.23.1"
+          cat "$SETUP_VP_REUSE_DOWNLOADS"
+          test ! -s "$SETUP_VP_REUSE_DOWNLOADS"
+          node test/reuse-installation-snapshot.mjs "$VP_HOME/current" > "$RUNNER_TEMP/reuse-after.json"
+          diff -u "$RUNNER_TEMP/reuse-before.json" "$RUNNER_TEMP/reuse-after.json"
 
   test-preview-build:
     # End-to-end coverage for the commit-pinned install path: resolve the

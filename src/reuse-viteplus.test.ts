@@ -14,6 +14,7 @@ let bin: string;
 let config: string;
 let versionDir: string;
 let payload: string;
+let version: string;
 let env: NodeJS.ProcessEnv;
 let platform: NodeJS.Platform;
 
@@ -26,25 +27,30 @@ function dirsOutput(): string {
   return `layout\tsingle-root\ndata\t${data}\nbin\t${bin}\ncache\t${data}/cache\nconfig\t${config}\nstate\t${data}\n`;
 }
 
-function createInstallation(windows = false): void {
-  versionDir = join(data, "0.3.0");
+function createInstallation(
+  windows = false,
+  tools = ["vp", "node", "npm", "npx", "corepack", "vpx", "vpr"],
+  directory = version,
+): void {
+  versionDir = join(data, directory);
   payload = join(versionDir, "bin", windows ? "vp.exe" : "vp");
   write(payload);
   chmodSync(payload, 0o755);
+  mkdirSync(data, { recursive: true });
   symlinkSync(versionDir, join(data, "current"), "junction");
   write(
     join(versionDir, "package.json"),
     JSON.stringify({
       name: "vp-global",
-      version: "0.3.0",
-      dependencies: { "vite-plus": "0.3.0" },
+      version,
+      dependencies: { "vite-plus": version },
     }),
   );
   const packageDir = join(
     versionDir,
     "node_modules",
     ".pnpm",
-    "vite-plus@0.3.0",
+    `vite-plus@${version}`,
     "node_modules",
     "vite-plus",
   );
@@ -52,7 +58,7 @@ function createInstallation(windows = false): void {
     join(packageDir, "package.json"),
     JSON.stringify({
       name: "vite-plus",
-      version: "0.3.0",
+      version,
       dependencies: { "fixture-dep": "1.0.0" },
     }),
   );
@@ -68,7 +74,7 @@ function createInstallation(windows = false): void {
     write(join(versionDir, "bin", "vp-shim.exe"), "trampoline");
     write(join(bin, "vp-use.cmd"));
   }
-  for (const tool of ["vp", "node", "npm", "npx", "corepack", "vpx", "vpr"]) {
+  for (const tool of tools) {
     if (windows) {
       write(join(bin, `${tool}.exe`), "trampoline");
       write(
@@ -88,8 +94,11 @@ beforeEach(() => {
   config = data;
   env = { VP_HOME: data, HOME: join(root, "home"), USERPROFILE: join(root, "home") };
   platform = process.platform;
+  version = "0.3.0";
   vi.mocked(execFileSync).mockImplementation((_file, args) =>
-    (args as string[]).includes("--version") ? "vp v0.3.0\nLocal vite-plus v9.9.9\n" : dirsOutput(),
+    (args as string[]).includes("--version")
+      ? `vp v${version}\nLocal vite-plus v9.9.9\n`
+      : dirsOutput(),
   );
 });
 
@@ -99,10 +108,67 @@ afterEach(() => {
 });
 
 function reuse(): string | undefined {
-  return findReusableVitePlus("0.3.0", env, platform);
+  return findReusableVitePlus(version, env, platform);
 }
 
 describe("findReusableVitePlus", () => {
+  describe.each(["linux", "win32"] as const)("%s shim layouts", (targetPlatform) => {
+    const modernTools = [
+      "vp",
+      "node",
+      "npm",
+      "npx",
+      "pnpm",
+      "pnpx",
+      "yarn",
+      "yarnpkg",
+      "bun",
+      "bunx",
+      "vpx",
+      "vpr",
+    ];
+
+    it.each(["0.3.1", "0.3.2", "0.3.3"])("reuses %s without a Corepack shim", (release) => {
+      platform = targetPlatform;
+      version = release;
+      createInstallation(platform === "win32", modernTools);
+      expect(reuse()).toBe(bin);
+    });
+
+    it("still requires the Corepack shim for 0.3.0", () => {
+      platform = targetPlatform;
+      createInstallation(platform === "win32");
+      rmSync(join(bin, platform === "win32" ? "corepack.exe" : "corepack"));
+      expect(reuse()).toBeUndefined();
+    });
+
+    it("reuses the active directory from a native reinstall", () => {
+      platform = targetPlatform;
+      version = "0.3.3";
+      createInstallation(platform === "win32", modernTools, "0.3.3+force.123.456");
+      expect(reuse()).toBe(bin);
+    });
+
+    it("rejects an active installation outside the selected data directory", () => {
+      platform = targetPlatform;
+      version = "0.3.3";
+      createInstallation(platform === "win32", modernTools, join("..", "external"));
+      expect(reuse()).toBeUndefined();
+      expect(execFileSync).not.toHaveBeenCalled();
+    });
+
+    it.each(["pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"])(
+      "repairs a 0.3.3 installation with a missing %s shim",
+      (tool) => {
+        platform = targetPlatform;
+        version = "0.3.3";
+        createInstallation(platform === "win32", modernTools);
+        rmSync(join(bin, platform === "win32" ? `${tool}.exe` : tool));
+        expect(reuse()).toBeUndefined();
+      },
+    );
+  });
+
   it("reuses the active exact version through an absolute payload probe", () => {
     createInstallation(process.platform === "win32");
     expect(reuse()).toBe(bin);
