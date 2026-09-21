@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { SpawnSyncOptions, SpawnSyncReturns } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { installVitePlus } from "./install-viteplus.js";
 
 const { spawnSync } = vi.hoisted(() => ({ spawnSync: vi.fn() }));
@@ -90,21 +90,25 @@ describe("portable installer shell selection", () => {
 });
 
 describe("portable installer PATH", () => {
-  it.each(["linux", "darwin", "win32"] as const)(
-    "exports fallback shims after system tools on %s even when bin is already present",
-    async (platform) => {
+  it.each([false, true])(
+    "exports fallback shims after system tools (main bin already present: %s)",
+    async (binAlreadyPresent) => {
       const root = mkdtempSync(join(tmpdir(), "setup-vp-portable-path-"));
       const bin = join(root, "separate-bin");
       const data = join(root, "data");
       const fallbackBin = join(data, "fallback-bin");
       mkdirSync(fallbackBin, { recursive: true });
-      const separator = platform === "win32" ? ";" : ":";
-      const env = { PATH: [fallbackBin, bin, "/system/bin", fallbackBin].join(separator) };
+      const entries = [
+        fallbackBin,
+        ...(binAlreadyPresent ? [bin] : []),
+        "/system/bin",
+        fallbackBin,
+      ];
+      const env = { PATH: entries.join(delimiter) };
       const exportPath = vi.fn();
 
       try {
         await installVitePlus("latest", {
-          platform,
           env,
           exportPath,
           runInstall: (_url, installEnv) => {
@@ -116,7 +120,7 @@ describe("portable installer PATH", () => {
           },
         });
 
-        const expectedPath = [bin, "/system/bin", fallbackBin].join(separator);
+        const expectedPath = [bin, "/system/bin", fallbackBin].join(delimiter);
         expect(env.PATH).toBe(expectedPath);
         expect(exportPath).toHaveBeenCalledExactlyOnceWith(expectedPath);
       } finally {
