@@ -66,7 +66,7 @@ For a manual run, use `workflow_dispatch`. Set `setup_ref` to an exact commit SH
 
 ## Dependency Updates
 
-Renovate opens a PR when SocketDev publishes a new `sfw-free` release. See the custom managers in [`.github/renovate.json`](.github/renovate.json) for the pinned `SFW_VERSION` values in the GitHub and portable runtimes.
+Renovate opens a PR when SocketDev publishes a new `sfw-free` release. The custom manager in [`.github/renovate.json`](.github/renovate.json) updates the shared `SFW_VERSION` pin in `src/ci/install-sfw.ts` for all three integrations.
 
 ## Releasing
 
