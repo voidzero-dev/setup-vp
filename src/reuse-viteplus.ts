@@ -14,6 +14,14 @@ import type { VitePlusBinDirs, VitePlusDirs } from "./ci/vp-dirs.js";
 const EXACT_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const COMMON_SHIMS = ["vp", "node", "npm", "npx", "vpx", "vpr"];
 const PACKAGE_MANAGER_SHIMS = ["pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"];
+const MANAGER_OVERRIDES = [
+  "VP_NODE_MANAGER",
+  "VP_PM_MANAGER",
+  "VP_NPM_MANAGER",
+  "VP_PNPM_MANAGER",
+  "VP_YARN_MANAGER",
+  "VP_BUN_MANAGER",
+];
 
 interface PackageJson {
   name?: string;
@@ -42,7 +50,7 @@ export function findReusableVitePlus(
     env.VP_LOCAL_TGZ ||
     env.VP_LOCAL_BINARY ||
     env.VP_SKIP_DEPS_INSTALL ||
-    (env.VP_NODE_MANAGER && env.VP_NODE_MANAGER !== "yes") ||
+    MANAGER_OVERRIDES.some((key) => env[key] && env[key] !== "yes") ||
     !hasValidDirOverrides(env)
   ) {
     return undefined;
@@ -81,6 +89,7 @@ export function findReusableVitePlus(
       if (parseInstalledVpVersion(versionOutput) !== version) continue;
       if (!hasManagedEnvironment(dirs.config, platform)) continue;
       if (!hasValidShims(dirs, binary, platform, layout, versionOutput)) continue;
+      if (!hasNativeBinding(versionDir, options)) continue;
 
       return getVitePlusBinDirs(dirs);
     } catch (error) {
@@ -146,6 +155,38 @@ function hasDependencies(versionDir: string, version: string): boolean {
 function isInside(parent: string, child: string): boolean {
   const path = relative(parent, child);
   return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
+}
+
+function hasNativeBinding(
+  versionDir: string,
+  options: ExecFileSyncOptionsWithStringEncoding,
+): boolean {
+  const loader = realpathSync(
+    join(versionDir, "node_modules", "vite-plus", "binding", "index.cjs"),
+  );
+  if (!isInside(versionDir, loader) || !statSync(loader).isFile()) return false;
+
+  // Let the installed loader select the platform, architecture, and libc.
+  // A child process isolates native load failures from the action runtime.
+  const script = `
+require(process.argv[1]);
+process.stdout.write(JSON.stringify(Object.keys(require.cache).filter(file => file.endsWith('.node'))));
+`;
+  const files: unknown = JSON.parse(
+    execFileSync(process.execPath, ["--input-type=commonjs", "--eval", script, loader], {
+      ...options,
+      env: { ...options.env, NAPI_RS_ENFORCE_VERSION_CHECK: "1" },
+    }),
+  );
+  // A binding from another installation must not hide a damaged active one.
+  return (
+    Array.isArray(files) &&
+    files.length > 0 &&
+    files.every(
+      (file) =>
+        typeof file === "string" && isAbsolute(file) && isInside(versionDir, realpathSync(file)),
+    )
+  );
 }
 
 function hasManagedEnvironment(configDir: string, platform: NodeJS.Platform): boolean {

@@ -156,6 +156,45 @@ jobs:
           fi
           exit "$failed"
 
+  test-reuse-installation-integrity:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      VP_PR_VERSION: ""
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Prepare an isolated global installation and project
+        run: node test/reuse-installation-integrity.mjs prepare
+
+      - name: Install Vite+
+        uses: ./
+        with:
+          version: "0.3.3"
+          run-install: false
+          cache: false
+
+      - name: Remove the active native binding and reproduce the CLI failure
+        run: node test/reuse-installation-integrity.mjs remove-binding
+
+      - name: Repair the incomplete installation
+        uses: ./
+        with:
+          version: "0.3.3"
+          run-install: false
+          cache: false
+
+      - name: Check that JavaScript CLI commands work again
+        run: node test/reuse-installation-integrity.mjs verify-repair
+
+      - name: Check combined and per-manager installer overrides on an existing installation
+        if: runner.os == 'Linux'
+        run: node test/reuse-installation-integrity.mjs manager-overrides
+
   test-reuse-restored-prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 10

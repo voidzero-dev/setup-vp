@@ -14,6 +14,7 @@ let data: string;
 let bin: string;
 let config: string;
 let versionDir: string;
+let nativeFile: string;
 let version: string;
 let env: NodeJS.ProcessEnv;
 let platform: NodeJS.Platform;
@@ -63,6 +64,9 @@ function createInstallation({
     }),
   );
   write(join(packageDir, "dist", "bin.js"));
+  write(join(packageDir, "binding", "index.cjs"));
+  nativeFile = join(packageDir, "..", "@voidzero-dev", "vite-plus-native", "vite-plus.node");
+  write(nativeFile);
   write(
     join(packageDir, "..", "fixture-dep", "package.json"),
     '{"name":"fixture-dep","version":"1.0.0"}',
@@ -95,11 +99,12 @@ beforeEach(() => {
   env = { VP_HOME: data, HOME: join(root, "home"), USERPROFILE: join(root, "home") };
   platform = process.platform;
   version = "0.3.0";
-  vi.mocked(execFileSync).mockImplementation((_file, args) =>
-    (args as string[]).includes("--version")
+  vi.mocked(execFileSync).mockImplementation((file, args) => {
+    if (file === process.execPath) return JSON.stringify([nativeFile]);
+    return (args as string[]).includes("--version")
       ? `vp v${version}\nLocal vite-plus v9.9.9\n`
-      : dirsOutput(),
-  );
+      : dirsOutput();
+  });
 });
 
 afterEach(() => {
@@ -225,6 +230,7 @@ describe("findReusableVitePlus", () => {
     "package.json",
     "node_modules/vite-plus/package.json",
     "node_modules/vite-plus/dist/bin.js",
+    "node_modules/vite-plus/binding/index.cjs",
     "node_modules/.pnpm/vite-plus@0.3.0/node_modules/fixture-dep/package.json",
   ])("falls back when %s is missing", (file) => {
     createInstallation();
@@ -242,6 +248,59 @@ describe("findReusableVitePlus", () => {
     );
     write(join(project, "dist", "bin.js"));
     symlinkSync(project, join(versionDir, "node_modules", "vite-plus"), "junction");
+    expect(reuse()).toBeUndefined();
+  });
+
+  it.each(["package", "file"])(
+    "falls back when the loaded native binding %s is missing",
+    (target) => {
+      createInstallation();
+      rmSync(target === "package" ? dirname(nativeFile) : nativeFile, { recursive: true });
+      expect(reuse()).toBeUndefined();
+    },
+  );
+
+  it("probes the installed binding loader with the action's Node runtime", () => {
+    createInstallation();
+    expect(reuse()).toBe(bin);
+    expect(execFileSync).toHaveBeenCalledWith(
+      process.execPath,
+      ["--input-type=commonjs", "--eval", expect.any(String), expect.stringContaining("index.cjs")],
+      expect.objectContaining({
+        env: { ...env, NAPI_RS_ENFORCE_VERSION_CHECK: "1" },
+        cwd: tmpdir(),
+        timeout: 5000,
+      }),
+    );
+  });
+
+  it("falls back when the native loader fails", () => {
+    createInstallation();
+    vi.mocked(execFileSync)
+      .mockReturnValueOnce(dirsOutput())
+      .mockReturnValueOnce(`vp v${version}`)
+      .mockImplementationOnce(() => {
+        throw new Error("Cannot find native binding");
+      });
+    expect(reuse()).toBeUndefined();
+  });
+
+  it.each(["[]", "null", "invalid JSON"])(
+    "rejects a native probe without binding files: %s",
+    (output) => {
+      createInstallation();
+      vi.mocked(execFileSync)
+        .mockReturnValueOnce(dirsOutput())
+        .mockReturnValueOnce(`vp v${version}`)
+        .mockReturnValueOnce(output);
+      expect(reuse()).toBeUndefined();
+    },
+  );
+
+  it("does not accept a native binding from outside the active installation", () => {
+    createInstallation();
+    nativeFile = join(root, "other-installation", "vite-plus.node");
+    write(nativeFile);
     expect(reuse()).toBeUndefined();
   });
 
@@ -323,11 +382,26 @@ describe("findReusableVitePlus", () => {
     expect(reuse()).toBe(bin);
   });
 
-  it.each(["no", "invalid"])("does not bypass VP_NODE_MANAGER=%s", (value) => {
-    createInstallation();
-    env.VP_NODE_MANAGER = value;
-    expect(reuse()).toBeUndefined();
-    expect(execFileSync).not.toHaveBeenCalled();
+  describe.each([
+    "VP_NODE_MANAGER",
+    "VP_PM_MANAGER",
+    "VP_NPM_MANAGER",
+    "VP_PNPM_MANAGER",
+    "VP_YARN_MANAGER",
+    "VP_BUN_MANAGER",
+  ])("%s installer override", (key) => {
+    it.each(["no", "invalid"])("leaves %s to the installer", (value) => {
+      createInstallation();
+      env[key] = value;
+      expect(reuse()).toBeUndefined();
+      expect(execFileSync).not.toHaveBeenCalled();
+    });
+
+    it.each(["yes", ""])("reuses managed installations for %s", (value) => {
+      createInstallation();
+      env[key] = value;
+      expect(reuse()).toBe(bin);
+    });
   });
 
   it("falls back when a required shim is missing", () => {
