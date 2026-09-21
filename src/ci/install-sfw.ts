@@ -9,7 +9,7 @@ import { commandPath } from "./process.js";
 import { resolveSfwEnabled } from "./sfw.js";
 import type { ExportVariable, InstallCommand, LogFn, RunInstallEntry } from "./types.js";
 
-export const SFW_VERSION = "v1.15.1";
+export const SFW_VERSION = "v1.15.2";
 const SFW_RELEASE_BASE = `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}`;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 type DownloadClient = typeof httpGet;
