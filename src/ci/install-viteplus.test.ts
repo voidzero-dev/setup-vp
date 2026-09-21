@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { SpawnSyncOptions, SpawnSyncReturns } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { installVitePlus } from "./install-viteplus.js";
 
 const { spawnSync } = vi.hoisted(() => ({ spawnSync: vi.fn() }));
@@ -85,4 +87,45 @@ describe("portable installer shell selection", () => {
     expect(spawnSync).toHaveBeenCalledTimes(8);
     expect(spawnSync.mock.calls.every(([command]) => command === "bash")).toBe(true);
   });
+});
+
+describe("portable installer PATH", () => {
+  it.each([false, true])(
+    "exports fallback shims after system tools (main bin already present: %s)",
+    async (binAlreadyPresent) => {
+      const root = mkdtempSync(join(tmpdir(), "setup-vp-portable-path-"));
+      const bin = join(root, "separate-bin");
+      const data = join(root, "data");
+      const fallbackBin = join(data, "fallback-bin");
+      mkdirSync(fallbackBin, { recursive: true });
+      const entries = [
+        fallbackBin,
+        ...(binAlreadyPresent ? [bin] : []),
+        "/system/bin",
+        fallbackBin,
+      ];
+      const env = { PATH: entries.join(delimiter) };
+      const exportPath = vi.fn();
+
+      try {
+        await installVitePlus("latest", {
+          env,
+          exportPath,
+          runInstall: (_url, installEnv) => {
+            writeFileSync(
+              installEnv.SETUP_VP_DIRS_FILE!,
+              `data\t${data}\nbin\t${bin}\ncache\t/cache\nconfig\t/config\nstate\t/state\n`,
+            );
+            return 0;
+          },
+        });
+
+        const expectedPath = [bin, "/system/bin", fallbackBin].join(delimiter);
+        expect(env.PATH).toBe(expectedPath);
+        expect(exportPath).toHaveBeenCalledExactlyOnceWith(expectedPath);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
 });

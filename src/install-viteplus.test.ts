@@ -1,19 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { exec } from "@actions/exec";
-import { addPath, warning } from "@actions/core";
-import { writeFileSync } from "node:fs";
+import { addPath, exportVariable, warning } from "@actions/core";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { installVitePlus } from "./install-viteplus.js";
+import { findReusableVitePlus } from "./reuse-viteplus.js";
 import type { Inputs } from "./types.js";
 
 vi.mock("@actions/core", () => ({
   info: vi.fn(),
   warning: vi.fn(),
   addPath: vi.fn(),
+  exportVariable: vi.fn(),
 }));
 
 vi.mock("@actions/exec", () => ({
   exec: vi.fn(),
 }));
+
+vi.mock("./reuse-viteplus.js", () => ({ findReusableVitePlus: vi.fn() }));
 
 vi.mock("node:timers/promises", () => ({
   setTimeout: vi.fn().mockResolvedValue(undefined),
@@ -35,12 +41,12 @@ const baseInputs: Inputs = {
 
 const commitSha = "7d848b3da1987fa60b4cf18487fcc36a2a697e94";
 
-function writeDirsFile(options: unknown, bin: string): void {
+function writeDirsFile(options: unknown, bin: string, data = "/test/data"): void {
   const dirsFile = (options as { env: Record<string, string> }).env.SETUP_VP_DIRS_FILE;
   writeFileSync(
     dirsFile,
     [
-      "data\t/test/data",
+      `data\t${data}`,
       `bin\t${bin}`,
       "cache\t/test/cache",
       "config\t/test/config",
@@ -85,6 +91,58 @@ describe("installVitePlus", () => {
     expect(warning).not.toHaveBeenCalled();
     expect(addPath).toHaveBeenCalledWith("/test/data/bin");
   });
+
+  it("reuses a validated installation and puts it first on PATH", async () => {
+    vi.stubEnv("PATH", "/other/bin:/existing/bin");
+    vi.mocked(findReusableVitePlus).mockReturnValue({ bin: "/existing/bin" });
+
+    await installVitePlus({ ...baseInputs, version: "0.3.0", nodeManager: true });
+
+    expect(findReusableVitePlus).toHaveBeenCalledWith("0.3.0");
+    expect(addPath).toHaveBeenCalledWith("/existing/bin");
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it.each(["fresh", "reused"])(
+    "exports fallback shims after system tools for a %s installation",
+    async (installation) => {
+      const root = mkdtempSync(join(tmpdir(), "setup-vp-path-"));
+      const bin = join(root, "separate-bin");
+      const data = join(root, "data");
+      const fallbackBin = join(data, "fallback-bin");
+      mkdirSync(fallbackBin, { recursive: true });
+      const githubPath = join(root, "github-path");
+      const githubEnv = join(root, "github-env");
+      writeFileSync(githubPath, "");
+      writeFileSync(githubEnv, "");
+      vi.stubEnv("GITHUB_PATH", githubPath);
+      vi.stubEnv("GITHUB_ENV", githubEnv);
+      vi.stubEnv("PATH", [fallbackBin, "/system/bin", fallbackBin].join(delimiter));
+      const core = await vi.importActual<typeof import("@actions/core")>("@actions/core");
+      vi.mocked(addPath).mockImplementation(core.addPath);
+      vi.mocked(exportVariable).mockImplementation(core.exportVariable);
+      if (installation === "reused") {
+        vi.mocked(findReusableVitePlus).mockReturnValue({ bin, fallbackBin });
+      } else {
+        vi.mocked(exec).mockImplementationOnce(async (_command, _args, options) => {
+          writeDirsFile(options, bin, data);
+          return 0;
+        });
+      }
+
+      try {
+        await installVitePlus(baseInputs);
+
+        const expectedPath = [bin, "/system/bin", fallbackBin].join(delimiter);
+        expect(process.env.PATH).toBe(expectedPath);
+        expect(exportVariable).toHaveBeenCalledWith("PATH", expectedPath);
+        expect(readFileSync(githubEnv, "utf8")).toContain(expectedPath);
+        expect(readFileSync(githubPath, "utf8").trim()).toBe(bin);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("should fall back to the legacy bin for Vite+ releases without VpDirs", async () => {
     vi.stubEnv("HOME", "/home/runner");

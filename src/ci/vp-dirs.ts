@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pkgPrNewCommitSha } from "./install-script-urls.js";
@@ -18,6 +18,30 @@ export interface VitePlusDirs {
   cache: string;
   config: string;
   state: string;
+}
+
+export interface VitePlusBinDirs {
+  bin: string;
+  fallbackBin?: string;
+}
+
+export function getVitePlusBinDirs(dirs: VitePlusDirs): VitePlusBinDirs {
+  const fallbackBin = join(dirs.data, "fallback-bin");
+  // Older releases do not create a fallback directory. Use the resolved data
+  // root because split layouts can place it outside the main bin directory.
+  return statSync(fallbackBin, { throwIfNoEntry: false })?.isDirectory()
+    ? { bin: dirs.bin, fallbackBin }
+    : { bin: dirs.bin };
+}
+
+export function appendFallbackBinToPath(
+  path: string | undefined,
+  fallbackBin: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const separator = isWindows(platform) ? ";" : ":";
+  const entries = path ? path.split(separator).filter((entry) => entry !== fallbackBin) : [];
+  return [...entries, fallbackBin].join(separator);
 }
 
 const EXACT_VERSION_RE = /^v?(\d+)\.(\d+)\.\d+(?:-[0-9A-Za-z.-]+)?$/;
@@ -57,26 +81,26 @@ function readVitePlusProbe(filePath: string): string | undefined {
   }
 }
 
-export function resolveVitePlusBinDir(
+export function resolveVitePlusBinDirs(
   requestedVersion: string,
   dirsFile: string | undefined,
   legacyBinDir: string,
-): string {
+): VitePlusBinDirs {
   if (!dirsFile) {
-    if (!supportsVitePlusDirs(requestedVersion)) return legacyBinDir;
+    if (!supportsVitePlusDirs(requestedVersion)) return { bin: legacyBinDir };
     throw new Error("Vite+ was installed successfully, but setup-vp could not resolve its VpDirs.");
   }
 
   const output = readVitePlusProbe(dirsFile);
   const dirs = output === undefined ? undefined : parseVitePlusDirs(output);
-  if (dirs) return dirs.bin;
+  if (dirs) return getVitePlusBinDirs(dirs);
 
   const hasKnownRequestedVersion =
     pkgPrNewCommitSha(requestedVersion) !== undefined || EXACT_VERSION_RE.test(requestedVersion);
   if (!hasKnownRequestedVersion && output !== undefined) {
     const installedVersion = parseInstalledVpVersion(output);
     if (installedVersion !== "unknown" && !supportsVitePlusDirs(installedVersion)) {
-      return legacyBinDir;
+      return { bin: legacyBinDir };
     }
   }
 

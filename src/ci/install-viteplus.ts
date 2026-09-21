@@ -5,10 +5,11 @@ import { spawnSync } from "node:child_process";
 import { getInstallScriptUrls, pkgPrNewCommitSha } from "./install-script-urls.js";
 import { isWindows } from "./platform.js";
 import {
+  appendFallbackBinToPath,
   createVitePlusDirsFile,
   getInstallScriptCommand,
   removeVitePlusDirsFile,
-  resolveVitePlusBinDir,
+  resolveVitePlusBinDirs,
   supportsVitePlusDirs,
   VP_DIRS_FILE_ENV,
 } from "./vp-dirs.js";
@@ -53,6 +54,7 @@ export async function installVitePlus(
     platform?: NodeJS.Platform;
     env?: NodeJS.ProcessEnv;
     prependPath?: (binDir: string) => void;
+    exportPath?: (path: string) => void;
     sleep?: (ms: number) => Promise<void>;
     runInstall?: typeof runInstallCommand;
     logWarningFn?: (message: string) => void;
@@ -123,16 +125,20 @@ export async function installVitePlus(
   }
 
   function ensureBinInPath(): void {
-    const binDir = resolveVitePlusBinDir(
+    const { bin, fallbackBin } = resolveVitePlusBinDirs(
       version,
       dirsFile,
       join(getVitePlusHome(platform, targetEnv), "bin"),
     );
     const separator = isWindows(platform) ? ";" : ":";
-    if (!targetEnv.PATH?.split(separator).includes(binDir)) {
-      targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
-      prependPath?.(binDir);
+    if (!targetEnv.PATH?.split(separator).includes(bin)) {
+      targetEnv.PATH = `${bin}${separator}${targetEnv.PATH || ""}`;
+      prependPath?.(bin);
     }
+    if (fallbackBin) {
+      targetEnv.PATH = appendFallbackBinToPath(targetEnv.PATH, fallbackBin, platform);
+    }
+    options.exportPath?.(targetEnv.PATH!);
   }
 
   try {

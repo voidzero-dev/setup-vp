@@ -1,19 +1,22 @@
-import { info, warning, addPath } from "@actions/core";
+import { info, warning, addPath, exportVariable } from "@actions/core";
 import { exec } from "@actions/exec";
 import { delimiter, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { getInstallScriptUrls, pkgPrNewCommitSha } from "./ci/install-script-urls.js";
 import {
+  appendFallbackBinToPath,
   createVitePlusDirsFile,
   getInstallScriptCommand,
   removeVitePlusDirsFile,
-  resolveVitePlusBinDir,
+  resolveVitePlusBinDirs,
   supportsVitePlusDirs,
   VP_DIRS_FILE_ENV,
+  type VitePlusBinDirs,
 } from "./ci/vp-dirs.js";
 import type { Inputs } from "./types.js";
 import { DISPLAY_NAME } from "./types.js";
 import { getVitePlusHome } from "./utils.js";
+import { findReusableVitePlus } from "./reuse-viteplus.js";
 
 // Try each group's URLs in order, for up to N rounds per group (max attempts
 // per group = rounds * URLs). Two rounds × two URLs = 4 attempts, ~1 minute
@@ -23,6 +26,15 @@ const INSTALL_RETRY_DELAY_MS = 2000;
 
 export async function installVitePlus(inputs: Inputs): Promise<void> {
   const { version } = inputs;
+
+  const existingDirs = findReusableVitePlus(version);
+  if (existingDirs) {
+    // Prepend even when already present later on PATH: another installation
+    // must not shadow the version that passed the reuse checks.
+    ensureVitePlusBinsInPath(existingDirs, true);
+    info(`Reusing ${DISPLAY_NAME}@${version} from ${existingDirs.bin}`);
+    return;
+  }
 
   info(`Installing ${DISPLAY_NAME}@${version}...`);
 
@@ -118,8 +130,18 @@ async function runInstallCommand(url: string, env: { [key: string]: string }): P
 }
 
 function ensureVitePlusBinInPath(version: string, dirsFile: string | undefined): void {
-  const binDir = resolveVitePlusBinDir(version, dirsFile, join(getVitePlusHome(), "bin"));
-  if (!process.env.PATH?.split(delimiter).includes(binDir)) {
-    addPath(binDir);
+  ensureVitePlusBinsInPath(
+    resolveVitePlusBinDirs(version, dirsFile, join(getVitePlusHome(), "bin")),
+  );
+}
+
+function ensureVitePlusBinsInPath({ bin, fallbackBin }: VitePlusBinDirs, prepend = false): void {
+  if (prepend || !process.env.PATH?.split(delimiter).includes(bin)) {
+    addPath(bin);
+  }
+  if (fallbackBin) {
+    // GITHUB_PATH only prepends. Export the full PATH so system executables
+    // stay ahead of fallback shims in this action and subsequent steps.
+    exportVariable("PATH", appendFallbackBinToPath(process.env.PATH, fallbackBin));
   }
 }
