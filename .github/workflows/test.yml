@@ -69,7 +69,7 @@ jobs:
       - name: Prepare project and record CLI downloads
         shell: bash
         run: |
-          mkdir -p "$RUNNER_TEMP/reuse-project" "$RUNNER_TEMP/reuse-curl"
+          mkdir -p "$RUNNER_TEMP/reuse-project"
           printf '{"name":"reuse-project","private":true,"devDependencies":{"vite-plus":"%s"}}\n' "$REUSE_VERSION" > "$RUNNER_TEMP/reuse-project/package.json"
           reuse_root="$RUNNER_TEMP/setup-vp-reuse"
           # The Windows installer passes this path to cmd.exe for mklink.

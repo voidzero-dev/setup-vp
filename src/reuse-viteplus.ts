@@ -1,11 +1,12 @@
 import { debug } from "@actions/core";
-import { execFileSync } from "node:child_process";
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
 import { accessSync, constants, existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { pkgPrNewCommitSha } from "./ci/install-script-urls.js";
 import { supportsScopedEnv } from "./ci/node-manager.js";
+import { isWindows } from "./ci/platform.js";
 import { parseInstalledVpVersion } from "./ci/version.js";
 import { parseVitePlusDirs, supportsVitePlusDirs } from "./ci/vp-dirs.js";
 import type { VitePlusDirs } from "./ci/vp-dirs.js";
@@ -18,6 +19,12 @@ interface PackageJson {
   name?: string;
   version?: string;
   dependencies?: Record<string, string>;
+}
+
+interface ManagementConfig {
+  shimMode?: string;
+  nodeShimMode?: string;
+  packageManagerShimModes?: Record<string, string>;
 }
 
 // Only recognize the active, complete installation. Installation, repair, and
@@ -36,12 +43,12 @@ export function findReusableVitePlus(
     env.VP_LOCAL_BINARY ||
     env.VP_SKIP_DEPS_INSTALL ||
     (env.VP_NODE_MANAGER && env.VP_NODE_MANAGER !== "yes") ||
-    !validDirOverrides(env)
+    !hasValidDirOverrides(env)
   ) {
     return undefined;
   }
 
-  const binaryName = platform === "win32" ? "vp.exe" : "vp";
+  const binaryName = isWindows(platform) ? "vp.exe" : "vp";
 
   for (const dataDir of candidateDataDirs(env, platform)) {
     const binary = join(dataDir, "current", "bin", binaryName);
@@ -56,13 +63,13 @@ export function findReusableVitePlus(
 
       // Query the payload, not a PATH command or a Windows trampoline that
       // could select a different installation through its sidecar file.
-      const options = {
+      const options: ExecFileSyncOptionsWithStringEncoding = {
         cwd: tmpdir(),
         env,
-        encoding: "utf8" as const,
+        encoding: "utf8",
         timeout: 5000,
         maxBuffer: 1024 * 1024,
-        stdio: ["ignore", "pipe", "ignore"] as ["ignore", "pipe", "ignore"],
+        stdio: ["ignore", "pipe", "ignore"],
       };
       const output = execFileSync(binary, [], { ...options, env: { ...env, VP_DUMP_DIRS: "1" } });
       const dirs = parseVitePlusDirs(output);
@@ -72,7 +79,8 @@ export function findReusableVitePlus(
       if (realpathSync(dirs.data) !== realpathSync(dataDir)) continue;
       const versionOutput = execFileSync(binary, ["--version"], options);
       if (parseInstalledVpVersion(versionOutput) !== version) continue;
-      if (!hasShimsAndConfig(dirs, binary, platform, layout, versionOutput)) continue;
+      if (!hasManagedEnvironment(dirs.config, platform)) continue;
+      if (!hasValidShims(dirs, binary, platform, layout, versionOutput)) continue;
 
       return dirs.bin;
     } catch (error) {
@@ -84,19 +92,21 @@ export function findReusableVitePlus(
   return undefined;
 }
 
-function validDirOverrides(env: NodeJS.ProcessEnv): boolean {
+function hasValidDirOverrides(env: NodeJS.ProcessEnv): boolean {
   if (env.VP_HOME && !isAbsolute(env.VP_HOME)) return false;
-  const split = [env.VP_BIN_DIR, env.VP_DATA_DIR, env.VP_CACHE_DIR].filter(Boolean);
-  return split.length === 0 || (split.length === 3 && split.every((dir) => isAbsolute(dir!)));
+  const overrides = [env.VP_BIN_DIR, env.VP_DATA_DIR, env.VP_CACHE_DIR].filter(
+    (dir): dir is string => !!dir,
+  );
+  return overrides.length === 0 || (overrides.length === 3 && overrides.every(isAbsolute));
 }
 
 function candidateDataDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string[] {
   if (env.VP_HOME) return [env.VP_HOME];
-  const home = (platform === "win32" ? env.USERPROFILE : env.HOME) || homedir();
+  const home = (isWindows(platform) ? env.USERPROFILE : env.HOME) || homedir();
   // These are discovery hints only. VP_DUMP_DIRS above decides whether the
   // candidate is the installation selected by the current environment.
   const candidates = [join(home, ".vite-plus"), env.VP_DATA_DIR];
-  if (platform === "win32") {
+  if (isWindows(platform)) {
     candidates.push(join(env.LOCALAPPDATA || join(home, "AppData", "Local"), "vite-plus", "data"));
   } else {
     const xdgData = env.XDG_DATA_HOME;
@@ -120,15 +130,15 @@ function hasDependencies(versionDir: string, version: string): boolean {
   if (!isInside(versionDir, packageFile)) return false;
   const pkg = JSON.parse(readFileSync(packageFile, "utf8")) as PackageJson;
   if (pkg.name !== "vite-plus" || pkg.version !== version || !pkg.dependencies) return false;
-  const require = createRequire(packageFile);
-  if (!statSync(join(packageFile, "..", "dist", "bin.js")).isFile()) return false;
+  const packageRequire = createRequire(packageFile);
+  if (!statSync(join(dirname(packageFile), "dist", "bin.js")).isFile()) return false;
 
   // Follow pnpm's dependency links without executing JS or relying on packages
   // exporting package.json. Do not accept dependencies from outside this install.
   return Object.keys(pkg.dependencies).every((name) =>
-    require.resolve.paths(name)?.some((modulesDir) => {
-      const dependency = join(modulesDir, name, "package.json");
-      return existsSync(dependency) && isInside(versionDir, realpathSync(dependency));
+    packageRequire.resolve.paths(name)?.some((modulesDir) => {
+      const dependencyFile = join(modulesDir, name, "package.json");
+      return existsSync(dependencyFile) && isInside(versionDir, realpathSync(dependencyFile));
     }),
   );
 }
@@ -138,20 +148,10 @@ function isInside(parent: string, child: string): boolean {
   return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
 }
 
-function hasShimsAndConfig(
-  dirs: VitePlusDirs,
-  binary: string,
-  platform: NodeJS.Platform,
-  layout: string,
-  versionOutput: string,
-): boolean {
-  const configFile = join(dirs.config, "config.json");
+function hasManagedEnvironment(configDir: string, platform: NodeJS.Platform): boolean {
+  const configFile = join(configDir, "config.json");
   const config = existsSync(configFile)
-    ? (JSON.parse(readFileSync(configFile, "utf8")) as {
-        shimMode?: string;
-        nodeShimMode?: string;
-        packageManagerShimModes?: Record<string, string>;
-      })
+    ? (JSON.parse(readFileSync(configFile, "utf8")) as ManagementConfig)
     : {};
   // runMain applies requested opt-outs after installation. Reuse must preserve
   // the installer's enabled defaults, including the scoped modes from 0.3.1.
@@ -161,16 +161,25 @@ function hasShimsAndConfig(
     ...Object.values(config.packageManagerShimModes ?? {}),
   ];
   if (modes.some((mode) => mode !== undefined && mode !== "managed")) return false;
-  if (!statSync(join(dirs.config, platform === "win32" ? "env.ps1" : "env")).isFile()) return false;
+  const envFile = join(configDir, isWindows(platform) ? "env.ps1" : "env");
+  return statSync(envFile).isFile();
+}
 
+function hasValidShims(
+  dirs: VitePlusDirs,
+  binary: string,
+  platform: NodeJS.Platform,
+  layout: string,
+  versionOutput: string,
+): boolean {
   // 0.3.1 introduced scoped package-manager modes and their own shims,
   // replacing Corepack. Requiring the old shim rejects complete installations.
   const tools = [
     ...COMMON_SHIMS,
     ...(supportsScopedEnv(versionOutput) ? PACKAGE_MANAGER_SHIMS : ["corepack"]),
   ];
-  if (platform === "win32") {
-    const trampoline = readFileSync(join(binary, "..", "vp-shim.exe"));
+  if (isWindows(platform)) {
+    const trampoline = readFileSync(join(dirname(binary), "vp-shim.exe"));
     if (!statSync(join(dirs.bin, "vp-use.cmd")).isFile()) return false;
     return tools.every((tool) => {
       const shim = readFileSync(join(dirs.bin, `${tool}.exe`));
