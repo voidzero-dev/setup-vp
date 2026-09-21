@@ -272,6 +272,9 @@ jobs:
           run-install: false
           cache: false
 
+      - name: Verify shim PATH order in a subsequent step
+        run: node test/verify-vp-path.mjs
+
       - name: Verify installation
         shell: bash
         run: |

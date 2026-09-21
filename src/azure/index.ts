@@ -91,6 +91,7 @@ export async function runPrepare(
   await ports.installVitePlus(version, {
     env,
     prependPath: (binDir) => ports.prependPath(binDir),
+    exportPath: (value) => ports.setVariable("PATH", value),
     logWarningFn: ports.logWarning,
   });
   // Finalize must use the resolved version, including pins from files or lockfiles.

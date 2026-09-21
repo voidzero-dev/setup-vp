@@ -8,8 +8,8 @@ import { pkgPrNewCommitSha } from "./ci/install-script-urls.js";
 import { supportsScopedEnv } from "./ci/node-manager.js";
 import { isWindows } from "./ci/platform.js";
 import { parseInstalledVpVersion } from "./ci/version.js";
-import { parseVitePlusDirs, supportsVitePlusDirs } from "./ci/vp-dirs.js";
-import type { VitePlusDirs } from "./ci/vp-dirs.js";
+import { getVitePlusBinDirs, parseVitePlusDirs, supportsVitePlusDirs } from "./ci/vp-dirs.js";
+import type { VitePlusBinDirs, VitePlusDirs } from "./ci/vp-dirs.js";
 
 const EXACT_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const COMMON_SHIMS = ["vp", "node", "npm", "npx", "vpx", "vpr"];
@@ -33,7 +33,7 @@ export function findReusableVitePlus(
   version: string,
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
-): string | undefined {
+): VitePlusBinDirs | undefined {
   if (
     !EXACT_VERSION_RE.test(version) ||
     pkgPrNewCommitSha(version) ||
@@ -82,7 +82,7 @@ export function findReusableVitePlus(
       if (!hasManagedEnvironment(dirs.config, platform)) continue;
       if (!hasValidShims(dirs, binary, platform, layout, versionOutput)) continue;
 
-      return dirs.bin;
+      return getVitePlusBinDirs(dirs);
     } catch (error) {
       // Missing files, invalid metadata, failed probes, and unsupported layouts
       // must not turn an optional optimization into an installation failure.

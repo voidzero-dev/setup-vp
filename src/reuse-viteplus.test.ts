@@ -108,10 +108,18 @@ afterEach(() => {
 });
 
 function reuse(): string | undefined {
-  return findReusableVitePlus(version, env, platform);
+  return findReusableVitePlus(version, env, platform)?.bin;
 }
 
 describe("findReusableVitePlus", () => {
+  it("returns the fallback bin from the selected data directory", () => {
+    bin = join(root, "separate-bin");
+    createInstallation();
+    const fallbackBin = join(data, "fallback-bin");
+    mkdirSync(fallbackBin);
+    expect(findReusableVitePlus(version, env, platform)).toEqual({ bin, fallbackBin });
+  });
+
   describe.each(["linux", "win32"] as const)("%s shim layouts", (targetPlatform) => {
     beforeEach(() => {
       platform = targetPlatform;
