@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { configureAuth } from "../ci/auth.js";
+import { installVitePlus } from "../ci/install-viteplus.js";
 import { setupSfw } from "../ci/install-sfw.js";
 import { parseRunInstall } from "../ci/run-install.js";
 import { runPrepare, runFinalize } from "./index.js";
@@ -19,7 +20,7 @@ function fixture() {
   mkdirSync(project);
   const env = { SYSTEM_DEFAULTWORKINGDIRECTORY: root, SETUP_VP_WORKING_DIRECTORY: "app" };
   const ports = {
-    installVitePlus: vi.fn(async () => {}),
+    installVitePlus: vi.fn<typeof installVitePlus>(async () => {}),
     prepareCacheMetadata: vi.fn(() => ({ ready: false })),
     configureAuth: vi.fn(configureAuth),
     setupSfw: vi.fn<typeof setupSfw>().mockResolvedValue("vp"),
@@ -37,6 +38,34 @@ function fixture() {
 }
 
 describe("Azure parity", () => {
+  it("exports the full installer PATH for subsequent Azure tasks", async () => {
+    const { root, env, ports } = fixture();
+    const bin = path.join(root, "bin");
+    const data = path.join(root, "data");
+    const fallbackBin = path.join(data, "fallback-bin");
+    mkdirSync(fallbackBin, { recursive: true });
+    ports.installVitePlus.mockImplementation((version, options) =>
+      installVitePlus(version, {
+        ...options,
+        runInstall: (_url, installEnv) => {
+          writeFileSync(
+            installEnv.SETUP_VP_DIRS_FILE!,
+            `data\t${data}\nbin\t${bin}\ncache\t/cache\nconfig\t/config\nstate\t/state\n`,
+          );
+          return 0;
+        },
+      }),
+    );
+
+    await runPrepare({ ...env, PATH: "/system/bin", SETUP_VP_VERSION: "latest" }, ports);
+
+    expect(ports.prependPath).toHaveBeenCalledWith(bin);
+    expect(ports.setVariable).toHaveBeenCalledWith(
+      "PATH",
+      [bin, "/system/bin", fallbackBin].join(path.delimiter),
+    );
+  });
+
   it("resolves a monorepo catalog pin and selects Node from a file in workingDirectory", async () => {
     const { root, project, env, ports } = fixture();
     writeFileSync(
