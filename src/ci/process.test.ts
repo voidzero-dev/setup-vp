@@ -3,10 +3,10 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -14,10 +14,12 @@ import { isWindows } from "./platform.js";
 import { commandPath, getCommandOutput, run, runWithOutput } from "./process.js";
 
 const directories: string[] = [];
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllEnvs();
-  for (const directory of directories.splice(0))
-    rmSync(directory, { recursive: true, force: true });
+  for (const directory of directories.splice(0)) {
+    // Windows can briefly retain a lock on a native executable after it exits.
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
 });
 
 describe("portable process helpers", () => {
@@ -87,5 +89,7 @@ process.exit(Number(process.env.SETUP_VP_TEST_EXIT || 0));
       expect((await runWithOutput("vp", [script], { cwd: root })).exitCode).toBe(7);
       expect(getCommandOutput("vp", [script], { cwd: root })).toBeUndefined();
     },
+    // This test starts several native processes; Windows runners can exceed the default 5s.
+    30_000,
   );
 });

@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { configureAuth } from "../ci/auth.js";
 import { installVitePlus } from "../ci/install-viteplus.js";
-import { setupSfw } from "../ci/install-sfw.js";
+import { setupSfw, SFW_VERSION } from "../ci/install-sfw.js";
 import { parseRunInstall } from "../ci/run-install.js";
 import { runPrepare, runFinalize } from "./index.js";
 import type { AzurePorts } from "./index.js";
@@ -126,7 +126,7 @@ describe("Azure parity", () => {
     expect(ports.setVariable).toHaveBeenCalledWith("SETUP_VP_SFW_READY", "true");
     expect(ports.setVariable).toHaveBeenCalledWith(
       "SETUP_VP_SFW_CACHE_KEY",
-      expect.stringMatching(/^v1\.15\.1-sfw-free-/),
+      expect.stringMatching(new RegExp(`^${SFW_VERSION.replaceAll(".", "\\.")}-sfw-free-`)),
     );
   });
 
