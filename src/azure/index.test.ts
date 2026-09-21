@@ -4,6 +4,8 @@ import { runFinalize, runPrepare } from "./index.js";
 describe("Azure lifecycle", () => {
   it("runs prepare in install → cache order", async () => {
     const calls: string[] = [];
+    const setVariable = vi.fn();
+    const prependPath = vi.fn();
     await runPrepare(
       {
         SETUP_VP_VERSION: "latest",
@@ -11,8 +13,10 @@ describe("Azure lifecycle", () => {
         SYSTEM_DEFAULTWORKINGDIRECTORY: process.cwd(),
       },
       {
-        installVitePlus: async () => {
+        installVitePlus: async (_version, options) => {
           calls.push("install");
+          options?.exportPath?.("/bin:/system:/fallback");
+          options?.prependPath?.("/bin");
         },
         prepareCacheMetadata: () => {
           calls.push("cache");
@@ -25,14 +29,16 @@ describe("Azure lifecycle", () => {
         getCommandOutput: () => "vp v0.2.2",
         run: () => undefined,
         parseInstalledVpVersion: () => "0.2.2",
-        prependPath: () => undefined,
-        setVariable: () => undefined,
+        prependPath,
+        setVariable,
         logWarning: () => undefined,
         logInfo: () => undefined,
       },
     );
 
     expect(calls).toEqual(["install", "cache"]);
+    expect(setVariable).toHaveBeenCalledWith("PATH", "/bin:/system:/fallback");
+    expect(prependPath).toHaveBeenCalledExactlyOnceWith("/bin");
   });
 
   it("runs finalize in auth → sfw → install → version order", async () => {

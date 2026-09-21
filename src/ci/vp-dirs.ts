@@ -48,6 +48,14 @@ export function readVitePlusDirs(filePath: string): VitePlusDirs | undefined {
   return output === undefined ? undefined : parseVitePlusDirs(output);
 }
 
+export function readVitePlusPath(filePath: string | undefined): string | undefined {
+  if (!filePath) return undefined;
+  return readVitePlusProbe(filePath)
+    ?.split(/\r?\n/)
+    .find((line) => line.startsWith("path\t"))
+    ?.slice(5);
+}
+
 function readVitePlusProbe(filePath: string): string | undefined {
   try {
     return readFileSync(filePath, "utf8");
@@ -140,6 +148,15 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $env:VP_DUMP_DIRS = '1'
 & $vpPath | Add-Content -LiteralPath $dirsFile -Encoding UTF8
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# Use Vite+'s generated environment so system-first shims stay last in PATH.
+$configLine = Get-Content -LiteralPath $dirsFile | Where-Object { $_.StartsWith("config" + [char]9) } | Select-Object -Last 1
+if ($configLine) {
+  $envFile = Join-Path $configLine.Substring(7) 'env.ps1'
+  if (Test-Path -LiteralPath $envFile -PathType Leaf) {
+    . $envFile
+    Add-Content -LiteralPath $dirsFile -Value ("path" + [char]9 + $env:PATH) -Encoding UTF8
+  }
+}
 `.trim();
     return { command: "pwsh", args: ["-Command", script] };
   }
@@ -177,6 +194,14 @@ vp_dir="\${SHIM_DIR:-\${INSTALL_DIR:-\${VP_HOME:-$HOME/.vite-plus}}/bin}"
 if [ -x "$vp_dir/vp" ]; then
   "$vp_dir/vp" --version > "$${VP_DIRS_FILE_ENV}"
   VP_DUMP_DIRS=1 "$vp_dir/vp" >> "$${VP_DIRS_FILE_ENV}"
+  # Read the resolved config directory, including split/custom installations.
+  while IFS=$'\\t' read -r key value; do
+    if [ "$key" = config ] && [ -f "$value/env" ]; then
+      source "$value/env"
+      printf 'path\\t%s\\n' "$PATH" >> "$${VP_DIRS_FILE_ENV}"
+      break
+    fi
+  done < "$${VP_DIRS_FILE_ENV}"
 fi
 `.trim();
   return { command: "bash", args: ["-c", script] };

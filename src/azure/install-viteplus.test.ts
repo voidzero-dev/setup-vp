@@ -16,6 +16,33 @@ function writeDirsFile(env: Record<string, string>, bin: string): void {
 }
 
 describe("installVitePlus", () => {
+  it.each(["linux", "win32"] as const)(
+    "propagates generated %s PATH even when main bin is already present",
+    async (platform) => {
+      const separator = platform === "win32" ? ";" : ":";
+      const bin = platform === "win32" ? "C:\\custom bin" : "/custom bin";
+      const originalPath = [bin, "system"].join(separator);
+      const installedPath = [originalPath, "fallback"].join(separator);
+      const env = { PATH: originalPath };
+      const exportPath = vi.fn();
+      const prependPath = vi.fn();
+      await installVitePlus("0.3.3", {
+        platform,
+        env,
+        exportPath,
+        prependPath,
+        runInstall: (_url, installEnv) => {
+          writeDirsFile(installEnv, bin);
+          writeFileSync(installEnv.SETUP_VP_DIRS_FILE, `\npath\t${installedPath}\n`, { flag: "a" });
+          return 0;
+        },
+      });
+      expect(env.PATH).toBe(installedPath);
+      expect(exportPath).toHaveBeenCalledExactlyOnceWith(installedPath);
+      expect(prependPath).toHaveBeenCalledExactlyOnceWith(bin);
+    },
+  );
+
   it("uses PowerShell installers on Windows and bash installers on Unix", async () => {
     const calls: NodeJS.Platform[] = [];
     const runInstall = vi.fn(

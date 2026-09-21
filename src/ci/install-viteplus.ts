@@ -8,6 +8,7 @@ import {
   createVitePlusDirsFile,
   getInstallScriptCommand,
   removeVitePlusDirsFile,
+  readVitePlusPath,
   resolveVitePlusBinDir,
   supportsVitePlusDirs,
   VP_DIRS_FILE_ENV,
@@ -53,6 +54,7 @@ export async function installVitePlus(
     platform?: NodeJS.Platform;
     env?: NodeJS.ProcessEnv;
     prependPath?: (binDir: string) => void;
+    exportPath?: (value: string) => void;
     sleep?: (ms: number) => Promise<void>;
     runInstall?: typeof runInstallCommand;
     logWarningFn?: (message: string) => void;
@@ -128,9 +130,17 @@ export async function installVitePlus(
       dirsFile,
       join(getVitePlusHome(platform, targetEnv), "bin"),
     );
+    const installedPath = readVitePlusPath(dirsFile);
+    if (installedPath !== undefined) {
+      targetEnv.PATH = installedPath;
+      options.exportPath?.(installedPath);
+      prependPath?.(binDir);
+      return;
+    }
     const separator = isWindows(platform) ? ";" : ":";
     if (!targetEnv.PATH?.split(separator).includes(binDir)) {
       targetEnv.PATH = `${binDir}${separator}${targetEnv.PATH || ""}`;
+      options.exportPath?.(targetEnv.PATH);
       prependPath?.(binDir);
     }
   }

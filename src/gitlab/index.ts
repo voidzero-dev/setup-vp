@@ -86,7 +86,7 @@ export async function main(phase = "setup"): Promise<void> {
     projectDir,
   );
 
-  await installVitePlus(version, { env, prependPath: () => exportShellEnv("PATH", env.PATH) });
+  await installVitePlus(version, { env, exportPath: (value) => exportShellEnv("PATH", value) });
 
   applyEnvironmentModes();
   if (nodeVersion) run("vp", ["env", "use", nodeVersion], { cwd: projectDir });

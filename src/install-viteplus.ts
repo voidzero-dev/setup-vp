@@ -1,4 +1,4 @@
-import { info, warning, addPath } from "@actions/core";
+import { info, warning, addPath, exportVariable } from "@actions/core";
 import { exec } from "@actions/exec";
 import { delimiter, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -7,6 +7,7 @@ import {
   createVitePlusDirsFile,
   getInstallScriptCommand,
   removeVitePlusDirsFile,
+  readVitePlusPath,
   resolveVitePlusBinDir,
   supportsVitePlusDirs,
   VP_DIRS_FILE_ENV,
@@ -119,7 +120,10 @@ async function runInstallCommand(url: string, env: { [key: string]: string }): P
 
 function ensureVitePlusBinInPath(version: string, dirsFile: string | undefined): void {
   const binDir = resolveVitePlusBinDir(version, dirsFile, join(getVitePlusHome(), "bin"));
-  if (!process.env.PATH?.split(delimiter).includes(binDir)) {
+  const installedPath = readVitePlusPath(dirsFile);
+  // GITHUB_PATH only prepends; persist the full generated PATH through GITHUB_ENV.
+  if (installedPath !== undefined || !process.env.PATH?.split(delimiter).includes(binDir)) {
     addPath(binDir);
   }
+  if (installedPath !== undefined) exportVariable("PATH", installedPath);
 }

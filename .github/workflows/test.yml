@@ -284,6 +284,60 @@ jobs:
           assert.equal(node.mode, 'managed', 'Node.js management must remain enabled');
           NODE
 
+      - name: Verify command resolution without and with system package managers
+        shell: bash
+        env:
+          EXPECTED_MODES: ${{ matrix.config.modes }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+          import { tmpdir } from 'node:os';
+          import { delimiter, join } from 'node:path';
+
+          const managers = ['npm', 'pnpm', 'yarn', 'bun'];
+          const modes = JSON.parse(process.env.EXPECTED_MODES);
+          const windows = process.platform === 'win32';
+          const dirs = Object.fromEntries(execFileSync('vp', [], {
+            env: { ...process.env, VP_DUMP_DIRS: '1' }, encoding: 'utf8',
+          }).trim().split(/\r?\n/).map(line => line.split('\t')));
+          const system = mkdtempSync(join(tmpdir(), 'setup-vp-system-'));
+          const command = manager => windows ? `${manager}.exe` : manager;
+          const version = (manager, path = process.env.PATH) => execFileSync(command(manager), ['--version'], {
+            env: { ...process.env, PATH: path }, cwd: system, encoding: 'utf8',
+          }).trim();
+          try {
+            // Preserve the actual exported entries and ordering; do not manufacture the missing fallback.
+            const shimDirs = [dirs.bin, join(dirs.data, 'fallback-bin')];
+            const isolated = process.env.PATH.split(delimiter).filter(entry => shimDirs.includes(entry));
+            if (windows) {
+              isolated.push(join(process.env.SystemRoot, 'System32'));
+            } else {
+              // pnpm's native launcher needs these utilities, but no system package managers.
+              const utilities = join(system, 'utilities');
+              mkdirSync(utilities);
+              for (const name of ['sed', 'dirname', 'uname']) {
+                const executable = execFileSync('/bin/sh', ['-c', `command -v ${name}`], { encoding: 'utf8' }).trim();
+                symlinkSync(executable, join(utilities, name));
+              }
+              isolated.push(utilities);
+            }
+            for (const [index, manager] of managers.entries()) {
+              const managedVersion = version(manager, isolated.join(delimiter));
+              assert.ok(managedVersion, `${manager} must have a managed fallback`);
+              // A copy of Node acts as a native system executable on every OS.
+              copyFileSync(process.execPath, join(system, command(manager)));
+              const withSystem = [dirs.bin, system, ...isolated.slice(1)].join(delimiter);
+              assert.equal(version(manager, withSystem), modes[index] === 'managed' ? managedVersion : process.version);
+              const laterAddition = [system, process.env.PATH].join(delimiter);
+              assert.equal(version(manager, laterAddition), process.version, 'later PATH additions must win');
+            }
+          } finally {
+            rmSync(system, { recursive: true, force: true });
+          }
+          NODE
+
   test-default-version:
     # End-to-end check of the default version-resolution logic: with no `version`
     # or `version-file` input, the action auto-detects the vite-plus version from

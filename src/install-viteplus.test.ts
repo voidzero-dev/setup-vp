@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { exec } from "@actions/exec";
-import { addPath, warning } from "@actions/core";
+import { addPath, warning, exportVariable } from "@actions/core";
 import { writeFileSync } from "node:fs";
 import { installVitePlus } from "./install-viteplus.js";
 import type { Inputs } from "./types.js";
@@ -9,6 +9,7 @@ vi.mock("@actions/core", () => ({
   info: vi.fn(),
   warning: vi.fn(),
   addPath: vi.fn(),
+  exportVariable: vi.fn(),
 }));
 
 vi.mock("@actions/exec", () => ({
@@ -84,6 +85,22 @@ describe("installVitePlus", () => {
     expect(exec).toHaveBeenCalledTimes(1);
     expect(warning).not.toHaveBeenCalled();
     expect(addPath).toHaveBeenCalledWith("/test/data/bin");
+  });
+
+  it("persists generated PATH while reserving GITHUB_PATH for the main bin", async () => {
+    const installedPath = "/custom/bin:/system/bin:/data/fallback-bin";
+    vi.stubEnv("PATH", "/custom/bin:/system/bin");
+    vi.mocked(exec).mockImplementationOnce(async (_command, _args, options) => {
+      writeDirsFile(options, "/custom/bin");
+      const env = (options as { env: Record<string, string> }).env;
+      writeFileSync(env.SETUP_VP_DIRS_FILE, `\npath\t${installedPath}\n`, { flag: "a" });
+      return 0;
+    });
+
+    await installVitePlus(baseInputs);
+
+    expect(exportVariable).toHaveBeenCalledWith("PATH", installedPath);
+    expect(addPath).toHaveBeenCalledExactlyOnceWith("/custom/bin");
   });
 
   it("should fall back to the legacy bin for Vite+ releases without VpDirs", async () => {
