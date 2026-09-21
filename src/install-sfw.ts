@@ -5,19 +5,13 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { getSfwAssetName, isMuslLinux, SFW_RELEASE_BASE, SFW_VERSION } from "./ci/install-sfw.js";
 import { isWindows } from "./ci/platform.js";
 import { resolveSfwEnabled } from "./ci/sfw.js";
 import type { Inputs } from "./types.js";
 
-// Pin sfw so a re-run of the same commit gets the same binary. Renovate
-// watches SFW_VERSION (see .github/renovate.json customManagers entry) and
-// opens PRs whenever SocketDev publishes a new sfw-free release, keeping
-// us close to the latest malware-detection updates without giving up
-// reproducibility. For stricter supply-chain hygiene, users can compose
-// `socketdev/action@<sha>` ahead of this action — see README "Advanced:
-// stricter supply chain via socketdev/action".
-const SFW_VERSION = "v1.15.1";
-const SFW_RELEASE_BASE = `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}`;
+export { getSfwAssetName, isMuslLinux };
+
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 60";
@@ -44,40 +38,6 @@ export function isSfwSupported(
   } catch {
     return false;
   }
-}
-
-export function isMuslLinux(): boolean {
-  if (process.platform !== "linux") return false;
-  try {
-    const report = process.report?.getReport() as
-      | { header?: { glibcVersionRuntime?: string } }
-      | undefined;
-    if (report?.header && !report.header.glibcVersionRuntime) {
-      return true;
-    }
-  } catch {
-    // fall through to filesystem fallback
-  }
-  return existsSync("/etc/alpine-release");
-}
-
-export function getSfwAssetName(platform: NodeJS.Platform, arch: string, isMusl: boolean): string {
-  if (platform === "darwin") {
-    if (arch === "arm64") return "sfw-free-macos-arm64";
-    if (arch === "x64") return "sfw-free-macos-x86_64";
-  } else if (platform === "linux") {
-    if (arch === "arm64") {
-      return isMusl ? "sfw-free-musl-linux-arm64" : "sfw-free-linux-arm64";
-    }
-    if (arch === "x64") {
-      return isMusl ? "sfw-free-musl-linux-x86_64" : "sfw-free-linux-x86_64";
-    }
-  } else if (isWindows(platform)) {
-    if (arch === "arm64") return "sfw-free-windows-arm64.exe";
-    if (arch === "x64") return "sfw-free-windows-x86_64.exe";
-  }
-  const libcSuffix = platform === "linux" ? ` (${isMusl ? "musl" : "glibc"})` : "";
-  throw new Error(`Unsupported platform/arch for sfw: ${platform}/${arch}${libcSuffix}`);
 }
 
 function getSfwBinDir(): string {

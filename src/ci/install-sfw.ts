@@ -9,8 +9,10 @@ import { commandPath } from "./process.js";
 import { resolveSfwEnabled } from "./sfw.js";
 import type { ExportVariable, InstallCommand, LogFn, RunInstallEntry } from "./types.js";
 
-export const SFW_VERSION = "v1.15.1";
-const SFW_RELEASE_BASE = `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}`;
+// All integrations use this version pin. Renovate updates it through
+// .github/renovate.json so reruns of the same commit download the same release.
+export const SFW_VERSION = "v1.15.2";
+export const SFW_RELEASE_BASE = `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}`;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 type DownloadClient = typeof httpGet;
 
@@ -29,9 +31,6 @@ export function isMuslLinux(): boolean {
   return existsSync("/etc/alpine-release");
 }
 
-/**
- * Mirrors src/install-sfw.ts asset naming for portable CI runners.
- */
 export function getSfwAssetName(platform: NodeJS.Platform, arch: string, isMusl: boolean): string {
   if (platform === "darwin") {
     if (arch === "arm64") return "sfw-free-macos-arm64";

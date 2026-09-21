@@ -293,8 +293,12 @@ jobs:
         id: preview
         shell: bash
         run: |
-          version="$(curl -fsSL --connect-timeout 5 --max-time 15 https://registry-bridge.viteplus.dev/vite-plus \
-            | jq -r '.time | to_entries | map(select(.key | test("^0\\.0\\.0-commit\\.[0-9a-f]{40}$"))) | max_by(.value).key')"
+          metadata="$RUNNER_TEMP/setup-vp-preview-metadata.json"
+          # Download to a file so curl can discard partial responses before retrying.
+          curl -fsSL --connect-timeout 5 --max-time 15 \
+            --retry 3 --retry-delay 2 --retry-max-time 60 \
+            -o "$metadata" https://registry-bridge.viteplus.dev/vite-plus
+          version="$(jq -r '.time | to_entries | map(select(.key | test("^0\\.0\\.0-commit\\.[0-9a-f]{40}$"))) | max_by(.value).key' "$metadata")"
           if [[ ! "$version" =~ ^0\.0\.0-commit\.[0-9a-f]{40}$ ]]; then
             echo "Unexpected preview build version from the registry bridge: ${version}" >&2
             exit 1

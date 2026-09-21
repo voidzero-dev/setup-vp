@@ -18,10 +18,12 @@ vi.mock("@actions/cache", () => ({
 vi.mock("@actions/exec", () => ({
   exec: vi.fn(),
 }));
-vi.mock("node:child_process", () => ({
+vi.mock("node:child_process", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:child_process")>()),
   execFileSync: vi.fn(),
 }));
-vi.mock("node:fs", () => ({
+vi.mock("node:fs", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:fs")>()),
   chmodSync: vi.fn(),
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
@@ -35,6 +37,7 @@ import { addPath, info, warning } from "@actions/core";
 import { exec } from "@actions/exec";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { SFW_VERSION } from "./ci/install-sfw.js";
 import { getSfwAssetName, installSfw, isSfwSupported, setupSfw } from "./install-sfw.js";
 import type { Inputs } from "./types.js";
 
@@ -248,6 +251,9 @@ describe("installSfw", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     stubPlatform("linux", "x64");
+    vi.spyOn(process.report, "getReport").mockReturnValue({
+      header: { glibcVersionRuntime: "2.39" },
+    });
     // existsSync needs nuance: /etc/alpine-release → false (glibc), and
     // the downloaded binary path → true (so we proceed to chmod + addPath).
     vi.mocked(existsSync).mockImplementation((path) => {
@@ -258,12 +264,13 @@ describe("installSfw", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
     Object.defineProperty(process, "arch", { value: originalArch, configurable: true });
   });
 
   it("uses the cached binary and skips download on a cache hit", async () => {
-    vi.mocked(restoreCache).mockResolvedValueOnce("sfw-v1.11.0-linux-x64-glibc");
+    vi.mocked(restoreCache).mockResolvedValueOnce(`sfw-${SFW_VERSION}-linux-x64-glibc`);
     await installSfw();
     expect(exec).not.toHaveBeenCalled(); // no download attempted
     expect(saveCache).not.toHaveBeenCalled(); // no re-save on hit
@@ -271,15 +278,38 @@ describe("installSfw", () => {
     expect(info).toHaveBeenCalledWith(expect.stringContaining("restored from cache"));
   });
 
-  it("downloads and writes to cache on a cache miss", async () => {
-    vi.mocked(restoreCache).mockResolvedValueOnce(undefined);
-    vi.mocked(exec).mockResolvedValueOnce(0); // download success
-    vi.mocked(saveCache).mockResolvedValueOnce(123);
-    await installSfw();
-    expect(exec).toHaveBeenCalledTimes(1);
-    expect(saveCache).toHaveBeenCalledTimes(1);
-    expect(info).toHaveBeenCalledWith(expect.stringContaining("sfw cached under key"));
-  });
+  it.each([
+    ["linux", "x64", false, "sfw-free-linux-x86_64", "bash", "-c"],
+    ["linux", "arm64", true, "sfw-free-musl-linux-arm64", "bash", "-c"],
+    ["darwin", "arm64", false, "sfw-free-macos-arm64", "bash", "-c"],
+    ["win32", "x64", false, "sfw-free-windows-x86_64.exe", "pwsh", "-Command"],
+  ] as const)(
+    "downloads and caches the shared SFW version on %s/%s (musl=%s)",
+    async (platform, arch, isMusl, asset, shell, commandFlag) => {
+      stubPlatform(platform, arch);
+      if (isMusl) vi.spyOn(process.report, "getReport").mockReturnValue({ header: {} });
+      vi.mocked(restoreCache).mockResolvedValueOnce(undefined);
+      vi.mocked(exec).mockResolvedValueOnce(0);
+      vi.mocked(saveCache).mockResolvedValueOnce(123);
+
+      await installSfw();
+
+      const cacheKey = `sfw-${SFW_VERSION}-${platform}-${arch}-${isMusl ? "musl" : "glibc"}`;
+      expect(restoreCache).toHaveBeenCalledExactlyOnceWith([expect.any(String)], cacheKey);
+      expect(exec).toHaveBeenCalledExactlyOnceWith(
+        shell,
+        [
+          commandFlag,
+          expect.stringContaining(
+            `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}/${asset}`,
+          ),
+        ],
+        { ignoreReturnCode: true },
+      );
+      expect(saveCache).toHaveBeenCalledExactlyOnceWith([expect.any(String)], cacheKey);
+      expect(info).toHaveBeenCalledWith(expect.stringContaining("sfw cached under key"));
+    },
+  );
 
   it("falls through to download when cache restore throws", async () => {
     vi.mocked(restoreCache).mockRejectedValueOnce(new Error("cache service down"));
