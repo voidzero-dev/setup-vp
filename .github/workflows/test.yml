@@ -221,7 +221,7 @@ jobs:
           node test/reuse-installation-snapshot.mjs "$VP_HOME/current" > "$RUNNER_TEMP/reuse-before.json"
           # Preserve symlinks, permissions, and nanosecond timestamps across jobs.
           tar --format=posix -czf "$RUNNER_TEMP/reuse-installation.tar.gz" -C "$VP_HOME" .
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: reuse-installation
           path: |
@@ -238,7 +238,7 @@ jobs:
       VP_PR_VERSION: ""
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: reuse-installation
           path: ${{ runner.temp }}
