@@ -11,7 +11,7 @@ import type { ExportVariable, InstallCommand, LogFn, RunInstallEntry } from "./t
 
 // All integrations use this version pin. Renovate updates it through
 // .github/renovate.json so reruns of the same commit download the same release.
-export const SFW_VERSION = "v1.15.2";
+export const SFW_VERSION = "v1.15.4";
 export const SFW_RELEASE_BASE = `https://github.com/SocketDev/sfw-free/releases/download/${SFW_VERSION}`;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 type DownloadClient = typeof httpGet;
