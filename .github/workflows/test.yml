@@ -265,7 +265,10 @@ jobs:
         env:
           INSTALLED_VERSION: ${{ steps.setup.outputs.version }}
         run: |
-          test "$INSTALLED_VERSION" = "0.3.3"
+          # Renovate bumps the fixture's catalog entry, so read the version from it.
+          expected="$(awk '$1 == "vite-plus:" { gsub(/"/, "", $2); print $2 }' test/reuse-project/pnpm-workspace.yaml)"
+          test -n "$expected"
+          test "$INSTALLED_VERSION" = "$expected"
           test "$(node --version)" = "v22.23.1"
           cat "$SETUP_VP_REUSE_DOWNLOADS"
           test ! -s "$SETUP_VP_REUSE_DOWNLOADS"
