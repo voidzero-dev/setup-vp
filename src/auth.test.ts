@@ -315,36 +315,24 @@ describe("propagateProjectNpmrcAuth", () => {
     expect(() => propagateProjectNpmrcAuth(projectDir)).toThrow("EACCES");
   });
 
-  it("auto-writes _authToken for a scoped registry when NODE_AUTH_TOKEN is set", () => {
-    mockNpmrc("@myorg:registry=https://npm.pkg.github.com");
-    vi.stubEnv("NODE_AUTH_TOKEN", "ghp_xxx");
+  it.each([
+    "registry=https://attacker.invalid/",
+    "@scope:registry=https://attacker.invalid/npm/",
+    "registry=https://registry.npmjs.org/\n@scope:registry=https://attacker.invalid/",
+  ])("does not add auth for repository-controlled registries: %s", (content) => {
+    mockNpmrc(content);
+    vi.stubEnv("NODE_AUTH_TOKEN", "secret");
 
     propagateProjectNpmrcAuth(projectDir);
 
-    expect(writeFileSync).toHaveBeenCalledWith(
-      supplementalPath,
-      expect.stringContaining("//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"),
-    );
-    expect(exportVariable).toHaveBeenCalledWith("NPM_CONFIG_USERCONFIG", supplementalPath);
-    expect(exportVariable).toHaveBeenCalledWith("PNPM_CONFIG_USERCONFIG", supplementalPath);
-    expect(exportVariable).toHaveBeenCalledWith("NODE_AUTH_TOKEN", "ghp_xxx");
+    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(exportVariable).not.toHaveBeenCalled();
   });
 
-  it("auto-writes _authToken for the default registry", () => {
-    mockNpmrc("registry=https://registry.example.com");
-    vi.stubEnv("NODE_AUTH_TOKEN", "tok");
-
-    propagateProjectNpmrcAuth(projectDir);
-
-    expect(writeFileSync).toHaveBeenCalledWith(
-      supplementalPath,
-      expect.stringContaining("//registry.example.com/:_authToken=${NODE_AUTH_TOKEN}"),
-    );
-  });
-
-  it("does not overwrite existing _authToken entries in the project .npmrc", () => {
+  it("preserves explicit auth without adding tokens for other project registries", () => {
     mockNpmrc(
       [
+        "registry=https://attacker.invalid/",
         "@myorg:registry=https://npm.pkg.github.com",
         "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}",
       ].join("\n"),
@@ -355,7 +343,7 @@ describe("propagateProjectNpmrcAuth", () => {
     propagateProjectNpmrcAuth(projectDir);
 
     expect(writeFileSync).not.toHaveBeenCalled();
-    expect(exportVariable).toHaveBeenCalledWith("GITHUB_TOKEN", "gh-token");
+    expect(exportVariable).toHaveBeenCalledExactlyOnceWith("GITHUB_TOKEN", "gh-token");
   });
 
   it("does not write supplemental .npmrc when NODE_AUTH_TOKEN is not set", () => {
@@ -368,63 +356,21 @@ describe("propagateProjectNpmrcAuth", () => {
     expect(exportVariable).not.toHaveBeenCalledWith("PNPM_CONFIG_USERCONFIG", expect.anything());
   });
 
-  it("writes _authToken for multiple missing registries", () => {
+  it("leaves the runner user config unchanged for project registries", () => {
     mockNpmrc(
-      ["@a:registry=https://one.example.com", "@b:registry=https://two.example.com"].join("\n"),
+      "@scope:registry=https://attacker.invalid/",
+      "strict-ssl=true\n//trusted.example/:_authToken=${CUSTOM_TOKEN}",
     );
-    vi.stubEnv("NODE_AUTH_TOKEN", "tok");
-
-    propagateProjectNpmrcAuth(projectDir);
-
-    const written = vi.mocked(writeFileSync).mock.calls[0]![1] as string;
-    expect(written).toContain("//one.example.com/:_authToken=${NODE_AUTH_TOKEN}");
-    expect(written).toContain("//two.example.com/:_authToken=${NODE_AUTH_TOKEN}");
-  });
-
-  it("preserves unrelated lines already in RUNNER_TEMP/.npmrc", () => {
-    mockNpmrc(
-      "@myorg:registry=https://npm.pkg.github.com",
-      "always-auth=true\n//other.example.com/:_authToken=preserved",
-    );
-    vi.stubEnv("NODE_AUTH_TOKEN", "tok");
-
-    propagateProjectNpmrcAuth(projectDir);
-
-    const written = vi.mocked(writeFileSync).mock.calls[0]![1] as string;
-    expect(written).toContain("always-auth=true");
-    expect(written).toContain("//other.example.com/:_authToken=preserved");
-    expect(written).toContain("//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}");
-  });
-
-  it("replaces stale _authToken for the same registry in RUNNER_TEMP/.npmrc", () => {
-    mockNpmrc(
-      "@myorg:registry=https://npm.pkg.github.com",
-      "//npm.pkg.github.com/:_authToken=old-value",
-    );
-    vi.stubEnv("NODE_AUTH_TOKEN", "tok");
-
-    propagateProjectNpmrcAuth(projectDir);
-
-    const written = vi.mocked(writeFileSync).mock.calls[0]![1] as string;
-    expect(written).not.toContain("old-value");
-    expect(written).toContain("//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}");
-  });
-
-  it("skips the write on re-run when RUNNER_TEMP/.npmrc already matches", () => {
-    mockNpmrc(
-      "@myorg:registry=https://npm.pkg.github.com",
-      `//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}`,
-    );
-    vi.stubEnv("NODE_AUTH_TOKEN", "tok");
+    vi.stubEnv("NODE_AUTH_TOKEN", "secret");
 
     propagateProjectNpmrcAuth(projectDir);
 
     expect(writeFileSync).not.toHaveBeenCalled();
-    expect(exportVariable).toHaveBeenCalledWith("NPM_CONFIG_USERCONFIG", supplementalPath);
-    expect(exportVariable).toHaveBeenCalledWith("PNPM_CONFIG_USERCONFIG", supplementalPath);
+    expect(exportVariable).not.toHaveBeenCalled();
+    expect(readFileSync).toHaveBeenCalledExactlyOnceWith(npmrcPath, "utf8");
   });
 
-  it("skips registries whose value contains ${VAR} (cannot synthesize a valid auth key)", () => {
+  it("propagates environment references in registry values without adding auth", () => {
     mockNpmrc("@myorg:registry=${CUSTOM_REGISTRY}");
     vi.stubEnv("NODE_AUTH_TOKEN", "tok");
     vi.stubEnv("CUSTOM_REGISTRY", "https://npm.example.com");
@@ -435,7 +381,7 @@ describe("propagateProjectNpmrcAuth", () => {
     expect(exportVariable).toHaveBeenCalledWith("CUSTOM_REGISTRY", "https://npm.example.com");
   });
 
-  it("treats _authToken key case-insensitively when checking project .npmrc", () => {
+  it("propagates token references from uppercase auth keys without adding auth", () => {
     mockNpmrc(
       [
         "@myorg:registry=https://npm.pkg.github.com",
@@ -447,5 +393,6 @@ describe("propagateProjectNpmrcAuth", () => {
     propagateProjectNpmrcAuth(projectDir);
 
     expect(writeFileSync).not.toHaveBeenCalled();
+    expect(exportVariable).toHaveBeenCalledExactlyOnceWith("NODE_AUTH_TOKEN", "tok");
   });
 });

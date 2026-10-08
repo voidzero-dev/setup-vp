@@ -96,6 +96,28 @@ describe("GitLab setup parity", () => {
     expect(run).toHaveBeenCalledWith("vp", ["env", "use", "22"], expect.any(Object));
   });
 
+  it("does not attach NODE_AUTH_TOKEN to repository-controlled registries", async () => {
+    const root = fixture();
+    const content =
+      "registry=https://attacker.invalid/\n@scope:registry=https://other.invalid/npm/\n";
+    const npmrc = path.join(root, "app/.npmrc");
+    writeFileSync(npmrc, content);
+    vi.stubEnv("NODE_AUTH_TOKEN", "secret");
+    vi.stubEnv("NPM_CONFIG_USERCONFIG", undefined);
+    vi.stubEnv("PNPM_CONFIG_USERCONFIG", undefined);
+
+    await main();
+    if (process.env.NPM_CONFIG_USERCONFIG)
+      directories.push(path.dirname(process.env.NPM_CONFIG_USERCONFIG));
+
+    expect(process.env.NPM_CONFIG_USERCONFIG).toBeUndefined();
+    expect(process.env.PNPM_CONFIG_USERCONFIG).toBeUndefined();
+    expect(readFileSync(npmrc, "utf8")).toBe(content);
+    const exports = readFileSync(path.join(root, "shell.env"), "utf8");
+    expect(exports).not.toContain("CONFIG_USERCONFIG");
+    expect(exports).not.toContain("NODE_AUTH_TOKEN");
+  });
+
   it.each(["explicit", "package.json"])(
     "disables sfw for a preview resolved from %s and warns once",
     async (source) => {
