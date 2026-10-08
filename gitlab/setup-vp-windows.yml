@@ -73,47 +73,61 @@ spec:
       }
 
 .setup-vp:
+  # Keep string inputs out of shell source and disable variable expansion.
+  variables:
+    SETUP_VP_INPUT_VERSION:
+      value: $[[ inputs.version ]]
+      expand: false
+    SETUP_VP_INPUT_VERSION_FILE:
+      value: $[[ inputs.version-file ]]
+      expand: false
+    SETUP_VP_INPUT_NODE_VERSION:
+      value: $[[ inputs.node-version ]]
+      expand: false
+    SETUP_VP_INPUT_NODE_VERSION_FILE:
+      value: $[[ inputs.node-version-file ]]
+      expand: false
+    SETUP_VP_INPUT_CACHE_DEPENDENCY_PATH:
+      value: $[[ inputs.cache-dependency-path ]]
+      expand: false
+    SETUP_VP_INPUT_WORKING_DIRECTORY:
+      value: $[[ inputs.working-directory ]]
+      expand: false
+    SETUP_VP_INPUT_RUN_INSTALL:
+      value: $[[ inputs.run-install ]]
+      expand: false
+    SETUP_VP_INPUT_PACKAGE_MANAGER:
+      value: $[[ inputs.package-manager ]]
+      expand: false
+    SETUP_VP_INPUT_NODE_MANAGER:
+      value: $[[ inputs.node-manager ]]
+      expand: false
+    SETUP_VP_INPUT_REGISTRY_URL:
+      value: $[[ inputs.registry-url ]]
+      expand: false
+    SETUP_VP_INPUT_SCOPE:
+      value: $[[ inputs.scope ]]
+      expand: false
+    SETUP_VP_INPUT_SETUP_REF:
+      value: $[[ inputs.setup-ref ]]
+      expand: false
   before_script:
     - |
-      $env:SETUP_VP_VERSION = @'
-      $[[ inputs.version ]]
-      '@
-      $env:SETUP_VP_VERSION_FILE = @'
-      $[[ inputs.version-file ]]
-      '@
-      $env:SETUP_VP_NODE_VERSION = @'
-      $[[ inputs.node-version ]]
-      '@
-      $env:SETUP_VP_NODE_VERSION_FILE = @'
-      $[[ inputs.node-version-file ]]
-      '@
-      $env:SETUP_VP_CACHE_DEPENDENCY_PATH = @'
-      $[[ inputs.cache-dependency-path ]]
-      '@
-      $env:SETUP_VP_WORKING_DIRECTORY = @'
-      $[[ inputs.working-directory ]]
-      '@
-      $env:SETUP_VP_RUN_INSTALL = @'
-      $[[ inputs.run-install ]]
-      '@
-      $env:SETUP_VP_SFW = @'
-      $[[ inputs.sfw ]]
-      '@
-      $env:SETUP_VP_PACKAGE_MANAGER = @'
-      $[[ inputs.package-manager ]]
-      '@
-      $env:SETUP_VP_NODE_MANAGER = @'
-      $[[ inputs.node-manager ]]
-      '@
-      $env:SETUP_VP_REGISTRY_URL = @'
-      $[[ inputs.registry-url ]]
-      '@
-      $env:SETUP_VP_SCOPE = @'
-      $[[ inputs.scope ]]
-      '@
-      $env:SETUP_VP_SETUP_REF = @'
-      $[[ inputs.setup-ref ]]
-      '@
+      # Copy inputs at runtime so they still override SETUP_VP_* variables.
+      $env:SETUP_VP_VERSION = $env:SETUP_VP_INPUT_VERSION
+      $env:SETUP_VP_VERSION_FILE = $env:SETUP_VP_INPUT_VERSION_FILE
+      $env:SETUP_VP_NODE_VERSION = $env:SETUP_VP_INPUT_NODE_VERSION
+      $env:SETUP_VP_NODE_VERSION_FILE = $env:SETUP_VP_INPUT_NODE_VERSION_FILE
+      $env:SETUP_VP_CACHE_DEPENDENCY_PATH = $env:SETUP_VP_INPUT_CACHE_DEPENDENCY_PATH
+      $env:SETUP_VP_WORKING_DIRECTORY = $env:SETUP_VP_INPUT_WORKING_DIRECTORY
+      $env:SETUP_VP_RUN_INSTALL = $env:SETUP_VP_INPUT_RUN_INSTALL
+      $env:SETUP_VP_PACKAGE_MANAGER = $env:SETUP_VP_INPUT_PACKAGE_MANAGER
+      $env:SETUP_VP_NODE_MANAGER = $env:SETUP_VP_INPUT_NODE_MANAGER
+      $env:SETUP_VP_REGISTRY_URL = $env:SETUP_VP_INPUT_REGISTRY_URL
+      $env:SETUP_VP_SCOPE = $env:SETUP_VP_INPUT_SCOPE
+      $env:SETUP_VP_SETUP_REF = $env:SETUP_VP_INPUT_SETUP_REF
+      # GitLab validates these inputs as a boolean and a fixed option list.
+      $env:SETUP_VP_SFW = '$[[ inputs.sfw ]]'
       if ('$[[ inputs.cache-policy ]]' -eq 'pull') { $env:SETUP_VP_CACHE_SAVE = 'false' }
     - !reference [.setup-vp-bootstrap, before_script]
 

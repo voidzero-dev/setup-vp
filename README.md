@@ -456,6 +456,8 @@ test:
 
 ### With GitLab Inputs
 
+String inputs are passed as literal environment values. Quotes, dollar signs, and multiline values do not become shell commands. Inputs take precedence over the corresponding `SETUP_VP_*` variables when you extend `.setup-vp` or `.setup-vp-cached`; use `.setup-vp-bootstrap` directly to configure setup through variables instead.
+
 `setup-ref` accepts ASCII letters, digits, underscores, and hyphens, with single dots or slashes between these groups (for example, `v1.21.1` or `refs/tags/v1.21.1`). The templates and bootstrap scripts reject other values before downloading executable files. The same validation applies to `SETUP_VP_SETUP_REF` when using `.setup-vp-bootstrap` directly. Keep this value under maintainer control because it selects code that runs on the runner.
 
 ```yaml
