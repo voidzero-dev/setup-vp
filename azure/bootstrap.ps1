@@ -14,6 +14,9 @@ function Setup-VpDownload {
 }
 
 $setupRef = if ($env:SETUP_VP_SETUP_REF) { $env:SETUP_VP_SETUP_REF } else { 'v1.21.1' }
+if ($setupRef -cnotmatch '\A[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*\z') {
+  throw 'setup-vp: invalid setupRef; use a tag, branch or commit SHA with safe ref characters.'
+}
 $runtimeOut = if ($env:SETUP_VP_RUNTIME_OUT) {
   $env:SETUP_VP_RUNTIME_OUT
 } else {

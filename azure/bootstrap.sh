@@ -20,6 +20,10 @@ setup_vp_download() {
 }
 
 SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1.21.1}"
+if [[ ! "$SETUP_VP_SETUP_REF" =~ ^[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*$ ]]; then
+  echo 'setup-vp: invalid setupRef; use a tag, branch or commit SHA with safe ref characters.' >&2
+  exit 1
+fi
 SETUP_VP_RUNTIME_OUT="${SETUP_VP_RUNTIME_OUT:-${TMPDIR:-/tmp}/setup-vp-azure/dist/azure/index.mjs}"
 setup_vp_runtime_dir="$(dirname "$SETUP_VP_RUNTIME_OUT")"
 setup_vp_chunk_dir="$(dirname "$setup_vp_runtime_dir")"

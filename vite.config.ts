@@ -14,6 +14,9 @@ const minifyOptions = {
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
+    // PowerShell and Git Bash subprocesses can exceed five seconds on Windows
+    // CI runners. Allow startup overhead beyond the subprocess timeout.
+    testTimeout: process.platform === "win32" ? 15_000 : 5_000,
   },
   staged: {
     "*": "vp check --fix",

@@ -19,6 +19,10 @@ setup_vp_download() {
   fi
 }
 SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1.21.1}"
+if [[ ! "$SETUP_VP_SETUP_REF" =~ ^[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*$ ]]; then
+  echo 'setup-vp: invalid setup-ref; use a tag, branch or commit SHA with safe ref characters.' >&2
+  exit 1
+fi
 setup_vp_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/setup-vp-gitlab-runtime.XXXXXX")"
 setup_vp_runtime_tmp="$setup_vp_runtime_dir/index.mjs"
 trap 'rm -f "$setup_vp_runtime_tmp"; rmdir "$setup_vp_runtime_dir"' EXIT

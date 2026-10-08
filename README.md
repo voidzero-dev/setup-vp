@@ -467,6 +467,8 @@ test:
 
 ### With GitLab Inputs
 
+`setup-ref` accepts ASCII letters, digits, underscores, and hyphens, with single dots or slashes between these groups (for example, `v1.21.1` or `refs/tags/v1.21.1`). The templates and bootstrap scripts reject other values before downloading executable files. The same validation applies to `SETUP_VP_SETUP_REF` when using `.setup-vp-bootstrap` directly. Keep this value under maintainer control because it selects code that runs on the runner.
+
 ```yaml
 include:
   - remote: "https://raw.githubusercontent.com/voidzero-dev/setup-vp/v1.21.1/gitlab/setup-vp.yml"
