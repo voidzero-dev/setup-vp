@@ -16,7 +16,35 @@ afterEach(() => {
 });
 
 describe("portable project auth", () => {
-  it("supplements scoped registries, preserves user config, and never writes secret values", () => {
+  it.each([
+    "registry=https://attacker.invalid/",
+    "@scope:registry=https://attacker.invalid/npm/",
+    "registry=https://registry.npmjs.org/\n@scope:registry=https://attacker.invalid/",
+  ])("does not add auth for repository-controlled registries: %s", (content) => {
+    const project = tempDir();
+    const projectNpmrc = path.join(project, ".npmrc");
+    const userConfig = path.join(tempDir(), ".npmrc");
+    writeFileSync(projectNpmrc, content);
+    writeFileSync(userConfig, "strict-ssl=true\n");
+    const env: RuntimeEnv = {
+      NODE_AUTH_TOKEN: "secret",
+      NPM_CONFIG_USERCONFIG: userConfig,
+      PNPM_CONFIG_USERCONFIG: userConfig,
+    };
+    const originalEnv = { ...env };
+    const exporter = vi.fn();
+
+    const npmrc = configureAuth("", "", env, exporter, project);
+    if (npmrc) directories.push(path.dirname(npmrc));
+
+    expect(npmrc).toBeUndefined();
+    expect(env).toEqual(originalEnv);
+    expect(exporter).not.toHaveBeenCalled();
+    expect(readFileSync(userConfig, "utf8")).toBe("strict-ssl=true\n");
+    expect(readFileSync(projectNpmrc, "utf8")).toBe(content);
+  });
+
+  it("authenticates only the explicit registry and preserves existing user config", () => {
     const project = tempDir();
     const userConfig = path.join(tempDir(), ".npmrc");
     const content =
@@ -29,17 +57,20 @@ describe("portable project auth", () => {
       NPM_CONFIG_USERCONFIG: userConfig,
     };
     const exporter = vi.fn();
-    const npmrc = configureAuth("", "", env, exporter, project)!;
+    const npmrc = configureAuth("https://trusted.example/npm/", "trusted", env, exporter, project)!;
     directories.push(path.dirname(npmrc));
     const result = readFileSync(npmrc, "utf8");
     expect(result).toContain("strict-ssl=true");
-    expect(result).toContain("//registry.example/npm/:_authToken=${NODE_AUTH_TOKEN}");
+    expect(result).toContain("//trusted.example/npm/:_authToken=${NODE_AUTH_TOKEN}");
+    expect(result).toContain("@trusted:registry=https://trusted.example/npm/");
+    expect(result).not.toContain("registry.example");
+    expect(result).not.toContain("other.example");
     expect(result).not.toContain("secret");
     expect(readFileSync(path.join(project, ".npmrc"), "utf8")).toBe(content);
     // Windows does not expose POSIX owner/group permission bits.
     if (process.platform !== "win32") expect(statSync(npmrc).mode & 0o777).toBe(0o600);
     expect(exporter).toHaveBeenCalledWith("NODE_AUTH_TOKEN", "secret");
-    expect(exporter).toHaveBeenCalledWith("CUSTOM_TOKEN", "other-secret");
+    expect(exporter).not.toHaveBeenCalledWith("CUSTOM_TOKEN", expect.anything());
     expect(env.PNPM_CONFIG_USERCONFIG).toBe(npmrc);
   });
 
@@ -48,7 +79,8 @@ describe("portable project auth", () => {
     writeFileSync(
       path.join(project, ".npmrc"),
       [
-        "registry=https://registry.example/",
+        "registry=https://attacker.invalid/",
+        "@scope:registry=https://registry.example/",
         "//registry.example/:_authToken=${CUSTOM_TOKEN}",
         "@other:registry=https://${REGISTRY_HOST}/",
         "cache=${PATH}",

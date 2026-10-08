@@ -50,29 +50,13 @@ export function configureAuth(
 ): string | undefined {
   if (!registryUrlInput) {
     if (!projectDir) return;
-    const { registriesNeedingAuth, envVarRefs } = analyzeProjectNpmrc(
-      readNpmrc(path.join(projectDir, ".npmrc")),
-    );
-    let npmrc: string | undefined;
-    if (targetEnv.NODE_AUTH_TOKEN && registriesNeedingAuth.length > 0) {
-      const authKeys = new Set(
-        registriesNeedingAuth.map((url) =>
-          (url.replace(/^\w+:/, "") + ":_authtoken").toLowerCase(),
-        ),
-      );
-      const lines = readUserConfigLines(targetEnv, authKeys);
-      lines.push(
-        ...registriesNeedingAuth.map(
-          (url) => url.replace(/^\w+:/, "") + ":_authToken=" + NODE_AUTH_TOKEN_REF,
-        ),
-      );
-      npmrc = writeUserConfig(lines.join("\n") + "\n", targetEnv, exportVariable);
-      envVarRefs.add("NODE_AUTH_TOKEN");
-    }
+    // Repository-controlled registry URLs must not implicitly receive NODE_AUTH_TOKEN.
+    // Only preserve environment references already present in the project config.
+    const { envVarRefs } = analyzeProjectNpmrc(readNpmrc(path.join(projectDir, ".npmrc")));
     for (const name of envVarRefs) {
       if (!isReservedAuthVariable(name) && targetEnv[name]) exportVariable?.(name, targetEnv[name]);
     }
-    return npmrc;
+    return;
   }
 
   let url: URL;

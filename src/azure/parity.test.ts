@@ -118,6 +118,25 @@ describe("Azure parity", () => {
     );
   });
 
+  it("does not attach NODE_AUTH_TOKEN to repository-controlled registries", async () => {
+    const { project, env, ports } = fixture();
+    writeFileSync(
+      path.join(project, ".npmrc"),
+      "registry=https://attacker.invalid/\n@scope:registry=https://other.invalid/npm/\n",
+    );
+    const target: NodeJS.ProcessEnv = { ...env, NODE_AUTH_TOKEN: "secret" };
+
+    await runFinalize(target, ports);
+    if (target.NPM_CONFIG_USERCONFIG) directories.push(path.dirname(target.NPM_CONFIG_USERCONFIG));
+
+    expect(target.NPM_CONFIG_USERCONFIG).toBeUndefined();
+    expect(target.PNPM_CONFIG_USERCONFIG).toBeUndefined();
+    expect(ports.setVariable.mock.calls.some(([name]) => name.endsWith("CONFIG_USERCONFIG"))).toBe(
+      false,
+    );
+    expect(ports.runInstall).toHaveBeenCalledWith(expect.anything(), project, "vp", target);
+  });
+
   it("prepares a version/platform-specific sfw cache only when an install will run", async () => {
     const { env, ports } = fixture();
     await runPrepare({ ...env, SETUP_VP_SFW: "true", SETUP_VP_RUN_INSTALL: "false" }, ports);

@@ -225,32 +225,8 @@ steps:
 
 ### With Private Registry (GitHub Packages)
 
-If your repo has a `.npmrc` that declares the registry, pass `NODE_AUTH_TOKEN`
-via `env` and let the default `vp install` run — no `registry-url` needed.
-When `NODE_AUTH_TOKEN` is set, the action auto-generates a matching
-`_authToken` entry at `$RUNNER_TEMP/.npmrc` for each registry declared in your
-repo `.npmrc` that doesn't already have one, so your repo `.npmrc` can stay
-minimal:
-
-```yaml
-# .npmrc in the repo (auth line not required — action adds it):
-#   @myorg:registry=https://npm.pkg.github.com
-
-steps:
-  - uses: actions/checkout@v7
-  - uses: voidzero-dev/setup-vp@v1.21.1
-    with:
-      node-version: "lts"
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
-
-If you already have the `_authToken` line in your repo `.npmrc` (e.g. for local
-dev symmetry), that's respected as-is and the action won't overwrite it.
-
-Alternatively, pass `registry-url` explicitly to bypass the action's repo-level
-`.npmrc` detection and auth propagation logic (the package manager may still
-read the repo `.npmrc` per its own config resolution):
+Set `registry-url` explicitly and pass `NODE_AUTH_TOKEN` via `env` to configure
+authentication for that registry:
 
 ```yaml
 steps:
@@ -260,11 +236,24 @@ steps:
       node-version: "lts"
       registry-url: "https://npm.pkg.github.com"
       scope: "@myorg"
-      run-install: false
-  - run: vp install
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
+
+Without `registry-url`, the action respects existing auth entries in the project
+`.npmrc` and propagates their referenced environment variables. It does not
+create token entries from registry URLs in repository files, even when
+`NODE_AUTH_TOKEN` is set. Jobs that relied on automatic token entries must set
+`registry-url` or supply an explicit auth entry:
+
+```ini
+@myorg:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+```
+
+An explicit `registry-url` bypasses project `.npmrc` auth propagation in the
+action. The package manager still reads the project `.npmrc` according to its
+own configuration rules.
 
 ### With Socket Firewall Free (sfw)
 
@@ -623,7 +612,7 @@ Include `gitlab/setup-vp-windows.yml` instead of `gitlab/setup-vp.yml` on a Powe
 - The template expects a Unix-like runner image with Node.js, `bash`, and either `curl` or `wget`.
 - Node.js must be available to start the bootstrap. Set `node-version` or `node-version-file` to select the project runtime with `vp env use`. Neither can be combined with `node-manager: "false"`; omit both to retain Vite+'s normal project-based resolution.
 - Vite+ version precedence matches GitHub Actions: explicit `version`, explicit `version-file`, project package/catalog pin, lockfile, then `latest`. Paths are relative to `working-directory`. An unresolvable explicit `version-file` warns and falls back to `latest`.
-- Without `registry-url`, an existing project `.npmrc` is inspected for registry auth. Missing token entries use `NODE_AUTH_TOKEN` when available; existing entries and referenced token variables are preserved.
+- Without `registry-url`, existing project `.npmrc` auth entries and referenced token variables are preserved. Registry URLs in repository files do not receive automatic token entries. Set `registry-url` to generate auth configuration for a registry.
 
 ## Azure Pipelines
 
@@ -697,7 +686,7 @@ On refs containing these changes, `nodeVersion` selects the managed project runt
 
 Finalize tasks also expose `version` and `cacheHit` as named outputs. Use `$(setupVpUnix.version)` on Linux/macOS or `$(setupVpWindows.version)` on Windows; `stepName` changes the prefix. `cacheHit` is `true` only for an exact match, while the job variable retains Azure's `inexact` value. Cross-job consumers use Azure's `dependencies.<job>.outputs['setupVpUnix.version']` syntax. [Azure output variables](https://learn.microsoft.com/en-us/azure/devops/pipelines/process/set-variables-scripts?view=azure-devops)
 
-Without `registryUrl`, the runtime can supplement the project's `.npmrc` with `NODE_AUTH_TOKEN`. Other referenced token variables are propagated as secret pipeline variables, not public outputs. Pass custom secret mappings through `authEnv`, for example `authEnv: { CUSTOM_TOKEN: "$(CUSTOM_TOKEN)" }`. Azure does not automatically put secret pipeline variables in task environments.
+Without `registryUrl`, the runtime preserves existing project `.npmrc` auth entries but does not generate token entries for its registry URLs. Set `registryUrl` to generate auth configuration for a registry. Referenced custom token variables are propagated as secret pipeline variables, not public outputs. Pass custom secret mappings through `authEnv`, for example `authEnv: { CUSTOM_TOKEN: "$(CUSTOM_TOKEN)" }`. Azure does not automatically put secret pipeline variables in task environments.
 
 ### Azure Notes
 
