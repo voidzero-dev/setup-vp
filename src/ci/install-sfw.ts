@@ -184,7 +184,7 @@ export async function setupSfw(
     return "vp";
   }
 
-  const existing = commandPath("sfw");
+  const existing = commandPath("sfw", env);
   if (existing) {
     console.log(`setup-vp: using existing sfw on PATH: ${existing}`);
     return "sfw";

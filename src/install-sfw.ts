@@ -1,12 +1,12 @@
 import { restoreCache, saveCache } from "@actions/cache";
 import { info, warning, addPath } from "@actions/core";
 import { exec } from "@actions/exec";
-import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { getSfwAssetName, isMuslLinux, SFW_RELEASE_BASE, SFW_VERSION } from "./ci/install-sfw.js";
 import { isWindows } from "./ci/platform.js";
+import { commandPath } from "./ci/process.js";
 import { resolveSfwEnabled } from "./ci/sfw.js";
 import type { Inputs } from "./types.js";
 
@@ -122,17 +122,7 @@ export async function installSfw(): Promise<void> {
 // Used to detect when the user composed `socketdev/action@<sha>` (or
 // installed sfw via some other means) before invoking this action.
 export function findSfwOnPath(): string | null {
-  const lookupCmd = isWindows() ? "where" : "which";
-  try {
-    const stdout = execFileSync(lookupCmd, ["sfw"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    const firstLine = stdout.split(/\r?\n/).find((line) => line.trim().length > 0);
-    return firstLine ? firstLine.trim() : null;
-  } catch {
-    return null;
-  }
+  return commandPath("sfw") ?? null;
 }
 
 // Decide what to do with `sfw: true`. Returns whether `vp install` should be

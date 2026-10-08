@@ -45,7 +45,7 @@ describe("GitLab sfw setup", () => {
     vi.mocked(commandPath).mockReturnValue(path.join(tempDir(), "sfw"));
 
     expect(await setupSfw([{}], { SETUP_VP_SFW: "true" })).toBe("sfw");
-    expect(commandPath).toHaveBeenCalledWith("sfw");
+    expect(commandPath).toHaveBeenCalledWith("sfw", { SETUP_VP_SFW: "true" });
     expect(spawnSync).not.toHaveBeenCalled();
   });
 
