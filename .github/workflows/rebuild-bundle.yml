@@ -1,12 +1,11 @@
 name: Rebuild action bundle
+run-name: "Rebuild PR #${{ github.event.pull_request.number }} at ${{ github.event.pull_request.head.sha }}"
 
 # The `needs-bundle-rebuild` label (Renovate adds it for bumps to deps compiled
-# into dist/index.mjs, or to the vite-plus bundler) triggers a rebuild of the
-# bundle and a push of the refreshed dist/, so the "Verify dist is up to date"
-# check passes without a manual `vp run build`. `synchronize` re-runs the
-# rebuild when Renovate rebases or pushes to a labeled PR, so a failed or stale
-# rebuild gets retried; the run triggered by our own dist/ push finds no diff
-# and exits without pushing, so it cannot loop.
+# into dist/, or to the vite-plus bundler) triggers a read-only build.
+# publish-bundle.yml runs on a separate runner and commits the artifact.
+# `synchronize` retries after rebases; publishing stops when dist/ is unchanged.
+# The publisher verifies this workflow's Git blob before trusting its run name.
 on:
   pull_request:
     types: [labeled, synchronize]
@@ -27,12 +26,10 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'needs-bundle-rebuild') &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
-    outputs:
-      artifact-id: ${{ steps.bundles.outputs.artifact-id }}
     steps:
-      # PR code and dependencies run only on this unprivileged runner.
       # Actions are pinned to a full commit SHA (org policy).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -53,8 +50,8 @@ jobs:
       - name: Rebuild the action bundle
         run: pnpm build
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        id: bundles
+      - name: Upload rebuilt bundles
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rebuilt-bundles-${{ github.run_attempt }}
           path: |
@@ -63,121 +60,3 @@ jobs:
             dist/azure/index.mjs
           if-no-files-found: error
           retention-days: 1
-
-  commit:
-    name: commit rebuilt bundle
-    needs: rebuild
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    # Use a fresh runner with no checkout, package installs, or cache restore.
-    # Treat the artifact as data; never execute it or apply a supplied patch.
-    steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          # Keep the build's artifact ID when only this failed job is rerun.
-          artifact-ids: ${{ needs.rebuild.outputs.artifact-id }}
-          path: ${{ runner.temp }}/rebuilt-bundles
-
-      - name: Validate bundles and prepare commit
-        id: prepare
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const fs = require('node:fs');
-            const path = require('node:path');
-            const { createHash } = require('node:crypto');
-            const expected = context.payload.pull_request;
-            const repository = `${context.repo.owner}/${context.repo.repo}`;
-            const { data: pr } = await github.rest.pulls.get({
-              ...context.repo, pull_number: expected.number,
-            });
-            if (pr.state !== 'open' || pr.head.sha !== expected.head.sha ||
-                pr.head.ref !== expected.head.ref || pr.head.repo?.full_name !== repository ||
-                !pr.labels.some(label => label.name === 'needs-bundle-rebuild')) {
-              core.info('The PR changed or no longer qualifies for a bundle rebuild; skip this result.');
-              return;
-            }
-
-            const files = ['index.mjs', 'gitlab/index.mjs', 'azure/index.mjs'];
-            const directories = ['', 'gitlab', 'azure'];
-            const root = path.join(process.env.RUNNER_TEMP, 'rebuilt-bundles');
-            // Reject unexpected paths, symlinks, and non-regular files before reading data.
-            for (const directory of directories) {
-              const absolute = path.join(root, directory);
-              if (!fs.lstatSync(absolute).isDirectory()) {
-                throw new Error(`Expected a bundle directory: ${directory}`);
-              }
-              for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
-                const relative = directory ? `${directory}/${entry.name}` : entry.name;
-                if (directories.includes(relative) && entry.isDirectory()) continue;
-                if (files.includes(relative) && entry.isFile()) continue;
-                throw new Error(`Unexpected bundle artifact entry: ${relative}`);
-              }
-            }
-
-            const { data: commit } = await github.rest.git.getCommit({
-              ...context.repo, commit_sha: expected.head.sha,
-            });
-            const { data: tree } = await github.rest.git.getTree({
-              ...context.repo, tree_sha: commit.tree.sha, recursive: 'true',
-            });
-            if (tree.truncated) throw new Error('Cannot verify a truncated repository tree.');
-            const additions = [];
-            for (const file of files) {
-              const absolute = path.join(root, file);
-              const stat = fs.lstatSync(absolute);
-              if (!stat.isFile() || stat.size === 0 || stat.size > 10 * 1024 * 1024) {
-                throw new Error(`Invalid bundle file: ${file}`);
-              }
-              const content = fs.readFileSync(absolute);
-              const destination = `dist/${file}`;
-              const previous = tree.tree.find(entry => entry.path === destination);
-              if (previous && (previous.type !== 'blob' || previous.mode !== '100644')) {
-                throw new Error(`Expected a regular repository file: ${destination}`);
-              }
-              const sha = createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex');
-              if (sha !== previous?.sha) {
-                additions.push({ path: destination, contents: content.toString('base64') });
-              }
-            }
-            if (additions.length === 0) {
-              core.info('Bundle already up to date; nothing to push.');
-              return;
-            }
-
-            fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'bundle-commit.json'), JSON.stringify({
-              branch: { repositoryNameWithOwner: repository, refName: `refs/heads/${expected.head.ref}` },
-              expectedHeadOid: expected.head.sha,
-              message: { headline: 'chore: rebuild action bundle for dependency update' },
-              fileChanges: { additions },
-            }));
-            core.setOutput('changed', 'true');
-
-      # Create the narrowly scoped token only after validation on this runner.
-      # The App identity ensures the commit triggers the PR's required checks.
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        if: steps.prepare.outputs.changed == 'true'
-        id: app-token
-        with:
-          client-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          permission-contents: write
-
-      - name: Commit the rebuilt bundles
-        if: steps.prepare.outputs.changed == 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            const fs = require('node:fs');
-            const path = require('node:path');
-            const input = JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'bundle-commit.json'), 'utf8'));
-            // The API atomically checks the head SHA, so a concurrent push or rebase
-            // cannot receive bundles built from an older revision.
-            await github.graphql(`
-              mutation($input: CreateCommitOnBranchInput!) {
-                createCommitOnBranch(input: $input) { commit { oid } }
-              }
-            `, { input });

@@ -27,8 +27,11 @@ interface Step {
 const workflow = parseYaml(
   readFileSync(new URL("../.github/workflows/rebuild-bundle.yml", import.meta.url), "utf8"),
 );
+const publisher = parseYaml(
+  readFileSync(new URL("../.github/workflows/publish-bundle.yml", import.meta.url), "utf8"),
+);
 const buildSteps = workflow.jobs.rebuild.steps as Step[];
-const commitSteps = workflow.jobs.commit.steps as Step[];
+const commitSteps = publisher.jobs.publish.steps as Step[];
 const prepareStep = commitSteps.find((step) => step.id === "prepare")!;
 const publishStep = commitSteps.at(-1)!;
 const bundleFiles = ["index.mjs", "gitlab/index.mjs", "azure/index.mjs"];
@@ -66,7 +69,7 @@ function fixture() {
   };
   const context = {
     repo: { owner: "upstream", repo: "setup-vp" },
-    payload: { pull_request: structuredClone(pr) },
+    payload: { workflow_run: { head_sha: headSha, head_branch: pr.head.ref } },
   };
   const tree = {
     truncated: false,
@@ -94,7 +97,13 @@ function fixture() {
       github,
       context,
       core,
-      process: { env: { RUNNER_TEMP: dir } },
+      process: {
+        env: {
+          RUNNER_TEMP: dir,
+          PR_NUMBER: String(pr.number),
+          PR_BRANCH: context.payload.workflow_run.head_branch,
+        },
+      },
     });
   }
   return {
@@ -129,10 +138,6 @@ describe("bundle rebuild credential isolation", () => {
       /secrets\.|app-token|contents.*write/,
     );
     const upload = buildSteps.at(-1)!;
-    expect(upload.id).toBe("bundles");
-    expect(workflow.jobs.rebuild.outputs).toEqual({
-      "artifact-id": "${{ steps.bundles.outputs.artifact-id }}",
-    });
     expect(upload.uses).toMatch(/^actions\/upload-artifact@[a-f0-9]{40}$/);
     expect(String(upload.with!.path).trim().split("\n").sort()).toEqual(
       bundleFiles.map((file) => `dist/${file}`).sort(),
@@ -140,27 +145,41 @@ describe("bundle rebuild credential isolation", () => {
     expect(upload.with!["if-no-files-found"]).toBe("error");
   });
 
-  it("creates a contents-only App token after validation on a fresh runner", () => {
-    expect(workflow.jobs.commit.needs).toBe("rebuild");
-    expect(workflow.jobs.commit.permissions).toEqual({ contents: "read", "pull-requests": "read" });
+  it("creates a contents-only App token after validation in a default-branch workflow", () => {
+    expect(publisher.on).toEqual({
+      workflow_run: { workflows: [workflow.name], types: ["completed"] },
+    });
+    expect(publisher.permissions).toEqual({});
+    expect(publisher.jobs.publish.permissions).toEqual({
+      actions: "read",
+      contents: "read",
+      "pull-requests": "read",
+    });
     expect(commitSteps.map((step) => step.uses?.split("@")[0])).toEqual([
+      "actions/github-script",
       "actions/download-artifact",
       "actions/github-script",
       "actions/create-github-app-token",
       "actions/github-script",
     ]);
     expect(commitSteps.every((step) => !step.run && /@[a-f0-9]{40}$/.test(step.uses!))).toBe(true);
-    expect(commitSteps[0].with).toEqual({
-      "artifact-ids": "${{ needs.rebuild.outputs.artifact-id }}",
+    expect(commitSteps[1].with).toEqual({
+      name: "rebuilt-bundles-${{ github.event.workflow_run.run_attempt }}",
       path: "${{ runner.temp }}/rebuilt-bundles",
+      "github-token": "${{ github.token }}",
+      "run-id": "${{ github.event.workflow_run.id }}",
     });
-    expect(buildSteps.at(-1)!.with!.name).toContain("github.run_attempt");
-    expect(commitSteps[2].with).toEqual({
+    expect(buildSteps.at(-1)!.with!.name).toBe("rebuilt-bundles-${{ github.run_attempt }}");
+    expect(commitSteps[3].with).toEqual({
       "client-id": "${{ secrets.APP_ID }}",
       "private-key": "${{ secrets.APP_PRIVATE_KEY }}",
+      repositories: "${{ github.event.repository.name }}",
       "permission-contents": "write",
     });
-    for (const step of commitSteps.slice(2)) {
+    for (const step of commitSteps.slice(1, 3)) {
+      expect(step.if).toBe("steps.request.outputs.ready == 'true'");
+    }
+    for (const step of commitSteps.slice(3)) {
       expect(step.if).toBe("steps.prepare.outputs.changed == 'true'");
     }
     expect(publishStep.with!["github-token"]).toBe("${{ steps.app-token.outputs.token }}");
@@ -296,7 +315,7 @@ describe("bundle artifact validation and commit", () => {
     const f = fixture();
     const branch = "renovate/$(echo-injected)";
     f.pr.head.ref = branch;
-    f.context.payload.pull_request.head.ref = branch;
+    f.context.payload.workflow_run.head_branch = branch;
     const content = "`${process.env.APP_TOKEN}`\n$(echo injected)\n\u0000\u00e9";
     writeFileSync(join(f.root, "index.mjs"), content);
     await f.prepare();

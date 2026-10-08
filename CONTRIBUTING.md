@@ -66,9 +66,11 @@ For a manual run, use `workflow_dispatch`. Set `setup_ref` to an exact commit SH
 
 ## Dependency Updates
 
-Renovate opens a PR when SocketDev publishes a new `sfw-free` release. The custom manager in [`.github/renovate.json`](.github/renovate.json) updates the shared `SFW_VERSION` pin in `src/ci/install-sfw.ts` for all three integrations.
+For same-repository PRs with the `needs-bundle-rebuild` label, [the build workflow](.github/workflows/rebuild-bundle.yml) builds the exact PR commit with read-only access. [The publisher](.github/workflows/publish-bundle.yml) runs separately from the default branch and uses a repository-scoped GitHub App token to update only the three bundles in `dist/`. It validates the bundle files before creating the token and does not execute PR code or downloaded bundles. It skips stale PR heads and unchanged bundles; the commit fails if the branch head changes after validation.
 
-The `needs-bundle-rebuild` label rebuilds bundles for same-repository PRs when the label is added or the branch changes. The build job checks out the event's exact commit without persisted credentials and runs with read-only repository access. A separate job validates the three bundle files, then creates a GitHub App token with `contents: write` to commit changes through the API. It does not check out or execute PR code. It skips unchanged bundles and stale PRs; the commit fails if the branch head changes after validation.
+The PR's `rebuild-bundle.yml` must match the default branch before the publisher accepts the build. After changes to that workflow reach the default branch, update existing dependency branches and rerun the build. The publisher must be on the default branch to receive build completion events.
+
+Renovate opens a PR when SocketDev publishes a new `sfw-free` release. The custom manager in [`.github/renovate.json`](.github/renovate.json) updates the shared `SFW_VERSION` pin in `src/ci/install-sfw.ts` for all three integrations.
 
 ## Releasing
 
