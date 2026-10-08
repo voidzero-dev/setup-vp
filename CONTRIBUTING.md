@@ -68,6 +68,8 @@ For a manual run, use `workflow_dispatch`. Set `setup_ref` to an exact commit SH
 
 Renovate opens a PR when SocketDev publishes a new `sfw-free` release. The custom manager in [`.github/renovate.json`](.github/renovate.json) updates the shared `SFW_VERSION` pin in `src/ci/install-sfw.ts` for all three integrations.
 
+The `needs-bundle-rebuild` label rebuilds bundles for same-repository PRs when the label is added or the branch changes. The build job checks out the event's exact commit without persisted credentials and runs with read-only repository access. A separate job validates the three bundle files, then creates a GitHub App token with `contents: write` to commit changes through the API. It does not check out or execute PR code. It skips unchanged bundles and stale PRs; the commit fails if the branch head changes after validation.
+
 ## Releasing
 
 Publish releases as Git tags, not as an npm package. Keep `package.json.version` aligned with the release tag. Consumers pin an exact tag such as `voidzero-dev/setup-vp@v1.21.1` or a commit SHA. Do not move the `v1` major tag, which is frozen at `v1.15.0`.
