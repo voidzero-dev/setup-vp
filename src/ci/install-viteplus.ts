@@ -2,7 +2,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { spawnSync } from "node:child_process";
-import { getInstallScriptUrls, pkgPrNewCommitSha } from "./install-script-urls.js";
+import {
+  getInstallScriptSources,
+  pkgPrNewCommitSha,
+  type InstallScriptSource,
+} from "./install-script-urls.js";
 import { isWindows } from "./platform.js";
 import {
   appendFallbackBinToPath,
@@ -26,11 +30,11 @@ export function getVitePlusHome(
 }
 
 function runInstallCommand(
-  url: string,
+  source: InstallScriptSource,
   env: Record<string, string>,
-  platform: NodeJS.Platform = process.platform,
+  platform: NodeJS.Platform,
 ): number {
-  const { command, args } = getInstallScriptCommand(url, platform, env.VP_VPDIRS_AWARE === "1");
+  const { command, args } = getInstallScriptCommand(source, platform, env.VP_VPDIRS_AWARE === "1");
   const spawnOptions = {
     env: { ...process.env, ...env },
     stdio: "inherit" as const,
@@ -92,21 +96,22 @@ export async function installVitePlus(
     env.VP_PR_VERSION = prVersion;
   }
 
-  // Prefer the install script pinned to the requested version's git ref. Fall
-  // back to the latest script only after all pinned sources fail (see
+  // Prefer the bundled pin for the requested version. Try the default pin
+  // only after all version-specific sources fail (see
   // ../ci/install-script-urls.ts for the rationale).
-  const { pinned, latest } = getInstallScriptUrls(version, platform);
-  const totalUrls = pinned.length + latest.length;
+  const { pinned, fallback } = getInstallScriptSources(version, platform);
+  const totalUrls = pinned.length + fallback.length;
   const maxAttempts = INSTALL_MAX_ROUNDS * totalUrls;
   let failureReason = "";
   let attempt = 0;
 
-  async function tryUrls(urls: string[]): Promise<boolean> {
+  async function tryUrls(urls: InstallScriptSource[]): Promise<boolean> {
     for (let round = 0; round < INSTALL_MAX_ROUNDS; round += 1) {
-      for (const url of urls) {
+      for (const source of urls) {
+        const { url } = source;
         attempt += 1;
         try {
-          const exitCode = runInstall(url, env, platform);
+          const exitCode = runInstall(source, env, platform);
           if (exitCode === 0) return true;
           failureReason = `exit code ${exitCode}`;
         } catch (error) {
@@ -148,11 +153,11 @@ export async function installVitePlus(
         return;
       }
       warn(
-        `setup-vp: could not fetch the install script pinned to Vite+ ${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
+        `setup-vp: could not fetch the install script pinned to Vite+ ${version}. Falling back to the checksum-pinned default install script. The default script may not be compatible with ${version}.`,
       );
     }
 
-    if (await tryUrls(latest)) {
+    if (await tryUrls(fallback)) {
       ensureBinInPath();
       return;
     }

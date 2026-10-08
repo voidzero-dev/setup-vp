@@ -379,6 +379,20 @@ Separate package-manager modes require Vite+ 0.3.1+. Any explicit configuration,
 | `version`   | The installed version of Vite+           |
 | `cache-hit` | Boolean indicating if cache was restored |
 
+## Installer integrity
+
+GitHub Actions, GitLab, and Azure download installer scripts from immutable
+upstream commits and check their SHA-256 checksums before execution. The expected
+checksums ship with setup-vp. Both download mirrors use the same checksums, and
+the installer's legacy helper is also verified before execution.
+
+Known versions use their matching installer. Dist-tags, preview builds, and
+versions without a bundled checksum use the checksum-pinned default installer.
+If all sources for a known version fail, setup-vp also tries that default.
+The requested CLI version is unchanged. Update setup-vp when a newer CLI requires
+an installer that its current checksum pins do not support. These checksums cover
+installer scripts; the installer still downloads the requested CLI packages.
+
 ## Caching
 
 ### Reuse an installed version

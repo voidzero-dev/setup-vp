@@ -6,10 +6,14 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { installVitePlus } from "./install-viteplus.js";
 import { findReusableVitePlus } from "./reuse-viteplus.js";
+import manifest from "./ci/installer-checksums.json" with { type: "json" };
 import type { Inputs } from "./types.js";
 
 const windows = process.platform === "win32";
 const installerExtension = windows ? "ps1" : "sh";
+const defaultCommit =
+  manifest.releases[manifest.defaultVersion as keyof typeof manifest.releases].commit;
+const releaseCommit = manifest.releases["0.2.9"].commit;
 
 vi.mock("@actions/core", () => ({
   info: vi.fn(),
@@ -159,8 +163,10 @@ describe("installVitePlus", () => {
 
     expect(addPath).toHaveBeenCalledWith(join("/home/runner", ".vite-plus", "bin"));
     const [_command, args, options] = vi.mocked(exec).mock.calls[0];
-    expect((args as string[])[1]).toContain(windows ? "[scriptblock]::Create" : "| bash");
-    expect((args as string[])[1]).not.toContain("VP_DUMP_DIRS");
+    expect((args as string[]).at(-1)!).toContain(
+      windows ? "& $installerFile" : 'bash "$installer_file"',
+    );
+    expect((args as string[]).at(-1)!).not.toContain("VP_DUMP_DIRS");
     expect((options as { env: Record<string, string> }).env.VP_VPDIRS_AWARE).toBeUndefined();
     expect((options as { env: Record<string, string> }).env.SETUP_VP_DIRS_FILE).toBeUndefined();
   });
@@ -229,7 +235,7 @@ describe("installVitePlus", () => {
     expect(warning).toHaveBeenCalledTimes(1);
   });
 
-  it("should fall back to the GitHub install URL after a single primary failure", async () => {
+  it("should fall back to the checksum-pinned mirror after a single primary failure", async () => {
     vi.mocked(exec).mockResolvedValueOnce(35);
     mockSuccessfulInstallOnce();
 
@@ -237,12 +243,14 @@ describe("installVitePlus", () => {
 
     expect(exec).toHaveBeenCalledTimes(2);
 
-    const primaryScript = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
-    expect(primaryScript).toContain(`https://viteplus.dev/install.${installerExtension}`);
+    const primaryScript = (vi.mocked(exec).mock.calls[0][1] as string[]).at(-1)!;
+    expect(primaryScript).toContain(
+      `https://raw.githubusercontent.com/voidzero-dev/vite-plus/${defaultCommit}/packages/cli/install.${installerExtension}`,
+    );
 
-    const fallbackScript = (vi.mocked(exec).mock.calls[1][1] as string[])[1];
+    const fallbackScript = (vi.mocked(exec).mock.calls[1][1] as string[]).at(-1)!;
     expect(fallbackScript).toContain(
-      `https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.${installerExtension}`,
+      `https://cdn.jsdelivr.net/gh/voidzero-dev/vite-plus@${defaultCommit}/packages/cli/install.${installerExtension}`,
     );
   });
 
@@ -251,32 +259,29 @@ describe("installVitePlus", () => {
 
     await expect(installVitePlus(baseInputs)).rejects.toThrow();
 
-    const scripts = vi.mocked(exec).mock.calls.map((call) => (call[1] as string[])[1]);
+    const scripts = vi.mocked(exec).mock.calls.map((call) => (call[1] as string[]).at(-1)!);
     expect(scripts).toHaveLength(4);
-    expect(scripts[0]).toContain(`viteplus.dev/install.${installerExtension}`);
-    expect(scripts[1]).toContain("raw.githubusercontent.com");
-    expect(scripts[2]).toContain(`viteplus.dev/install.${installerExtension}`);
-    expect(scripts[3]).toContain("raw.githubusercontent.com");
+    expect(scripts[0]).toContain(`/${defaultCommit}/packages/cli/install.${installerExtension}`);
+    expect(scripts[1]).toContain("cdn.jsdelivr.net");
+    expect(scripts[2]).toContain(`/${defaultCommit}/packages/cli/install.${installerExtension}`);
+    expect(scripts[3]).toContain("cdn.jsdelivr.net");
   });
 
   // ci/install-script-urls.test.ts tests the exact URL strings. These tests
   // verify that the version reaches the URL selection.
   it.each([
-    { desc: "exact versions", version: "0.2.9", ref: "v0.2.9" },
-    { desc: "pkg.pr.new commit builds", version: `0.0.0-commit.${commitSha}`, ref: commitSha },
-  ])(
-    "should install $desc with the install script from their git ref",
-    async ({ version, ref }) => {
-      mockSuccessfulInstallOnce();
+    { desc: "exact versions", version: "0.2.9", ref: releaseCommit },
+    { desc: "pkg.pr.new commit builds", version: `0.0.0-commit.${commitSha}`, ref: defaultCommit },
+  ])("should install $desc with a checksum-pinned install script", async ({ version, ref }) => {
+    mockSuccessfulInstallOnce();
 
-      await installVitePlus({ ...baseInputs, version });
+    await installVitePlus({ ...baseInputs, version });
 
-      const script = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
-      expect(script).toContain(
-        `https://raw.githubusercontent.com/voidzero-dev/vite-plus/${ref}/packages/cli/install.${installerExtension}`,
-      );
-    },
-  );
+    const script = (vi.mocked(exec).mock.calls[0][1] as string[]).at(-1)!;
+    expect(script).toContain(
+      `https://raw.githubusercontent.com/voidzero-dev/vite-plus/${ref}/packages/cli/install.${installerExtension}`,
+    );
+  });
 
   it("should fall back to the jsDelivr mirror of the pinned script on failure", async () => {
     vi.mocked(exec).mockResolvedValueOnce(35);
@@ -284,17 +289,19 @@ describe("installVitePlus", () => {
 
     await installVitePlus({ ...baseInputs, version: "0.2.9" });
 
-    const fallbackScript = (vi.mocked(exec).mock.calls[1][1] as string[])[1];
+    const fallbackScript = (vi.mocked(exec).mock.calls[1][1] as string[]).at(-1)!;
     expect(fallbackScript).toContain(
-      `https://cdn.jsdelivr.net/gh/voidzero-dev/vite-plus@v0.2.9/packages/cli/install.${installerExtension}`,
+      `https://cdn.jsdelivr.net/gh/voidzero-dev/vite-plus@${releaseCommit}/packages/cli/install.${installerExtension}`,
     );
-    // If both pinned attempts fail, the code warns before it uses the latest
+    // If both pinned attempts fail, the code warns before it uses the default
     // URLs. Success on the mirror must not trigger the compatibility fallback.
-    expect(warning).not.toHaveBeenCalledWith(expect.stringContaining("latest install script"));
+    expect(warning).not.toHaveBeenCalledWith(
+      expect.stringContaining("checksum-pinned default install script"),
+    );
   });
 
-  it("should fall back to the latest install script only after exhausting pinned URLs", async () => {
-    // 4 pinned attempts fail (2 rounds × 2 URLs), the 5th (latest CDN) succeeds.
+  it("should fall back to the checksum-pinned default install script only after exhausting pinned URLs", async () => {
+    // 4 pinned attempts fail (2 rounds × 2 URLs), the 5th (default primary) succeeds.
     vi.mocked(exec)
       .mockResolvedValueOnce(22)
       .mockResolvedValueOnce(22)
@@ -304,24 +311,26 @@ describe("installVitePlus", () => {
 
     await installVitePlus({ ...baseInputs, version: "0.2.9" });
 
-    const scripts = vi.mocked(exec).mock.calls.map((call) => (call[1] as string[])[1]);
-    expect(scripts[0]).toContain("/v0.2.9/");
+    const scripts = vi.mocked(exec).mock.calls.map((call) => (call[1] as string[]).at(-1)!);
+    expect(scripts[0]).toContain(`/${releaseCommit}/`);
     expect(scripts[1]).toContain("jsdelivr");
-    expect(scripts[2]).toContain("/v0.2.9/");
+    expect(scripts[2]).toContain(`/${releaseCommit}/`);
     expect(scripts[3]).toContain("jsdelivr");
-    expect(scripts[4]).toContain(`https://viteplus.dev/install.${installerExtension}`);
+    expect(scripts[4]).toContain(
+      `https://raw.githubusercontent.com/voidzero-dev/vite-plus/${defaultCommit}/packages/cli/install.${installerExtension}`,
+    );
     expect(warning).toHaveBeenCalledWith(
-      expect.stringContaining("The latest script may not be compatible with 0.2.9"),
+      expect.stringContaining("The default script may not be compatible with 0.2.9"),
     );
   });
 
-  it("should count pinned and latest URLs in the exhaustion error for exact versions", async () => {
+  it("should count pinned and default URLs in the exhaustion error for exact versions", async () => {
     vi.mocked(exec).mockResolvedValue(6);
 
     await expect(installVitePlus({ ...baseInputs, version: "0.2.9" })).rejects.toThrow(
       /after 8 attempts across 4 URL\(s\)/,
     );
-    // 2 rounds × 2 pinned URLs + 2 rounds × 2 latest URLs.
+    // 2 rounds × 2 pinned URLs + 2 rounds × 2 default URLs.
     expect(exec).toHaveBeenCalledTimes(8);
   });
 
@@ -332,9 +341,9 @@ describe("installVitePlus", () => {
 
     const [cmd, args] = vi.mocked(exec).mock.calls[0];
     expect(cmd).toBe(windows ? "pwsh" : "bash");
-    const script = (args as string[])[1];
+    const script = (args as string[]).at(-1)!;
     if (windows) {
-      expect(script).toContain(". ([scriptblock]::Create((irm -TimeoutSec");
+      expect(script).toContain(". $installerFile");
       expect(script).toContain("Join-Path $vpDir 'vp.exe'");
       expect(script).toContain("& $vpPath --version");
       expect(script).toContain("$env:VP_DUMP_DIRS = '1'");
@@ -344,7 +353,7 @@ describe("installVitePlus", () => {
     expect(script).toMatch(/^set \+u\nset -eo pipefail\n/);
     expect(script).toContain("--connect-timeout");
     expect(script).toContain("--max-time");
-    expect(script).toContain('-o "$installer_file"');
+    expect(script).toContain('-o "$download_file"');
     expect(script).toContain('source "$installer_file"');
     expect(script).not.toContain("source /dev/stdin");
     expect(script).toContain('"$vp_dir/vp" --version');

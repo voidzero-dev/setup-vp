@@ -72,6 +72,28 @@ The PR's `rebuild-bundle.yml` must match the default branch before the publisher
 
 Renovate opens a PR when SocketDev publishes a new `sfw-free` release. The custom manager in [`.github/renovate.json`](.github/renovate.json) updates the shared `SFW_VERSION` pin in `src/ci/install-sfw.ts` for all three integrations.
 
+### Installer Checksum Pins
+
+`src/ci/installer-checksums.json` is the trust source for installer downloads in
+all three integrations. It records immutable upstream commits and SHA-256
+checksums. Historical pins keep older installer directory layouts available.
+The default pin also serves dist-tags, unknown versions, and preview builds.
+
+To add a pin, review `packages/cli/install.sh` and `packages/cli/install.ps1` at
+the intended commit in `voidzero-dev/vite-plus`. Review any scripts they execute,
+including `install-legacy.sh` and `install-legacy.ps1`. Then run:
+
+```bash
+node scripts/update-installer-checksums.mjs <version> <reviewed-commit-sha>
+```
+
+Add `--default` to select the new default installer. The command fetches the
+scripts without executing them and records their checksums, including the
+legacy helpers when present. It does not run during installation or builds.
+Review the manifest diff and rebuild all three bundles. Do not add a runtime
+checksum lookup or an unverified download fallback. If upstream adds another
+script dependency, extend verification before approving that installer.
+
 ## Releasing
 
 Publish releases as Git tags, not as an npm package. Keep `package.json.version` aligned with the release tag. Consumers pin an exact tag such as `voidzero-dev/setup-vp@v1.21.1` or a commit SHA. Do not move the `v1` major tag, which is frozen at `v1.15.0`.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -14,6 +15,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isWindows } from "./platform.js";
 import { getInstallScriptCommand, parseVitePlusDirs, supportsVitePlusDirs } from "./vp-dirs.js";
+
+const source = (url: string, content = "") => ({
+  url,
+  sha256: createHash("sha256").update(content).digest("hex"),
+});
 
 describe("Vite+ directory resolution", () => {
   it("parses the machine-readable VpDirs output", () => {
@@ -55,16 +61,16 @@ describe("Vite+ directory resolution", () => {
   });
 
   it("dumps directories from the installer-resolved Unix shim", () => {
-    const command = getInstallScriptCommand("https://example.com/install.sh", "linux");
+    const command = getInstallScriptCommand(source("https://example.com/install.sh"), "linux");
 
     expect(command.command).toBe("bash");
-    expect(command.args[1]).toContain('mktemp "${TMPDIR:-/tmp}/setup-vp-install.XXXXXX"');
-    expect(command.args[1]).toContain('-o "$installer_file"');
-    expect(command.args[1]).toContain('source "$installer_file"');
-    expect(command.args[1]).not.toContain("source /dev/stdin");
-    expect(command.args[1]).toContain('"$vp_dir/vp" --version');
-    expect(command.args[1]).toContain('VP_DUMP_DIRS=1 "$vp_dir/vp"');
-    expect(command.args[1]).toContain('>> "$SETUP_VP_DIRS_FILE"');
+    expect(command.args.at(-1)!).toContain('mktemp -d "${TMPDIR:-/tmp}/setup-vp-install.XXXXXX"');
+    expect(command.args.at(-1)!).toContain('-o "$download_file"');
+    expect(command.args.at(-1)!).toContain('source "$installer_file"');
+    expect(command.args.at(-1)!).not.toContain("source /dev/stdin");
+    expect(command.args.at(-1)!).toContain('"$vp_dir/vp" --version');
+    expect(command.args.at(-1)!).toContain('VP_DUMP_DIRS=1 "$vp_dir/vp"');
+    expect(command.args.at(-1)!).toContain('>> "$SETUP_VP_DIRS_FILE"');
   });
 
   it.skipIf(isWindows()).each([true, false])(
@@ -98,13 +104,13 @@ fi
       );
       chmodSync(join(bin, "curl"), 0o755);
       chmodSync(join(bin, "vp"), 0o755);
-      const command = getInstallScriptCommand(
-        "https://example.com/install.sh",
-        "linux",
-        detectDirs,
-      );
-      const runInstaller = () =>
-        spawnSync(command.command, command.args, {
+      const runInstaller = () => {
+        const command = getInstallScriptCommand(
+          source("https://example.com/install.sh", readFileSync(installer, "utf8")),
+          "linux",
+          detectDirs,
+        );
+        return spawnSync(command.command, command.args, {
           encoding: "utf8",
           env: {
             ...process.env,
@@ -116,6 +122,7 @@ fi
             SETUP_VP_TEST_CONTINUED: continued,
           },
         });
+      };
 
       try {
         writeFileSync(
@@ -152,18 +159,21 @@ printf 'installer completed\\n'
   );
 
   it("dumps directories from the installer-resolved Windows shim", () => {
-    const command = getInstallScriptCommand("https://example.com/install.ps1", "win32");
+    const command = getInstallScriptCommand(source("https://example.com/install.ps1"), "win32");
 
     expect(command.command).toBe("pwsh");
-    expect(command.args[1]).toContain(". ([scriptblock]::Create");
-    expect(command.args[1]).toContain("Join-Path $vpDir 'vp.exe'");
-    expect(command.args[1]).not.toContain("vp.cmd");
-    expect(command.args[1]).toContain("Test-Path -LiteralPath $vpPath -PathType Leaf");
-    expect(command.args[1]).toContain("setup-vp requires vp.exe in the installed bin directory");
-    expect(command.args[1]).toContain("& $vpPath --version");
-    expect(command.args[1]).toContain("$env:VP_DUMP_DIRS = '1'");
-    expect(command.args[1]).toContain("Set-Content -LiteralPath $dirsFile -Encoding UTF8");
-    expect(command.args[1]).toContain("Add-Content -LiteralPath $dirsFile -Encoding UTF8");
+    expect(command.args.slice(0, 3)).toEqual(["-ExecutionPolicy", "Bypass", "-Command"]);
+    expect(command.args.at(-1)!).toContain(". $installerFile");
+    expect(command.args.at(-1)!).toContain("Join-Path $vpDir 'vp.exe'");
+    expect(command.args.at(-1)!).not.toContain("vp.cmd");
+    expect(command.args.at(-1)!).toContain("Test-Path -LiteralPath $vpPath -PathType Leaf");
+    expect(command.args.at(-1)!).toContain(
+      "setup-vp requires vp.exe in the installed bin directory",
+    );
+    expect(command.args.at(-1)!).toContain("& $vpPath --version");
+    expect(command.args.at(-1)!).toContain("$env:VP_DUMP_DIRS = '1'");
+    expect(command.args.at(-1)!).toContain("Set-Content -LiteralPath $dirsFile -Encoding UTF8");
+    expect(command.args.at(-1)!).toContain("Add-Content -LiteralPath $dirsFile -Encoding UTF8");
   });
 
   it.skipIf(isWindows()).each([true, false])(
@@ -193,7 +203,7 @@ if [ "$7" = '-' ]; then cat "$SETUP_VP_TEST_INSTALLER"; else cp "$SETUP_VP_TEST_
         const marker = join(root, "installed");
         writeFileSync(installer, 'printf installed > "$SETUP_VP_TEST_MARKER"\n');
         const command = getInstallScriptCommand(
-          "https://example.invalid/install.sh",
+          source("https://example.invalid/install.sh", readFileSync(installer, "utf8")),
           "linux",
           detectDirs,
         );
@@ -228,16 +238,20 @@ if [ "$7" = '-' ]; then cat "$SETUP_VP_TEST_INSTALLER"; else cp "$SETUP_VP_TEST_
   );
 
   it.each([
-    ["linux" as const, "install.sh", "| bash"],
-    ["win32" as const, "install.ps1", "& ([scriptblock]::Create"],
+    ["linux" as const, "install.sh", 'bash "$installer_file"'],
+    ["win32" as const, "install.ps1", "& $installerFile"],
   ])(
     "uses the legacy %s installer command when detection is disabled",
     (platform, name, marker) => {
-      const command = getInstallScriptCommand(`https://example.com/${name}`, platform, false);
+      const command = getInstallScriptCommand(
+        source(`https://example.com/${name}`),
+        platform,
+        false,
+      );
 
-      expect(command.args[1]).toContain(marker);
-      expect(command.args[1]).not.toContain("VP_DUMP_DIRS");
-      expect(command.args[1]).not.toContain("SETUP_VP_DIRS_FILE");
+      expect(command.args.at(-1)!).toContain(marker);
+      expect(command.args.at(-1)!).not.toContain("VP_DUMP_DIRS");
+      expect(command.args.at(-1)!).not.toContain("SETUP_VP_DIRS_FILE");
     },
   );
 });
