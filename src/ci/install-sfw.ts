@@ -175,19 +175,19 @@ export async function setupSfw(
     options.vitePlusVersion ?? "",
     options.logWarning ?? console.warn,
   );
-  if (!effectiveSfw) return "vp";
+  if (!effectiveSfw) return { executable: "vp", sfw: false };
 
   if (runInstallEntries.length === 0) {
     console.log(
       "setup-vp: sfw was requested but run-install is disabled; sfw will not be invoked.",
     );
-    return "vp";
+    return { executable: "vp", sfw: false };
   }
 
   const existing = commandPath("sfw", env);
   if (existing) {
     console.log(`setup-vp: using existing sfw on PATH: ${existing}`);
-    return "sfw";
+    return { executable: existing, sfw: true };
   }
 
   let asset: string;
@@ -197,13 +197,13 @@ export async function setupSfw(
     console.error(
       `setup-vp: sfw has no published binary for this runner's platform/architecture (process.platform=${platform}, process.arch=${arch}, musl=${isMusl}) and none was found on PATH; falling back to plain vp install.`,
     );
-    return "vp";
+    return { executable: "vp", sfw: false };
   }
 
   const cacheDirectory = options.cacheDirectory || env.SETUP_VP_SFW_CACHE_DIR;
   const sfwDir = cacheDirectory
-    ? path.join(cacheDirectory, SFW_VERSION, asset)
-    : await mkdtemp(path.join(tmpdir(), "setup-vp-sfw-"));
+    ? path.resolve(cacheDirectory, SFW_VERSION, asset)
+    : await mkdtemp(path.resolve(tmpdir(), "setup-vp-sfw-"));
   await mkdir(sfwDir, { recursive: true });
   const sfwBin = path.join(sfwDir, isWindows(platform) ? "sfw.exe" : "sfw");
   const sfwUrl = `${SFW_RELEASE_BASE}/${asset}`;
@@ -211,7 +211,7 @@ export async function setupSfw(
     const pathSeparator = isWindows(platform) ? ";" : ":";
     env.PATH = `${sfwDir}${pathSeparator}${env.PATH || ""}`;
     options.exportVariable?.("PATH", env.PATH);
-    return "sfw";
+    return { executable: sfwBin, sfw: true };
   }
   if (
     await stat(sfwBin).then(

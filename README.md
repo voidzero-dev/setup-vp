@@ -293,7 +293,7 @@ steps:
 
 In the action log you will see `Using existing sfw on PATH: …` when this composition is detected, vs. `Installing sfw from …` for the bundled-download path.
 
-Existing `sfw` executables must be in an absolute `PATH` directory. The current working directory and empty or relative `PATH` entries are ignored. On Windows, setup-vp looks for the native `sfw.exe` executable.
+Existing `sfw` executables must be in an absolute `PATH` directory. The current working directory, including aliases of that directory, and empty or relative `PATH` entries are ignored. On Windows, setup-vp looks for the native `sfw.exe` executable. Dependency installation uses the selected executable's absolute path, including after a download or cache restore.
 
 > [!NOTE]
 > **macOS / Windows require Vite+ v0.1.23 or newer.** Earlier `vp` releases didn't honor `HTTPS_PROXY` / `SSL_CERT_FILE`, so `sfw vp install` failed the TLS handshake on macOS / Windows (it always worked on Linux). The action's default `version: latest` satisfies this; if you pin an older `vp` and enable `sfw` on macOS / Windows, the install will fail the handshake. On a runner architecture with no published `sfw` binary (e.g. `riscv64`), the action logs a warning and falls back to plain `vp install`.

@@ -85,6 +85,18 @@ describe("GitLab setup parity", () => {
     );
   });
 
+  it("executes the selected sfw path when running the install", async () => {
+    const root = fixture();
+    const executable = path.join(root, "trusted", "sfw");
+    vi.stubEnv("SETUP_VP_SFW", "true");
+    vi.stubEnv("SETUP_VP_RUN_INSTALL", "true");
+    vi.mocked(commandPath).mockReturnValue(executable);
+
+    await main();
+
+    expect(runWithOutput).toHaveBeenCalledWith(executable, ["vp", "install"], expect.any(Object));
+  });
+
   it("gives explicit versions priority over version files", async () => {
     fixture();
     vi.stubEnv("SETUP_VP_VERSION", "0.3.2");

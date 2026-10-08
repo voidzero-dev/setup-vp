@@ -65,11 +65,11 @@ export async function runMain(inputs: Inputs): Promise<void> {
 
   // Step 6: Install Socket Firewall Free if requested (must run before vp install).
   // Use the resolved version so preview pins in files also disable sfw.
-  const effectiveSfw = await setupSfw({ ...inputs, version });
+  const installCommand = await setupSfw({ ...inputs, version });
 
   // Step 7: Run vp install if requested
   if (inputs.runInstall.length > 0) {
-    await runViteInstall({ ...inputs, sfw: effectiveSfw });
+    await runViteInstall(inputs, installCommand);
   }
 
   // Print version info at the end

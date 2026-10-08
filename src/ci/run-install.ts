@@ -75,21 +75,18 @@ export async function runInstall(
   const installEnv = { ...env };
   delete installEnv.SETUP_VP_ENV_FILE;
   const execute = options.execute ?? runWithOutput;
+  const { executable, sfw } = installCommand;
   const failures: string[] = [];
 
   for (const entry of entries) {
     const cwd = entry.cwd ? path.resolve(projectDir, entry.cwd) : projectDir;
     const installArgs = ["install", ...(entry.args || [])];
-    const args = installCommand === "sfw" ? ["vp", ...installArgs] : installArgs;
-    const label = `${installCommand} ${args.join(" ")} (cwd: ${cwd})`;
+    const args = sfw ? ["vp", ...installArgs] : installArgs;
+    const label = `${executable} ${args.join(" ")} (cwd: ${cwd})`;
     console.log(`setup-vp: running ${label}`);
     try {
-      let result = await execute(installCommand, args, { cwd, env: installEnv });
-      if (
-        result.exitCode !== 0 &&
-        installCommand === "sfw" &&
-        isSfwVpNotFoundFlake(result.stdout, result.stderr)
-      ) {
+      let result = await execute(executable, args, { cwd, env: installEnv });
+      if (result.exitCode !== 0 && sfw && isSfwVpNotFoundFlake(result.stdout, result.stderr)) {
         const windows = isWindows(options.platform);
         console.warn(
           windows
@@ -106,7 +103,7 @@ export async function runInstall(
             // A failed warm-up must not prevent the retry.
           }
         }
-        result = await execute(installCommand, args, { cwd, env: installEnv });
+        result = await execute(executable, args, { cwd, env: installEnv });
       }
       if (result.exitCode !== 0) {
         failures.push(

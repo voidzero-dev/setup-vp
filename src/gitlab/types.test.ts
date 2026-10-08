@@ -11,8 +11,10 @@ describe("GitLab runtime types", () => {
     const input: RunInstallInput = entries;
     const env: RuntimeEnv = { SETUP_VP_SFW: "true" };
 
-    expect(acceptInstallCommand("vp")).toBe("vp");
-    expect(acceptInstallCommand("sfw")).toBe("sfw");
+    expect(acceptInstallCommand({ executable: "vp", sfw: false }).sfw).toBe(false);
+    expect(acceptInstallCommand({ executable: "/trusted/sfw", sfw: true }).executable).toBe(
+      "/trusted/sfw",
+    );
     expect(input).toEqual(entries);
     expect(env.SETUP_VP_SFW).toBe("true");
   });

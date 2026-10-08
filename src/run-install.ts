@@ -1,6 +1,7 @@
 import { startGroup, endGroup, setFailed, info, warning, error as logError } from "@actions/core";
 import { getExecOutput } from "@actions/exec";
 import type { Inputs } from "./types.js";
+import type { InstallCommand } from "./ci/types.js";
 import { getConfiguredProjectDir, getInstallCwd } from "./utils.js";
 import { isWindows } from "./ci/platform.js";
 
@@ -39,8 +40,12 @@ function tailOutput(buffer: string, max: number): string {
   return `…(truncated, showing last ${max} chars)…\n${trimmed.slice(-max)}`;
 }
 
-export async function runViteInstall(inputs: Inputs): Promise<void> {
+export async function runViteInstall(
+  inputs: Inputs,
+  installCommand: InstallCommand,
+): Promise<void> {
   const projectDir = getConfiguredProjectDir(inputs);
+  const { executable: cmd, sfw } = installCommand;
 
   for (const options of inputs.runInstall) {
     const installArgs = ["install"];
@@ -48,15 +53,15 @@ export async function runViteInstall(inputs: Inputs): Promise<void> {
       installArgs.push(...options.args);
     }
 
-    const cmd = inputs.sfw ? "sfw" : "vp";
-    const args = inputs.sfw ? ["vp", ...installArgs] : installArgs;
+    const args = sfw ? ["vp", ...installArgs] : installArgs;
     const cwd = getInstallCwd(projectDir, options.cwd);
     const cmdStr = `${cmd} ${args.join(" ")}`;
 
     const attempt = async (label: string) => {
       startGroup(`Running ${label} in ${cwd}...`);
       try {
-        return await getExecOutput(cmd, args, {
+        // @actions/exec parses its first parameter as a command line.
+        return await getExecOutput(`"${cmd.replaceAll('"', '\\"')}"`, args, {
           cwd,
           ignoreReturnCode: true,
         });
@@ -68,11 +73,7 @@ export async function runViteInstall(inputs: Inputs): Promise<void> {
     try {
       let result = await attempt(cmdStr);
 
-      if (
-        result.exitCode !== 0 &&
-        inputs.sfw &&
-        isSfwVpNotFoundFlake(result.stdout, result.stderr)
-      ) {
+      if (result.exitCode !== 0 && sfw && isSfwVpNotFoundFlake(result.stdout, result.stderr)) {
         warning(
           "sfw reported vp as not found even though it is on PATH. This is a known sfw flake on Windows: a cold PowerShell start exceeds sfw's 10s command-resolution timeout and the timeout is misreported as not-found. Warming the PowerShell command cache and retrying once.",
         );

@@ -103,9 +103,15 @@ describe("GitLab run-install execution", () => {
     const dir = tempDir();
     const appDir = path.join(dir, "app");
     mkdirSync(appDir);
-    await runInstall([{ cwd: "app", args: ["--frozen-lockfile"] }], dir, "vp", process.env, {
-      execute: recorder(dir),
-    });
+    await runInstall(
+      [{ cwd: "app", args: ["--frozen-lockfile"] }],
+      dir,
+      { executable: "vp", sfw: false },
+      process.env,
+      {
+        execute: recorder(dir),
+      },
+    );
 
     expect(JSON.parse(readFileSync(path.join(dir, "run.json"), "utf8"))).toEqual({
       cwd: realpathSync(appDir),
@@ -116,11 +122,13 @@ describe("GitLab run-install execution", () => {
 
   it("runs install entries through sfw when requested", async () => {
     const dir = tempDir();
-    await runInstall([{}], dir, "sfw", process.env, { execute: recorder(dir) });
+    await runInstall([{}], dir, { executable: "/trusted/sfw", sfw: true }, process.env, {
+      execute: recorder(dir),
+    });
 
     expect(JSON.parse(readFileSync(path.join(dir, "run.json"), "utf8"))).toEqual({
       cwd: realpathSync(dir),
-      command: "sfw",
+      command: "/trusted/sfw",
       args: ["vp", "install"],
     });
   });
@@ -128,7 +136,7 @@ describe("GitLab run-install execution", () => {
   it("does not expose SETUP_VP_ENV_FILE to install subprocesses", async () => {
     const dir = tempDir();
     const env = { ...process.env, SETUP_VP_ENV_FILE: path.join(dir, "setup-vp.env") };
-    await runInstall([{}], dir, "vp", env, { execute: recorder(dir) });
+    await runInstall([{}], dir, { executable: "vp", sfw: false }, env, { execute: recorder(dir) });
 
     expect(JSON.parse(readFileSync(path.join(dir, "run.json"), "utf8"))).not.toHaveProperty(
       "envFile",

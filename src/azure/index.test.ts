@@ -19,7 +19,7 @@ describe("Azure lifecycle", () => {
           return { ready: false };
         },
         configureAuth: () => undefined,
-        setupSfw: async () => "vp",
+        setupSfw: async () => ({ executable: "vp", sfw: false }),
         parseRunInstall: () => [],
         runInstall: () => undefined,
         getCommandOutput: () => "vp v0.2.2",
@@ -51,7 +51,7 @@ describe("Azure lifecycle", () => {
         },
         setupSfw: async () => {
           calls.push("sfw");
-          return "vp";
+          return { executable: "vp", sfw: false };
         },
         parseRunInstall: () => {
           calls.push("parse");
@@ -89,7 +89,7 @@ describe("Azure lifecycle", () => {
         installVitePlus: async () => undefined,
         prepareCacheMetadata: () => ({ ready: false }),
         configureAuth: () => undefined,
-        setupSfw: async () => "vp",
+        setupSfw: async () => ({ executable: "vp", sfw: false }),
         parseRunInstall: () => [],
         runInstall: () => undefined,
         getCommandOutput: () => `vp v${version}`,
@@ -123,7 +123,7 @@ describe("Azure lifecycle", () => {
         installVitePlus: async () => undefined,
         prepareCacheMetadata: () => ({ ready: false }),
         configureAuth: () => undefined,
-        setupSfw: async () => "vp",
+        setupSfw: async () => ({ executable: "vp", sfw: false }),
         parseRunInstall: () => [],
         runInstall: () => undefined,
         getCommandOutput: () => "vp v0.2.2",
@@ -150,7 +150,7 @@ describe("Azure lifecycle", () => {
         installVitePlus: async () => undefined,
         prepareCacheMetadata: () => ({ ready: false }),
         configureAuth: () => undefined,
-        setupSfw: async () => "vp",
+        setupSfw: async () => ({ executable: "vp", sfw: false }),
         parseRunInstall: () => [],
         runInstall,
         getCommandOutput: () => "vp v0.2.2",

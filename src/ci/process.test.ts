@@ -1,6 +1,7 @@
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -70,6 +71,38 @@ describe("commandPath", () => {
     const env = { Path: `"${first}";"${second}"`, PATHEXT: ".CMD;.COM" };
     expect(commandPath("sfw", env)).toBe(path.join(second, filename));
     expect(commandPath("sfw.exe", env)).toBe(path.join(second, filename));
+  });
+
+  it("excludes a case alias on a case-insensitive volume", (context) => {
+    const { root, first, filename } = fixture();
+    const alias = path.join(root, "FIRST BIN");
+    if (!existsSync(alias)) context.skip("requires a case-insensitive volume");
+    writeFileSync(path.join(first, filename), "workspace executable", { mode: 0o755 });
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(first);
+      expect(commandPath("sfw", { PATH: alias })).toBeUndefined();
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("keeps distinct directories that differ only in case on a case-sensitive volume", (context) => {
+    const { root, first, filename } = fixture();
+    const other = path.join(root, "FIRST BIN");
+    if (existsSync(other)) context.skip("requires a case-sensitive volume");
+    mkdirSync(other);
+    writeFileSync(path.join(first, filename), "workspace executable", { mode: 0o755 });
+    writeFileSync(path.join(other, filename), "trusted executable", { mode: 0o755 });
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(first);
+      expect(commandPath("sfw", { PATH: [first, other].join(path.delimiter) })).toBe(
+        path.join(other, filename),
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
   });
 });
 

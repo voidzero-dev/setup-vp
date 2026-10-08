@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import type { SpawnOptions, SpawnSyncOptions } from "node:child_process";
-import { accessSync, constants, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import path from "node:path";
 import { isWindows } from "./platform.js";
 
@@ -49,18 +49,17 @@ export function commandPath(
     : "PATH";
   const searchPath = (pathKey && env[pathKey]) || "";
   const filename = windows && !command.toLowerCase().endsWith(".exe") ? `${command}.exe` : command;
-  const cwd = realpathSync(process.cwd());
+  const cwd = statSync(process.cwd(), { bigint: true });
 
   for (const entry of searchPath.split(path.delimiter)) {
     const directory = windows ? entry.replace(/^"(.*)"$/, "$1") : entry;
     // Empty and relative entries can refer to attacker-controlled checkout files.
     if (!path.isAbsolute(directory)) continue;
     try {
-      const resolvedDirectory = realpathSync(directory);
-      const isCwd = windows
-        ? resolvedDirectory.toLowerCase() === cwd.toLowerCase()
-        : resolvedDirectory === cwd;
-      if (isCwd) continue;
+      // Filesystem identity covers case aliases and symlinks without assuming
+      // that all volumes on the same operating system use the same case rules.
+      const directoryStat = statSync(directory, { bigint: true });
+      if (directoryStat.dev === cwd.dev && directoryStat.ino === cwd.ino) continue;
 
       const candidate = path.join(directory, filename);
       if (!statSync(candidate).isFile()) continue;
