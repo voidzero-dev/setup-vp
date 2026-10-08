@@ -10,7 +10,10 @@ export type RunInstallInput = null | boolean | RunInstallEntry | RunInstallEntry
 
 export type RuntimeEnv = Record<string, string | undefined>;
 
-export type InstallCommand = "vp" | "sfw";
+export type InstallCommand = {
+  executable: string;
+  sfw: boolean;
+};
 
 export enum LockFileType {
   Npm = "npm",

@@ -56,17 +56,28 @@ const inputs = (cache: boolean, cacheSave: boolean): Inputs => ({
 });
 
 describe("runMain sfw", () => {
+  it("passes the selected sfw executable to the install runner", async () => {
+    vi.mocked(resolveVitePlusVersion).mockReturnValue("latest");
+    const command = { executable: "/trusted/sfw", sfw: true };
+    vi.mocked(setupSfw).mockResolvedValue(command);
+    const requested = { ...inputs(false, true), sfw: true, runInstall: [{}] };
+
+    await runMain(requested);
+
+    expect(runViteInstall).toHaveBeenCalledWith(requested, command);
+  });
+
   it("passes the resolved preview version to sfw setup and installs without sfw", async () => {
     const version = "0.0.0-commit.7d848b3da1987fa60b4cf18487fcc36a2a697e94";
     vi.mocked(resolveVitePlusVersion).mockReturnValue(version);
-    vi.mocked(setupSfw).mockResolvedValue(false);
+    vi.mocked(setupSfw).mockResolvedValue({ executable: "vp", sfw: false });
     const requested = { ...inputs(false, true), sfw: true, runInstall: [{}] };
 
     await runMain(requested);
 
     expect(installVitePlus).toHaveBeenCalledWith({ ...requested, version });
     expect(setupSfw).toHaveBeenCalledWith({ ...requested, version });
-    expect(runViteInstall).toHaveBeenCalledWith({ ...requested, sfw: false });
+    expect(runViteInstall).toHaveBeenCalledWith(requested, { executable: "vp", sfw: false });
   });
 });
 

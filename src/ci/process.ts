@@ -1,5 +1,6 @@
-import { spawn, spawnSync } from "node:child_process";
-import type { SpawnOptions, SpawnSyncOptions } from "node:child_process";
+import { spawn, spawnSync, type SpawnOptions, type SpawnSyncOptions } from "node:child_process";
+import { accessSync, constants, statSync } from "node:fs";
+import path from "node:path";
 import { isWindows } from "./platform.js";
 
 export function run(command: string, args: string[], options: SpawnSyncOptions = {}): void {
@@ -32,20 +33,45 @@ export function runWithOutput(
   });
 }
 
-export function commandPath(command: string): string | undefined {
-  if (isWindows()) {
-    const result = spawnSync("where", [command], { encoding: "utf8" });
-    if (result.status === 0) {
-      const line = result.stdout.trim().split(/\r?\n/)[0]?.trim();
-      return line || undefined;
-    }
-    return undefined;
-  }
+// Resolve native executables without running a lookup tool from the workspace.
+export function commandPath(
+  command: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  if (!command || command === "." || command === ".." || /[\\/:]/.test(command)) return undefined;
 
-  const result = spawnSync("sh", ["-c", 'command -v "$1"', "sh", command], {
-    encoding: "utf8",
-  });
-  if (result.status === 0) return result.stdout.trim();
+  const windows = isWindows();
+  const pathKey = windows
+    ? Object.keys(env)
+        .sort()
+        .find((key) => key.toUpperCase() === "PATH")
+    : "PATH";
+  const searchPath = pathKey ? env[pathKey] || "" : "";
+  const filename = windows && !command.toLowerCase().endsWith(".exe") ? `${command}.exe` : command;
+  const cwdStat = statSync(process.cwd(), { bigint: true });
+  const accessMode = windows ? constants.F_OK : constants.X_OK;
+
+  for (const entry of searchPath.split(path.delimiter)) {
+    const directory = windows ? entry.replace(/^"(.*)"$/, "$1") : entry;
+    // Empty and relative entries can refer to attacker-controlled checkout files.
+    if (!path.isAbsolute(directory)) continue;
+    // On Windows, isAbsolute also accepts drive-root-relative paths such as
+    // \trusted. These change meaning when the install cwd is on another drive.
+    if (windows && path.parse(directory).root.length === 1) continue;
+    try {
+      // Filesystem identity covers case aliases and symlinks without assuming
+      // that all volumes on the same operating system use the same case rules.
+      const directoryStat = statSync(directory, { bigint: true });
+      if (directoryStat.dev === cwdStat.dev && directoryStat.ino === cwdStat.ino) continue;
+
+      const candidate = path.join(directory, filename);
+      if (!statSync(candidate).isFile()) continue;
+      accessSync(candidate, accessMode);
+      return candidate;
+    } catch {
+      // Missing or inaccessible entries do not prevent searching the rest of PATH.
+    }
+  }
   return undefined;
 }
 

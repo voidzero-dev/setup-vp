@@ -33,7 +33,7 @@ describe("portable sfw preview handling", () => {
         logWarning,
       });
 
-      expect(installCommand).toBe("vp");
+      expect(installCommand).toEqual({ executable: "vp", sfw: false });
       expect(logWarning).toHaveBeenCalledExactlyOnceWith(
         `sfw was requested but is automatically disabled for Vite+ preview build ${vitePlusVersion}; Socket Firewall Free will not be used.`,
       );
@@ -46,7 +46,10 @@ describe("portable sfw preview handling", () => {
 
   it("does not warn when sfw is already disabled for a preview", async () => {
     const logWarning = vi.fn();
-    expect(await setupSfw([{}], { sfwEnabled: false, vitePlusVersion, logWarning })).toBe("vp");
+    expect(await setupSfw([{}], { sfwEnabled: false, vitePlusVersion, logWarning })).toEqual({
+      executable: "vp",
+      sfw: false,
+    });
     expect(logWarning).not.toHaveBeenCalled();
   });
 
@@ -55,9 +58,9 @@ describe("portable sfw preview handling", () => {
     async (version) => {
       vi.mocked(commandPath).mockReturnValue("/bin/sfw");
       const logWarning = vi.fn();
-      expect(await setupSfw([{}], { sfwEnabled: true, vitePlusVersion: version, logWarning })).toBe(
-        "sfw",
-      );
+      expect(
+        await setupSfw([{}], { sfwEnabled: true, vitePlusVersion: version, logWarning }),
+      ).toEqual({ executable: "/bin/sfw", sfw: true });
       expect(logWarning).not.toHaveBeenCalled();
     },
   );

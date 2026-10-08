@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { parseRunInstall, runInstall } from "./run-install.js";
 
+const sfwCommand = { executable: "/trusted/sfw", sfw: true };
+
 describe("portable installs", () => {
   it("parses YAML comments, anchors, quoted escapes and empty arguments", () => {
     expect(
@@ -23,8 +25,12 @@ describe("portable installs", () => {
       .mockResolvedValueOnce({ exitCode: 1, stdout: "", stderr: "Command 'vp' not found in PATH" })
       .mockRejectedValueOnce(new Error("warm-up failed"))
       .mockResolvedValueOnce({ exitCode: 0, stdout: "", stderr: "" });
-    await runInstall([{}], "/project", "sfw", {}, { platform: "win32", execute });
-    expect(execute.mock.calls.map((call) => call[0])).toEqual(["sfw", "powershell.exe", "sfw"]);
+    await runInstall([{}], "/project", sfwCommand, {}, { platform: "win32", execute });
+    expect(execute.mock.calls.map((call) => call[0])).toEqual([
+      sfwCommand.executable,
+      "powershell.exe",
+      sfwCommand.executable,
+    ]);
   });
 
   it("runs later entries, aggregates failures, and never retries ordinary install errors", async () => {
@@ -32,7 +38,7 @@ describe("portable installs", () => {
       .fn()
       .mockResolvedValue({ exitCode: 1, stdout: "", stderr: "lockfile mismatch" });
     await expect(
-      runInstall([{ cwd: "a" }, { cwd: "b" }], "/project", "sfw", {}, { execute }),
+      runInstall([{ cwd: "a" }, { cwd: "b" }], "/project", sfwCommand, {}, { execute }),
     ).rejects.toThrow(/cwd:.*a[\s\S]*cwd:.*b/);
     expect(execute).toHaveBeenCalledTimes(2);
   });
@@ -50,8 +56,11 @@ describe("portable installs", () => {
             stderr: "Command 'vp' not found in PATH",
           })
           .mockResolvedValueOnce({ exitCode: 0, stdout: "", stderr: "" });
-        await runInstall([{}], "/project", "sfw", {}, { platform, execute });
-        expect(execute.mock.calls.map(([command]) => command)).toEqual(["sfw", "sfw"]);
+        await runInstall([{}], "/project", sfwCommand, {}, { platform, execute });
+        expect(execute.mock.calls.map(([command]) => command)).toEqual([
+          sfwCommand.executable,
+          sfwCommand.executable,
+        ]);
         expect(warn).toHaveBeenCalledWith("setup-vp: sfw could not resolve vp; retrying once.");
       } finally {
         warn.mockRestore();

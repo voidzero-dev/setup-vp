@@ -1,9 +1,12 @@
 import {
+  chmodSync,
   copyFileSync,
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { rm } from "node:fs/promises";
@@ -20,6 +23,87 @@ afterEach(async () => {
     // Windows can briefly retain a lock on a native executable after it exits.
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
+});
+
+describe("commandPath", () => {
+  function fixture(): { root: string; first: string; second: string; filename: string } {
+    const root = mkdtempSync(path.join(tmpdir(), "setup-vp-path-"));
+    directories.push(root);
+    const first = path.join(root, "first bin");
+    const second = path.join(root, "second bin");
+    mkdirSync(first);
+    mkdirSync(second);
+    return { root, first, second, filename: isWindows() ? "sfw.exe" : "sfw" };
+  }
+
+  it("checks PATH order, skips directories and missing entries, and never executes the result", () => {
+    const { root, first, second, filename } = fixture();
+    const env = { PATH: [path.join(root, "missing"), first, second].join(path.delimiter) };
+    mkdirSync(path.join(first, filename));
+    writeFileSync(path.join(second, filename), "not an executable program", { mode: 0o755 });
+
+    expect(commandPath("sfw", env)).toBe(path.join(second, filename));
+    expect(commandPath("sfw", {})).toBeUndefined();
+    expect(commandPath("sfw", { PATH: "" })).toBeUndefined();
+    expect(commandPath("../sfw", env)).toBeUndefined();
+    expect(commandPath(path.join(second, filename), env)).toBeUndefined();
+    expect(commandPath("", env)).toBeUndefined();
+  });
+
+  it.skipIf(isWindows())("requires execute permission and accepts executable symlinks", () => {
+    const { first, second, filename } = fixture();
+    writeFileSync(path.join(first, filename), "not executable", { mode: 0o644 });
+    writeFileSync(path.join(second, filename), "executable", { mode: 0o755 });
+    const env = { PATH: [first, second].join(path.delimiter) };
+    expect(commandPath("sfw", env)).toBe(path.join(second, filename));
+
+    chmodSync(path.join(first, filename), 0o755);
+    expect(commandPath("sfw", env)).toBe(path.join(first, filename));
+    symlinkSync(path.join(second, filename), path.join(first, "linked-sfw"));
+    expect(commandPath("linked-sfw", env)).toBe(path.join(first, "linked-sfw"));
+  });
+
+  it.skipIf(!isWindows())("accepts quoted Path entries and selects native .exe files", () => {
+    const { first, second, filename } = fixture();
+    writeFileSync(path.join(first, "sfw.cmd"), "@exit /b 1");
+    writeFileSync(path.join(first, "sfw.com"), "not an exe");
+    writeFileSync(path.join(second, filename), "native exe");
+    const env = { Path: `"${first}";"${second}"`, PATHEXT: ".CMD;.COM" };
+    expect(commandPath("sfw", env)).toBe(path.join(second, filename));
+    expect(commandPath("sfw.exe", env)).toBe(path.join(second, filename));
+  });
+
+  it("excludes a case alias on a case-insensitive volume", (context) => {
+    const { root, first, filename } = fixture();
+    const alias = path.join(root, "FIRST BIN");
+    if (!existsSync(alias)) context.skip("requires a case-insensitive volume");
+    writeFileSync(path.join(first, filename), "workspace executable", { mode: 0o755 });
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(first);
+      expect(commandPath("sfw", { PATH: alias })).toBeUndefined();
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("keeps distinct directories that differ only in case on a case-sensitive volume", (context) => {
+    const { root, first, filename } = fixture();
+    const other = path.join(root, "FIRST BIN");
+    if (existsSync(other)) context.skip("requires a case-sensitive volume");
+    mkdirSync(other);
+    writeFileSync(path.join(first, filename), "workspace executable", { mode: 0o755 });
+    writeFileSync(path.join(other, filename), "trusted executable", { mode: 0o755 });
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(first);
+      expect(commandPath("sfw", { PATH: [first, other].join(path.delimiter) })).toBe(
+        path.join(other, filename),
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
 });
 
 describe("portable process helpers", () => {
@@ -67,8 +151,7 @@ process.exit(Number(process.env.SETUP_VP_TEST_EXIT || 0));
         "trailing\\",
       ];
       const commandArgs = [script, ...args];
-      // where.exe can expand TEMP's 8.3 spelling. Check file identity rather
-      // than requiring the same spelling for equivalent Windows paths.
+      // Check file identity across equivalent Windows path spellings.
       const resolvedPath = commandPath("vp");
       expect(resolvedPath).toBeDefined();
       const expectedFile = statSync(path.join(bin, "vp.exe"), { bigint: true });

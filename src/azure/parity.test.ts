@@ -23,7 +23,7 @@ function fixture() {
     installVitePlus: vi.fn<typeof installVitePlus>(async () => {}),
     prepareCacheMetadata: vi.fn(() => ({ ready: false })),
     configureAuth: vi.fn(configureAuth),
-    setupSfw: vi.fn<typeof setupSfw>().mockResolvedValue("vp"),
+    setupSfw: vi.fn<typeof setupSfw>().mockResolvedValue({ executable: "vp", sfw: false }),
     parseRunInstall,
     runInstall: vi.fn(),
     getCommandOutput: vi.fn((): string | undefined => "vp v0.3.1"),
@@ -134,7 +134,23 @@ describe("Azure parity", () => {
     expect(ports.setVariable.mock.calls.some(([name]) => name.endsWith("CONFIG_USERCONFIG"))).toBe(
       false,
     );
-    expect(ports.runInstall).toHaveBeenCalledWith(expect.anything(), project, "vp", target);
+    expect(ports.runInstall).toHaveBeenCalledWith(
+      expect.anything(),
+      project,
+      { executable: "vp", sfw: false },
+      target,
+    );
+  });
+
+  it("passes the selected sfw executable to the install runner", async () => {
+    const { project, env, ports } = fixture();
+    const command = { executable: path.join(project, "trusted", "sfw"), sfw: true };
+    ports.setupSfw.mockResolvedValue(command);
+    const target = { ...env, SETUP_VP_SFW: "true" };
+
+    await runFinalize(target, ports);
+
+    expect(ports.runInstall).toHaveBeenCalledWith([{}], project, command, target);
   });
 
   it("prepares a version/platform-specific sfw cache only when an install will run", async () => {
@@ -185,7 +201,12 @@ describe("Azure parity", () => {
       delete target.SETUP_VP_VERSION_FILE;
       await runFinalize(target, ports);
 
-      expect(ports.runInstall).toHaveBeenCalledWith([{}], project, "vp", target);
+      expect(ports.runInstall).toHaveBeenCalledWith(
+        [{}],
+        project,
+        { executable: "vp", sfw: false },
+        target,
+      );
       expect(ports.logWarning).toHaveBeenCalledExactlyOnceWith(
         expect.stringContaining(`automatically disabled for Vite+ preview build ${version}`),
       );
@@ -205,7 +226,12 @@ describe("Azure parity", () => {
       expect(target.CUSTOM_TOKEN).toBeUndefined();
       expect(target.UNRELATED_VALUE).toBe("$(keep-me)");
       expect(ports.setVariable.mock.calls.some(([name]) => name === "CUSTOM_TOKEN")).toBe(false);
-      expect(ports.runInstall).toHaveBeenCalledWith(expect.anything(), project, "vp", target);
+      expect(ports.runInstall).toHaveBeenCalledWith(
+        expect.anything(),
+        project,
+        { executable: "vp", sfw: false },
+        target,
+      );
     },
   );
 

@@ -37,15 +37,19 @@ describe("GitLab sfw setup", () => {
   });
 
   it("does not set up sfw when disabled or run-install is disabled", async () => {
-    expect(await setupSfw([{}], { SETUP_VP_SFW: "false" })).toBe("vp");
-    expect(await setupSfw([], { SETUP_VP_SFW: "true" })).toBe("vp");
+    expect(await setupSfw([{}], { SETUP_VP_SFW: "false" })).toEqual({
+      executable: "vp",
+      sfw: false,
+    });
+    expect(await setupSfw([], { SETUP_VP_SFW: "true" })).toEqual({ executable: "vp", sfw: false });
   });
 
   it("uses an existing sfw command from PATH", async () => {
-    vi.mocked(commandPath).mockReturnValue(path.join(tempDir(), "sfw"));
+    const executable = path.join(tempDir(), "sfw");
+    vi.mocked(commandPath).mockReturnValue(executable);
 
-    expect(await setupSfw([{}], { SETUP_VP_SFW: "true" })).toBe("sfw");
-    expect(commandPath).toHaveBeenCalledWith("sfw");
+    expect(await setupSfw([{}], { SETUP_VP_SFW: "true" })).toEqual({ executable, sfw: true });
+    expect(commandPath).toHaveBeenCalledWith("sfw", { SETUP_VP_SFW: "true" });
     expect(spawnSync).not.toHaveBeenCalled();
   });
 
