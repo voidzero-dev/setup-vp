@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   merge_group:
   workflow_dispatch:
     inputs:
@@ -1137,12 +1136,6 @@ jobs:
       - name: Build portable bundles
         run: vp run build
 
-      # The full unit suite runs only on Ubuntu and skips PowerShell execution.
-      # Run these regressions in the OS matrix to exercise Bash on Linux/macOS
-      # and native powershell.exe on Windows; syntax checks cannot catch injection.
-      - name: Test Azure template ref validation and shell injection regressions
-        run: vp run test src/azure/template.test.ts
-
       - name: Verify Azure runtime invalid phase smoke test
         shell: bash
         run: |
@@ -1162,9 +1155,14 @@ jobs:
           [scriptblock]::Create((Get-Content -Raw azure/bootstrap.ps1)) > $null
           [scriptblock]::Create((Get-Content -Raw gitlab/bootstrap.ps1)) > $null
 
-  test-portable-process:
-    name: Portable Windows command and cache regressions
-    runs-on: windows-latest
+  test-unit:
+    name: Unit tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    # Use the published CLI for repository checks, including manual runs.
     env:
       VP_PR_VERSION: ""
     steps:
@@ -1173,13 +1171,16 @@ jobs:
         uses: ./
         with:
           node-version-file: .node-version
-      - name: Test native Windows executables and cache links
-        run: vp run test src/ci/process.test.ts src/ci/cache-snapshot.test.ts
+      # Some tests inspect or execute dist/, so build on each runner first.
+      - name: Build
+        run: vp run build
+      - name: Unit tests
+        run: vp run test
 
   build:
     runs-on: ubuntu-latest
     # This job verifies the action's own artifacts (dist/ committed and up to
-    # date, types, unit tests). Pin it to the latest published Vite+ even on a
+    # date, types, lint). Pin it to the latest published Vite+ even on a
     # pr_version dispatch: a pre-release bundler could shift dist/ output and
     # fail the "dist is up to date" diff for reasons unrelated to the change.
     env:
@@ -1199,9 +1200,6 @@ jobs:
 
       - name: Check
         run: vp run check
-
-      - name: Unit tests
-        run: vp run test
 
       - name: Build
         run: vp run build
