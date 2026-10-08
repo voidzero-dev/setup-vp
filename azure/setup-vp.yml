@@ -153,7 +153,9 @@ steps:
       SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
       SETUP_VP_SCOPE: ${{ parameters.scope }}
       NODE_AUTH_TOKEN: $(NODE_AUTH_TOKEN)
-      ${{ insert }}: ${{ parameters.authEnv }}
+      # Keep credential mappings inert until the runtime validates their names.
+      ${{ each pair in parameters.authEnv }}:
+        ${{ format('SETUP_VP_AUTH_ENV_{0}', pair.key) }}: ${{ pair.value }}
       SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
       SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}
 
@@ -171,6 +173,8 @@ steps:
       SETUP_VP_REGISTRY_URL: ${{ parameters.registryUrl }}
       SETUP_VP_SCOPE: ${{ parameters.scope }}
       NODE_AUTH_TOKEN: $(NODE_AUTH_TOKEN)
-      ${{ insert }}: ${{ parameters.authEnv }}
+      # Keep credential mappings inert until the runtime validates their names.
+      ${{ each pair in parameters.authEnv }}:
+        ${{ format('SETUP_VP_AUTH_ENV_{0}', pair.key) }}: ${{ pair.value }}
       SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
       SETUP_VP_CACHE_DEPENDENCY_PATH: ${{ parameters.cacheDependencyPath }}

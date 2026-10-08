@@ -1,4 +1,5 @@
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -38,6 +39,42 @@ function fixture() {
 }
 
 describe("Azure parity", () => {
+  it("passes custom auth mappings to install subprocesses and exports referenced secrets", async () => {
+    const { project, env, ports } = fixture();
+    const secret = 'token with "quotes", \\ and\nnewlines';
+    writeFileSync(path.join(project, ".npmrc"), "//registry.example/:_authToken=${CUSTOM_TOKEN}\n");
+    const target: NodeJS.ProcessEnv = { ...env, SETUP_VP_AUTH_ENV_CUSTOM_TOKEN: secret };
+    ports.runInstall.mockImplementation((_entries, _project, _command, installEnv) => {
+      const result = spawnSync(
+        process.execPath,
+        [
+          "-e",
+          "process.stdout.write(JSON.stringify({token:process.env.CUSTOM_TOKEN,transport:process.env.SETUP_VP_AUTH_ENV_CUSTOM_TOKEN}))",
+        ],
+        { env: installEnv, encoding: "utf8" },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({ token: secret });
+    });
+
+    await runFinalize(target, ports);
+
+    expect(ports.runInstall).toHaveBeenCalledOnce();
+    expect(ports.setVariable).toHaveBeenCalledWith("CUSTOM_TOKEN", secret, { isSecret: true });
+  });
+
+  it("rejects unsafe auth mappings before auth, install, or version commands", async () => {
+    const { env, ports } = fixture();
+    await expect(
+      runFinalize({ ...env, SETUP_VP_AUTH_ENV_NODE_OPTIONS: "--require=./payload.cjs" }, ports),
+    ).rejects.toThrow("is not a supported credential name");
+    expect(ports.configureAuth).not.toHaveBeenCalled();
+    expect(ports.setupSfw).not.toHaveBeenCalled();
+    expect(ports.runInstall).not.toHaveBeenCalled();
+    expect(ports.getCommandOutput).not.toHaveBeenCalled();
+    expect(ports.setVariable).not.toHaveBeenCalled();
+  });
+
   it("exports the full installer PATH for subsequent Azure tasks", async () => {
     const { root, env, ports } = fixture();
     const bin = path.join(root, "bin");
@@ -221,7 +258,11 @@ describe("Azure parity", () => {
         path.join(project, ".npmrc"),
         "//registry.example/:_authToken=${CUSTOM_TOKEN}\n",
       );
-      const target = { ...env, CUSTOM_TOKEN: value, UNRELATED_VALUE: "$(keep-me)" };
+      const target: NodeJS.ProcessEnv = {
+        ...env,
+        SETUP_VP_AUTH_ENV_CUSTOM_TOKEN: value,
+        UNRELATED_VALUE: "$(keep-me)",
+      };
       await runFinalize(target, ports);
       expect(target.CUSTOM_TOKEN).toBeUndefined();
       expect(target.UNRELATED_VALUE).toBe("$(keep-me)");

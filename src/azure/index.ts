@@ -17,6 +17,7 @@ import { parseInstalledVpVersion } from "../ci/version.js";
 import { logInfo, logWarning, prependPath, setVariable } from "./commands.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { parseAzureInputs, resolveProjectDirFromInputs } from "./inputs.js";
+import { applyAuthEnv } from "./auth-env.js";
 
 export type AzurePhase = "prepare" | "finalize";
 
@@ -163,6 +164,7 @@ export async function runFinalize(
   env: NodeJS.ProcessEnv = process.env,
   ports: AzurePorts = defaultPorts,
 ): Promise<void> {
+  applyAuthEnv(env);
   const inputs = parseAzureInputs(env);
   const projectDir = resolveProjectDirFromInputs(inputs);
   // Azure leaves undefined macros unexpanded, including aliases supplied via

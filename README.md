@@ -690,6 +690,10 @@ Finalize tasks also expose `version` and `cacheHit` as named outputs. Use `$(set
 
 Without `registryUrl`, the runtime preserves existing project `.npmrc` auth entries but does not generate token entries for its registry URLs. Set `registryUrl` to generate auth configuration for a registry. Referenced custom token variables are propagated as secret pipeline variables, not public outputs. Pass custom secret mappings through `authEnv`, for example `authEnv: { CUSTOM_TOKEN: "$(CUSTOM_TOKEN)" }`. Azure does not automatically put secret pipeline variables in task environments.
 
+`authEnv` accepts `TOKEN`, `PASSWORD`, `SECRET`, `KEY`, or names ending in `_TOKEN`, `_PASSWORD`, `_SECRET`, or `_KEY`. Names can contain only ASCII letters, digits, and underscores, cannot start with a digit, and must be unique regardless of case. Runtime and CI namespaces, such as `NODE_*` and `SETUP_VP_*`, are reserved. Supported credential exceptions include `NODE_AUTH_TOKEN`, `GITHUB_TOKEN`, `CI_JOB_TOKEN`, `SYSTEM_ACCESSTOKEN`, `YARN_NPM_AUTH_TOKEN`, and `YARN_NPM_AUTH_IDENT`. Other names are rejected before installation.
+
+For a secret with a different name, use an alias such as `authEnv: { CUSTOM_TOKEN: "$(MY_CREDENTIAL)" }` and reference `${CUSTOM_TOKEN}` in `.npmrc`. Custom credentials reach the install process after validation; unresolved secret macros are treated as missing credentials.
+
 ### Azure Notes
 
 - The template supports Microsoft-hosted Linux, macOS, and Windows agents.
