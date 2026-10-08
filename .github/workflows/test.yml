@@ -1137,6 +1137,9 @@ jobs:
       - name: Build portable bundles
         run: vp run build
 
+      # The full unit suite runs only on Ubuntu and skips PowerShell execution.
+      # Run these regressions in the OS matrix to exercise Bash on Linux/macOS
+      # and native powershell.exe on Windows; syntax checks cannot catch injection.
       - name: Test Azure template ref validation and shell injection regressions
         run: vp run test src/azure/template.test.ts
 
