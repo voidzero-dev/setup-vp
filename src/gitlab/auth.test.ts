@@ -31,7 +31,8 @@ describe("configureAuth", () => {
     expect(targetEnv.NODE_AUTH_TOKEN).toBe("XXXXX-XXXXX-XXXXX-XXXXX");
     expect(path.basename(path.dirname(npmrc))).toMatch(/^setup-vp-npmrc-/);
     expect(npmrc).not.toBe(path.join(tmpdir(), `setup-vp-npmrc.${process.pid}`));
-    expect(statSync(npmrc).mode & 0o777).toBe(0o600);
+    // Windows does not expose POSIX owner/group permission bits.
+    if (process.platform !== "win32") expect(statSync(npmrc).mode & 0o777).toBe(0o600);
     expect(readFileSync(npmrc, "utf8")).toBe(
       "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n@myorg:registry=https://npm.pkg.github.com/\n",
     );

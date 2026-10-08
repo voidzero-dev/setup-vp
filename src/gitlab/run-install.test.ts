@@ -1,16 +1,9 @@
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { parseFlowArray, parseRunInstall, runInstall } from "./run-install.js";
+import { runWithOutput } from "../ci/process.js";
 
 const tempDirs: string[] = [];
 
@@ -86,90 +79,60 @@ describe("GitLab run-install parsing", () => {
   });
 });
 
+// Run the recorder through Node so cwd, arguments, and environment reach a real
+// child process on every OS. Native command lookup is covered in ci/process.test.ts.
+function recorder(directory: string): typeof runWithOutput {
+  const script = path.join(directory, "record.cjs");
+  const output = path.join(directory, "run.json");
+  writeFileSync(
+    script,
+    `const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(output)}, JSON.stringify({
+  cwd: fs.realpathSync(process.cwd()),
+  command: process.argv[2],
+  args: process.argv.slice(3),
+  envFile: process.env.SETUP_VP_ENV_FILE,
+}));`,
+  );
+  return (command, args, options) =>
+    runWithOutput(process.execPath, [script, command, ...args], options);
+}
+
 describe("GitLab run-install execution", () => {
   it("runs install entries with cwd and args", async () => {
     const dir = tempDir();
-    const binDir = path.join(dir, "bin");
     const appDir = path.join(dir, "app");
-    const logFile = path.join(dir, "run.log");
-    mkdirSync(binDir);
     mkdirSync(appDir);
-    const vpBin = path.join(binDir, "vp");
-    writeFileSync(
-      vpBin,
-      `#!/usr/bin/env sh\nprintf '%s\\n%s\\n' "$PWD" "$*" > "${logFile}"\n`,
-      "utf8",
-    );
-    chmodSync(vpBin, 0o755);
+    await runInstall([{ cwd: "app", args: ["--frozen-lockfile"] }], dir, "vp", process.env, {
+      execute: recorder(dir),
+    });
 
-    const previousPath = process.env.PATH;
-    try {
-      process.env.PATH = `${binDir}:${previousPath || ""}`;
-      await runInstall([{ cwd: "app", args: ["--frozen-lockfile"] }], dir, "vp");
-    } finally {
-      process.env.PATH = previousPath;
-    }
-
-    expect(readFileSync(logFile, "utf8")).toBe(
-      `${realpathSync(appDir)}\ninstall --frozen-lockfile\n`,
-    );
+    expect(JSON.parse(readFileSync(path.join(dir, "run.json"), "utf8"))).toEqual({
+      cwd: realpathSync(appDir),
+      command: "vp",
+      args: ["install", "--frozen-lockfile"],
+    });
   });
 
   it("runs install entries through sfw when requested", async () => {
     const dir = tempDir();
-    const binDir = path.join(dir, "bin");
-    const logFile = path.join(dir, "sfw.log");
-    mkdirSync(binDir);
-    const sfwBin = path.join(binDir, "sfw");
-    writeFileSync(sfwBin, `#!/usr/bin/env sh\nprintf '%s\\n' "$*" > "${logFile}"\n`, "utf8");
-    chmodSync(sfwBin, 0o755);
+    await runInstall([{}], dir, "sfw", process.env, { execute: recorder(dir) });
 
-    const previousPath = process.env.PATH;
-    try {
-      process.env.PATH = `${binDir}:${previousPath || ""}`;
-      await runInstall([{}], dir, "sfw");
-    } finally {
-      process.env.PATH = previousPath;
-    }
-
-    expect(readFileSync(logFile, "utf8")).toBe("vp install\n");
+    expect(JSON.parse(readFileSync(path.join(dir, "run.json"), "utf8"))).toEqual({
+      cwd: realpathSync(dir),
+      command: "sfw",
+      args: ["vp", "install"],
+    });
   });
 
   it("does not expose SETUP_VP_ENV_FILE to install subprocesses", async () => {
     const dir = tempDir();
-    const binDir = path.join(dir, "bin");
-    const logFile = path.join(dir, "env.log");
-    mkdirSync(binDir);
-    const vpBin = path.join(binDir, "vp");
-    writeFileSync(
-      vpBin,
-      [
-        "#!/usr/bin/env sh",
-        'if [ "${SETUP_VP_ENV_FILE+x}" = "x" ]; then',
-        `  printf 'present:%s\\n' "$SETUP_VP_ENV_FILE" > "${logFile}"`,
-        "else",
-        `  printf 'missing\\n' > "${logFile}"`,
-        "fi",
-      ].join("\n"),
-      "utf8",
+    const env = { ...process.env, SETUP_VP_ENV_FILE: path.join(dir, "setup-vp.env") };
+    await runInstall([{}], dir, "vp", env, { execute: recorder(dir) });
+
+    expect(JSON.parse(readFileSync(path.join(dir, "run.json"), "utf8"))).not.toHaveProperty(
+      "envFile",
     );
-    chmodSync(vpBin, 0o755);
-
-    const previousPath = process.env.PATH;
-    const previousEnvFile = process.env.SETUP_VP_ENV_FILE;
-    try {
-      process.env.PATH = `${binDir}:${previousPath || ""}`;
-      process.env.SETUP_VP_ENV_FILE = path.join(dir, "setup-vp.env");
-      await runInstall([{}], dir, "vp");
-    } finally {
-      process.env.PATH = previousPath;
-      if (previousEnvFile === undefined) {
-        delete process.env.SETUP_VP_ENV_FILE;
-      } else {
-        process.env.SETUP_VP_ENV_FILE = previousEnvFile;
-      }
-    }
-
-    expect(readFileSync(logFile, "utf8")).toBe("missing\n");
+    expect(env.SETUP_VP_ENV_FILE).toBe(path.join(dir, "setup-vp.env"));
   });
 });

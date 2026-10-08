@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { configAuthentication, propagateProjectNpmrcAuth } from "./auth.js";
 import { exportVariable, info } from "@actions/core";
 
@@ -21,7 +21,7 @@ vi.mock("node:fs", async () => {
 });
 
 describe("configAuthentication", () => {
-  const runnerTemp = "/tmp/runner";
+  const runnerTemp = resolve("/tmp/runner");
 
   beforeEach(() => {
     vi.stubEnv("RUNNER_TEMP", runnerTemp);
@@ -189,8 +189,8 @@ describe("configAuthentication", () => {
 });
 
 describe("propagateProjectNpmrcAuth", () => {
-  const runnerTemp = "/tmp/runner";
-  const projectDir = "/workspace/project";
+  const runnerTemp = resolve("/tmp/runner");
+  const projectDir = resolve("/workspace/project");
   const npmrcPath = join(projectDir, ".npmrc");
   const supplementalPath = join(runnerTemp, ".npmrc");
 

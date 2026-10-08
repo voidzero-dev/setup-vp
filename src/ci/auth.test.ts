@@ -36,7 +36,8 @@ describe("portable project auth", () => {
     expect(result).toContain("//registry.example/npm/:_authToken=${NODE_AUTH_TOKEN}");
     expect(result).not.toContain("secret");
     expect(readFileSync(path.join(project, ".npmrc"), "utf8")).toBe(content);
-    expect(statSync(npmrc).mode & 0o777).toBe(0o600);
+    // Windows does not expose POSIX owner/group permission bits.
+    if (process.platform !== "win32") expect(statSync(npmrc).mode & 0o777).toBe(0o600);
     expect(exporter).toHaveBeenCalledWith("NODE_AUTH_TOKEN", "secret");
     expect(exporter).toHaveBeenCalledWith("CUSTOM_TOKEN", "other-secret");
     expect(env.PNPM_CONFIG_USERCONFIG).toBe(npmrc);

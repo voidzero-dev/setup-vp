@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, normalize } from "node:path";
 import { debug } from "@actions/core";
 import {
   parseVitePlusVersionFromLockfile,
@@ -25,10 +26,10 @@ vi.mock("node:fs", async () => ({
 
 function lock(filename: string, type: LockFileType, content: string): LockFileInfo {
   vi.mocked(readFileSync).mockImplementation((path) => {
-    if (path === `/repo/${filename}`) return content;
+    if (path === join("/repo", filename)) return content;
     throw new Error(`ENOENT: ${String(path)}`);
   });
-  return { filename, type, path: `/repo/${filename}` };
+  return { filename, type, path: join("/repo", filename) };
 }
 
 describe("parseVitePlusVersionFromLockfile", () => {
@@ -364,10 +365,10 @@ describe("tryResolveVitePlusVersionFromLockfile", () => {
   it("searches upward to the workspace root for a monorepo package's lockfile", () => {
     // Lockfile lives at the repo root; the working-directory is a subpackage.
     vi.mocked(readdirSync).mockImplementation(
-      (dir) => (dir === "/repo" ? ["pnpm-lock.yaml"] : []) as never,
+      (dir) => (normalize(String(dir)) === normalize("/repo") ? ["pnpm-lock.yaml"] : []) as never,
     );
     vi.mocked(readFileSync).mockImplementation((p) => {
-      if (p === "/repo/pnpm-lock.yaml") {
+      if (p === join("/repo", "pnpm-lock.yaml")) {
         return [
           "importers:",
           "  packages/app:",
@@ -393,9 +394,9 @@ describe("tryResolveVitePlusVersionFromLockfile", () => {
 
   it("prefers a readable text bun.lock beside a binary bun.lockb", () => {
     vi.mocked(readdirSync).mockReturnValue(["bun.lockb", "bun.lock"] as never);
-    vi.mocked(existsSync).mockImplementation((p) => p === "/repo/bun.lock");
+    vi.mocked(existsSync).mockImplementation((p) => p === join("/repo", "bun.lock"));
     vi.mocked(readFileSync).mockImplementation((p) => {
-      if (p === "/repo/bun.lock") {
+      if (p === join("/repo", "bun.lock")) {
         return JSON.stringify({
           packages: { "vite-plus": ["vite-plus@0.2.0", "", {}, "sha512-x"] },
         }) as never;
