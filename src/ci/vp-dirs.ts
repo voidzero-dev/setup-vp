@@ -151,6 +151,7 @@ export function getInstallScriptCommand(
 $dirsFile = $env:${VP_DIRS_FILE_ENV}
 Set-Content -LiteralPath $dirsFile -Value '' -NoNewline -Encoding UTF8
 . $installerFile
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $vpDir = if ($script:ShimDir) {
   $script:ShimDir
 } elseif ($InstallDir) {

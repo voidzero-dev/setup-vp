@@ -142,6 +142,7 @@ n?this.stack.push(n):(yield*this.pop(),yield*this.step())}else{let t=this.peek(2
 $dirsFile = $env:${Q}
 Set-Content -LiteralPath $dirsFile -Value '' -NoNewline -Encoding UTF8
 . $installerFile
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $vpDir = if ($script:ShimDir) {
   $script:ShimDir
 } elseif ($InstallDir) {

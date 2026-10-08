@@ -193,6 +193,7 @@ function optional(e){return new ia({type:`optional`,innerType:e})}const aa=`Vite
 $dirsFile = $env:${ma}
 Set-Content -LiteralPath $dirsFile -Value '' -NoNewline -Encoding UTF8
 . $installerFile
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $vpDir = if ($script:ShimDir) {
   $script:ShimDir
 } elseif ($InstallDir) {
