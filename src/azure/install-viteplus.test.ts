@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { installVitePlus } from "./install-viteplus.js";
 
 function writeDirsFile(env: Record<string, string>, bin: string): void {
@@ -122,8 +123,9 @@ describe("installVitePlus", () => {
       logWarningFn: () => undefined,
     });
 
-    expect(prependPath).toHaveBeenCalledWith("/home/runner/.vite-plus/bin");
-    expect(env.PATH).toBe("/home/runner/.vite-plus/bin:/usr/bin");
+    const bin = join("/home/runner", ".vite-plus", "bin");
+    expect(prependPath).toHaveBeenCalledWith(bin);
+    expect(env.PATH).toBe(`${bin}:/usr/bin`);
   });
 
   it.each([

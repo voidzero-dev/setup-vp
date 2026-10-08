@@ -8,6 +8,9 @@ import { installVitePlus } from "./install-viteplus.js";
 import { findReusableVitePlus } from "./reuse-viteplus.js";
 import type { Inputs } from "./types.js";
 
+const windows = process.platform === "win32";
+const installerExtension = windows ? "ps1" : "sh";
+
 vi.mock("@actions/core", () => ({
   info: vi.fn(),
   warning: vi.fn(),
@@ -146,6 +149,7 @@ describe("installVitePlus", () => {
 
   it("should fall back to the legacy bin for Vite+ releases without VpDirs", async () => {
     vi.stubEnv("HOME", "/home/runner");
+    vi.stubEnv("USERPROFILE", "/home/runner");
     vi.stubEnv("PATH", "/usr/bin");
     vi.stubEnv("VP_VPDIRS_AWARE", "1");
     vi.stubEnv("SETUP_VP_DIRS_FILE", "/tmp/stale-vp-dirs");
@@ -153,9 +157,9 @@ describe("installVitePlus", () => {
 
     await installVitePlus({ ...baseInputs, version: "0.2.9" });
 
-    expect(addPath).toHaveBeenCalledWith("/home/runner/.vite-plus/bin");
+    expect(addPath).toHaveBeenCalledWith(join("/home/runner", ".vite-plus", "bin"));
     const [_command, args, options] = vi.mocked(exec).mock.calls[0];
-    expect((args as string[])[1]).toContain("| bash");
+    expect((args as string[])[1]).toContain(windows ? "[scriptblock]::Create" : "| bash");
     expect((args as string[])[1]).not.toContain("VP_DUMP_DIRS");
     expect((options as { env: Record<string, string> }).env.VP_VPDIRS_AWARE).toBeUndefined();
     expect((options as { env: Record<string, string> }).env.SETUP_VP_DIRS_FILE).toBeUndefined();
@@ -163,6 +167,7 @@ describe("installVitePlus", () => {
 
   it("should use the installed version to resolve the latest dist-tag", async () => {
     vi.stubEnv("HOME", "/home/runner");
+    vi.stubEnv("USERPROFILE", "/home/runner");
     vi.stubEnv("PATH", "/usr/bin");
     vi.mocked(exec).mockImplementationOnce(async (_command, _args, options) => {
       const env = (options as { env: Record<string, string> }).env;
@@ -172,7 +177,7 @@ describe("installVitePlus", () => {
 
     await installVitePlus(baseInputs);
 
-    expect(addPath).toHaveBeenCalledWith("/home/runner/.vite-plus/bin");
+    expect(addPath).toHaveBeenCalledWith(join("/home/runner", ".vite-plus", "bin"));
   });
 
   it.each([
@@ -233,11 +238,11 @@ describe("installVitePlus", () => {
     expect(exec).toHaveBeenCalledTimes(2);
 
     const primaryScript = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
-    expect(primaryScript).toContain("https://viteplus.dev/install.sh");
+    expect(primaryScript).toContain(`https://viteplus.dev/install.${installerExtension}`);
 
     const fallbackScript = (vi.mocked(exec).mock.calls[1][1] as string[])[1];
     expect(fallbackScript).toContain(
-      "https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.sh",
+      `https://raw.githubusercontent.com/voidzero-dev/vite-plus/main/packages/cli/install.${installerExtension}`,
     );
   });
 
@@ -248,9 +253,9 @@ describe("installVitePlus", () => {
 
     const scripts = vi.mocked(exec).mock.calls.map((call) => (call[1] as string[])[1]);
     expect(scripts).toHaveLength(4);
-    expect(scripts[0]).toContain("viteplus.dev/install.sh");
+    expect(scripts[0]).toContain(`viteplus.dev/install.${installerExtension}`);
     expect(scripts[1]).toContain("raw.githubusercontent.com");
-    expect(scripts[2]).toContain("viteplus.dev/install.sh");
+    expect(scripts[2]).toContain(`viteplus.dev/install.${installerExtension}`);
     expect(scripts[3]).toContain("raw.githubusercontent.com");
   });
 
@@ -268,7 +273,7 @@ describe("installVitePlus", () => {
 
       const script = (vi.mocked(exec).mock.calls[0][1] as string[])[1];
       expect(script).toContain(
-        `https://raw.githubusercontent.com/voidzero-dev/vite-plus/${ref}/packages/cli/install.sh`,
+        `https://raw.githubusercontent.com/voidzero-dev/vite-plus/${ref}/packages/cli/install.${installerExtension}`,
       );
     },
   );
@@ -281,7 +286,7 @@ describe("installVitePlus", () => {
 
     const fallbackScript = (vi.mocked(exec).mock.calls[1][1] as string[])[1];
     expect(fallbackScript).toContain(
-      "https://cdn.jsdelivr.net/gh/voidzero-dev/vite-plus@v0.2.9/packages/cli/install.sh",
+      `https://cdn.jsdelivr.net/gh/voidzero-dev/vite-plus@v0.2.9/packages/cli/install.${installerExtension}`,
     );
     // If both pinned attempts fail, the code warns before it uses the latest
     // URLs. Success on the mirror must not trigger the compatibility fallback.
@@ -304,7 +309,7 @@ describe("installVitePlus", () => {
     expect(scripts[1]).toContain("jsdelivr");
     expect(scripts[2]).toContain("/v0.2.9/");
     expect(scripts[3]).toContain("jsdelivr");
-    expect(scripts[4]).toContain("https://viteplus.dev/install.sh");
+    expect(scripts[4]).toContain(`https://viteplus.dev/install.${installerExtension}`);
     expect(warning).toHaveBeenCalledWith(
       expect.stringContaining("The latest script may not be compatible with 0.2.9"),
     );
@@ -320,14 +325,22 @@ describe("installVitePlus", () => {
     expect(exec).toHaveBeenCalledTimes(8);
   });
 
-  it("should source the downloaded bash installer and dump its resolved directories", async () => {
+  it("should source the platform installer and dump its resolved directories", async () => {
     mockSuccessfulInstallOnce();
 
     await installVitePlus(baseInputs);
 
     const [cmd, args] = vi.mocked(exec).mock.calls[0];
-    expect(cmd).toBe("bash");
+    expect(cmd).toBe(windows ? "pwsh" : "bash");
     const script = (args as string[])[1];
+    if (windows) {
+      expect(script).toContain(". ([scriptblock]::Create((irm -TimeoutSec");
+      expect(script).toContain("Join-Path $vpDir 'vp.exe'");
+      expect(script).toContain("& $vpPath --version");
+      expect(script).toContain("$env:VP_DUMP_DIRS = '1'");
+      expect(script).toContain("& $vpPath | Add-Content -LiteralPath $dirsFile");
+      return;
+    }
     expect(script).toMatch(/^set \+u\nset -eo pipefail\n/);
     expect(script).toContain("--connect-timeout");
     expect(script).toContain("--max-time");

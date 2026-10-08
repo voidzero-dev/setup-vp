@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { readFileSync, readdirSync } from "node:fs";
+import { join, normalize, sep } from "node:path";
 import { warning } from "@actions/core";
 import {
   resolveVitePlusVersion,
@@ -30,17 +31,20 @@ vi.mock("node:fs", async () => ({
  * map so lockfile auto-detection sees the same fixture files.
  */
 function mockFiles(files: Record<string, string>): void {
+  const nativeFiles = Object.fromEntries(
+    Object.entries(files).map(([file, content]) => [normalize(file), content]),
+  );
   vi.mocked(readFileSync).mockImplementation((path) => {
-    const content = files[path as string];
+    const content = nativeFiles[normalize(path as string)];
     if (content === undefined) {
       throw new Error(`ENOENT: ${String(path)}`);
     }
     return content;
   });
   vi.mocked(readdirSync).mockImplementation((dir) => {
-    const prefix = `${String(dir)}/`;
-    return Object.keys(files)
-      .filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes("/"))
+    const prefix = `${normalize(String(dir))}${sep}`;
+    return Object.keys(nativeFiles)
+      .filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes(sep))
       .map((p) => p.slice(prefix.length)) as never;
   });
 }
@@ -64,7 +68,7 @@ describe("resolveVitePlusVersionFile", () => {
       });
 
       expect(resolveVitePlusVersionFile("package.json")).toBe("0.2.0");
-      expect(readFileSync).toHaveBeenCalledWith("/workspace/package.json", "utf-8");
+      expect(readFileSync).toHaveBeenCalledWith(join("/workspace", "package.json"), "utf-8");
     });
 
     it("should use absolute path as-is", () => {
@@ -89,7 +93,7 @@ describe("resolveVitePlusVersionFile", () => {
       mockFiles({});
 
       expect(() => resolveVitePlusVersionFile("package.json")).toThrow(
-        "version-file not found: /workspace/package.json",
+        `version-file not found: ${join("/workspace", "package.json")}`,
       );
     });
 

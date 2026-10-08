@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { resolveNodeVersionFile } from "./node-version-file.js";
 
 vi.mock("@actions/core", () => ({
@@ -28,7 +29,7 @@ describe("resolveNodeVersionFile", () => {
 
       resolveNodeVersionFile(".nvmrc");
 
-      expect(readFileSync).toHaveBeenCalledWith("/workspace/.nvmrc", "utf-8");
+      expect(readFileSync).toHaveBeenCalledWith(join("/workspace", ".nvmrc"), "utf-8");
     });
 
     it("should use absolute path as-is", () => {
@@ -44,7 +45,7 @@ describe("resolveNodeVersionFile", () => {
 
       resolveNodeVersionFile(".nvmrc", "/workspace/web");
 
-      expect(readFileSync).toHaveBeenCalledWith("/workspace/web/.nvmrc", "utf-8");
+      expect(readFileSync).toHaveBeenCalledWith(join("/workspace/web", ".nvmrc"), "utf-8");
     });
 
     it("should throw if file does not exist", () => {
@@ -53,7 +54,7 @@ describe("resolveNodeVersionFile", () => {
       });
 
       expect(() => resolveNodeVersionFile(".nvmrc")).toThrow(
-        "node-version-file not found: /workspace/.nvmrc",
+        `node-version-file not found: ${join("/workspace", ".nvmrc")}`,
       );
     });
   });

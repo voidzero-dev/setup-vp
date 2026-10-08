@@ -1,10 +1,15 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { downloadFile, getSfwAssetName, setupSfw } from "./install-sfw.js";
+import { commandPath } from "../ci/process.js";
+
+vi.mock("node:child_process", () => ({ spawnSync: vi.fn() }));
+vi.mock("../ci/process.js", () => ({ commandPath: vi.fn() }));
 
 const tempDirs: string[] = [];
 
@@ -14,11 +19,8 @@ function tempDir(): string {
   return dir;
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 afterEach(() => {
+  vi.resetAllMocks();
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -40,61 +42,44 @@ describe("GitLab sfw setup", () => {
   });
 
   it("uses an existing sfw command from PATH", async () => {
-    const dir = tempDir();
-    const binDir = path.join(dir, "bin");
-    mkdirSync(binDir);
-    const sfwBin = path.join(binDir, "sfw");
-    writeFileSync(sfwBin, "#!/usr/bin/env sh\nexit 0\n", "utf8");
-    chmodSync(sfwBin, 0o755);
+    vi.mocked(commandPath).mockReturnValue(path.join(tempDir(), "sfw"));
 
-    const previousPath = process.env.PATH;
-    try {
-      process.env.PATH = `${binDir}:${previousPath || ""}`;
-      expect(await setupSfw([{}], { SETUP_VP_SFW: "true", PATH: process.env.PATH })).toBe("sfw");
-    } finally {
-      process.env.PATH = previousPath;
-    }
+    expect(await setupSfw([{}], { SETUP_VP_SFW: "true" })).toBe("sfw");
+    expect(commandPath).toHaveBeenCalledWith("sfw");
+    expect(spawnSync).not.toHaveBeenCalled();
   });
 
   it("uses curl for default downloads", async () => {
     const dir = tempDir();
-    const binDir = path.join(dir, "bin");
     const outputPath = path.join(dir, "sfw");
-    const logFile = path.join(dir, "curl.log");
-    mkdirSync(binDir);
+    const curl = path.join(dir, "bin with spaces", "curl");
+    vi.mocked(commandPath).mockReturnValue(curl);
+    vi.mocked(spawnSync).mockReturnValue({
+      pid: 1,
+      output: [],
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
+      status: 0,
+      signal: null,
+    });
 
-    const curlBin = path.join(binDir, "curl");
-    writeFileSync(
-      curlBin,
+    await downloadFile("https://example.test/sfw", outputPath);
+
+    expect(commandPath).toHaveBeenCalledWith("curl");
+    expect(spawnSync).toHaveBeenCalledExactlyOnceWith(
+      curl,
       [
-        "#!/usr/bin/env sh",
-        `printf '%s\\n' "$*" > ${shellQuote(logFile)}`,
-        'out=""',
-        'while [ "$#" -gt 0 ]; do',
-        '  if [ "$1" = "-o" ]; then',
-        "    shift",
-        '    out="$1"',
-        "    break",
-        "  fi",
-        "  shift",
-        "done",
-        'printf "sfw" > "$out"',
-      ].join("\n"),
-      "utf8",
+        "-fsSL",
+        "--connect-timeout",
+        "5",
+        "--max-time",
+        "60",
+        "https://example.test/sfw",
+        "-o",
+        outputPath,
+      ],
+      { stdio: "ignore" },
     );
-    chmodSync(curlBin, 0o755);
-
-    const previousPath = process.env.PATH;
-    try {
-      process.env.PATH = `${binDir}:${previousPath || ""}`;
-      await downloadFile("https://example.test/sfw", outputPath);
-    } finally {
-      process.env.PATH = previousPath;
-    }
-
-    expect(readFileSync(outputPath, "utf8")).toBe("sfw");
-    expect(readFileSync(logFile, "utf8")).toContain("https://example.test/sfw");
-    expect(readFileSync(logFile, "utf8")).toContain("--max-time 60");
   });
 
   it("times out stalled downloads", async () => {
