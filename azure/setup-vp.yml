@@ -60,8 +60,13 @@ steps:
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
+      # Read parameters as data, never as executable script source.
+      $setupRef = $env:SETUP_VP_SETUP_REF
+      if ($setupRef -cnotmatch '\A[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*\z') {
+        throw 'setup-vp: invalid setupRef; use a tag, branch or commit SHA with safe ref characters.'
+      }
       $bootstrap = Join-Path $env:AGENT_TEMPDIRECTORY 'setup-vp-azure-bootstrap.ps1'
-      $base = "https://raw.githubusercontent.com/voidzero-dev/setup-vp/${{ parameters.setupRef }}/azure"
+      $base = "https://raw.githubusercontent.com/voidzero-dev/setup-vp/$setupRef/azure"
       Invoke-WebRequest -Uri "$base/bootstrap.ps1" -OutFile $bootstrap -TimeoutSec 60
       & $bootstrap
     condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
@@ -85,8 +90,13 @@ steps:
 
   - bash: |
       set -euo pipefail
+      # Read parameters as data, never as executable script source.
+      if [[ ! "${SETUP_VP_SETUP_REF:-}" =~ ^[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*$ ]]; then
+        echo 'setup-vp: invalid setupRef; use a tag, branch or commit SHA with safe ref characters.' >&2
+        exit 1
+      fi
       bootstrap="$(Agent.TempDirectory)/setup-vp-azure-bootstrap.sh"
-      base="https://raw.githubusercontent.com/voidzero-dev/setup-vp/${{ parameters.setupRef }}/azure"
+      base="https://raw.githubusercontent.com/voidzero-dev/setup-vp/${SETUP_VP_SETUP_REF}/azure"
       curl -fsSL --connect-timeout 5 --max-time 60 "$base/bootstrap.sh" -o "$bootstrap"
       chmod +x "$bootstrap"
       bash "$bootstrap"
