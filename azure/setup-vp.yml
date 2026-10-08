@@ -40,7 +40,7 @@ steps:
   - powershell: |
       $ErrorActionPreference = 'Stop'
       $bootstrap = Join-Path $env:AGENT_TEMPDIRECTORY 'setup-vp-azure-bootstrap.ps1'
-      $base = "https://raw.githubusercontent.com/voidzero-dev/setup-vp/${{ parameters.setupRef }}/azure"
+      $base = "https://raw.githubusercontent.com/voidzero-dev/setup-vp/$env:SETUP_VP_SETUP_REF/azure"
       Invoke-WebRequest -Uri "$base/bootstrap.ps1" -OutFile $bootstrap -TimeoutSec 60
       & $bootstrap
     condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'))
@@ -60,7 +60,7 @@ steps:
   - bash: |
       set -euo pipefail
       bootstrap="$(Agent.TempDirectory)/setup-vp-azure-bootstrap.sh"
-      base="https://raw.githubusercontent.com/voidzero-dev/setup-vp/${{ parameters.setupRef }}/azure"
+      base="https://raw.githubusercontent.com/voidzero-dev/setup-vp/${SETUP_VP_SETUP_REF}/azure"
       curl -fsSL --connect-timeout 5 --max-time 60 "$base/bootstrap.sh" -o "$bootstrap"
       chmod +x "$bootstrap"
       bash "$bootstrap"

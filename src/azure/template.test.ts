@@ -53,6 +53,15 @@ describe("azure/setup-vp.yml", () => {
     expect(template).toContain("bootstrap.ps1");
   });
 
+  it("does not interpolate setupRef into executable script source", () => {
+    expect(template).not.toContain("setup-vp/${{ parameters.setupRef }}/azure");
+    expect(template).toContain("setup-vp/$env:SETUP_VP_SETUP_REF/azure");
+    expect(template).toContain("setup-vp/${SETUP_VP_SETUP_REF}/azure");
+    expect(
+      template.match(/SETUP_VP_SETUP_REF: \$\{\{ parameters\.setupRef \}\}/g) ?? [],
+    ).toHaveLength(2);
+  });
+
   it("selects the agent shell at runtime", () => {
     expect(template).not.toContain("${{ if eq(variables['Agent.OS'], 'Windows_NT') }}");
     expect(template).not.toContain("${{ if ne(variables['Agent.OS'], 'Windows_NT') }}");
