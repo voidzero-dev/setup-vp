@@ -658,6 +658,8 @@ steps:
 
 Pin `ref` and `setupRef` to the same exact tag or commit SHA. Do not use the `v1` tag: it is frozen at v1.15.0 and no longer updated.
 
+`setupRef` accepts ASCII letters, digits, underscores, and hyphens, with single dots or slashes between these groups (for example, `v1.21.1` or `refs/tags/v1.21.1`). Other values fail before any bootstrap download. Keep this parameter under maintainer control because it selects code that runs on the agent.
+
 ### Azure Parameters
 
 | Parameter              | Default               | Description                                                                                                                                                                   |
