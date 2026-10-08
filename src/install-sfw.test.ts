@@ -224,26 +224,22 @@ describe("setupSfw", () => {
     expect(warning).not.toHaveBeenCalled();
   });
 
-  it("uses an existing sfw on PATH on macOS and skips the download", async () => {
-    // macOS is supported as of vp v0.1.23 — the PATH-detection branch now
-    // applies to all platforms, not just Linux.
-    stubPlatform("darwin", "arm64");
-    vi.mocked(commandPath).mockReturnValue("/usr/local/bin/sfw");
-    expect(await setupSfw(makeInputs())).toEqual({ executable: "/usr/local/bin/sfw", sfw: true });
-    expect(info).toHaveBeenCalledWith(expect.stringContaining("Using existing sfw on PATH"));
-    expect(commandPath).toHaveBeenCalledExactlyOnceWith("sfw");
-    expect(restoreCache).not.toHaveBeenCalled(); // installSfw never invoked
-    expect(exec).not.toHaveBeenCalled();
-  });
+  it.each([
+    ["darwin", "arm64", "/usr/local/bin/sfw"],
+    ["linux", "x64", "/usr/bin/sfw"],
+  ] as const)(
+    "uses an existing sfw on PATH on %s and skips the download",
+    async (platform, arch, executable) => {
+      stubPlatform(platform, arch);
+      vi.mocked(commandPath).mockReturnValue(executable);
 
-  it("uses an existing sfw on PATH on Linux and skips the download", async () => {
-    vi.mocked(commandPath).mockReturnValue("/usr/bin/sfw");
-    expect(await setupSfw(makeInputs())).toEqual({ executable: "/usr/bin/sfw", sfw: true });
-    expect(info).toHaveBeenCalledWith(expect.stringContaining("Using existing sfw on PATH"));
-    expect(commandPath).toHaveBeenCalledExactlyOnceWith("sfw");
-    expect(restoreCache).not.toHaveBeenCalled();
-    expect(exec).not.toHaveBeenCalled();
-  });
+      expect(await setupSfw(makeInputs())).toEqual({ executable, sfw: true });
+      expect(info).toHaveBeenCalledWith(expect.stringContaining("Using existing sfw on PATH"));
+      expect(commandPath).toHaveBeenCalledExactlyOnceWith("sfw");
+      expect(restoreCache).not.toHaveBeenCalled();
+      expect(exec).not.toHaveBeenCalled();
+    },
+  );
 
   it("falls back with a warning on an unsupported arch + no sfw on PATH", async () => {
     stubPlatform("linux", "ia32");

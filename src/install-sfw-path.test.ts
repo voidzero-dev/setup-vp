@@ -1,3 +1,7 @@
+import { restoreCache, saveCache } from "@actions/cache";
+import { addPath, setFailed } from "@actions/core";
+import { exec } from "@actions/exec";
+import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -9,13 +13,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { rm } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { restoreCache, saveCache } from "@actions/cache";
-import { addPath, setFailed } from "@actions/core";
-import { exec } from "@actions/exec";
 import { setupSfw } from "./ci/install-sfw.js";
 import { runInstall } from "./ci/run-install.js";
 import { isWindows } from "./ci/platform.js";
@@ -38,6 +38,44 @@ vi.mock("@actions/exec", async (importOriginal) => ({
 }));
 
 const directories: string[] = [];
+
+function createFixture(prefix: string): {
+  root: string;
+  workspace: string;
+  trustedBin: string;
+  filename: string;
+} {
+  const root = mkdtempSync(path.join(tmpdir(), prefix));
+  directories.push(root);
+  const workspace = path.join(root, "workspace");
+  const trustedBin = path.join(root, "trusted bin");
+  mkdirSync(workspace);
+  mkdirSync(trustedBin);
+  return { root, workspace, trustedBin, filename: isWindows() ? "sfw.exe" : "sfw" };
+}
+
+function setNodePreload(root: string, source: string): void {
+  const hook = path.join(root, "preload.cjs");
+  writeFileSync(hook, source);
+  vi.stubEnv("NODE_OPTIONS", `--require ${JSON.stringify(hook)}`);
+}
+
+function writeExecutable(file: string): void {
+  mkdirSync(path.dirname(file), { recursive: true });
+  if (isWindows()) {
+    copyFileSync(process.execPath, file);
+  } else {
+    writeFileSync(file, '#!/bin/sh\nprintf "%s\\n" "$0" "$@" > "$SETUP_VP_EXECUTION_MARKER"\n', {
+      mode: 0o755,
+    });
+  }
+}
+
+function expectSameFile(actual: string, expected: string): void {
+  const { dev, ino } = statSync(expected, { bigint: true });
+  expect(statSync(actual, { bigint: true })).toMatchObject({ dev, ino });
+}
+
 afterEach(async () => {
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -50,45 +88,24 @@ describe.each(["portable", "GitHub Actions"] as const)("%s sfw execution", (adap
   it.each(["existing", "download", "cache"] as const)(
     "executes the selected %s binary despite workspace binaries and PATH changes",
     async (source) => {
-      const root = mkdtempSync(path.join(tmpdir(), "setup-vp-sfw-execute-"));
-      directories.push(root);
-      const workspace = path.join(root, "workspace");
+      const { root, workspace, trustedBin, filename } = createFixture("setup-vp-sfw-execute-");
       const installDir = path.join(workspace, "install directory");
-      const trustedBin = path.join(root, "trusted bin");
       const marker = path.join(root, "executed");
-      const filename = isWindows() ? "sfw.exe" : "sfw";
-      mkdirSync(installDir, { recursive: true });
-      mkdirSync(trustedBin);
+      mkdirSync(installDir);
       vi.stubEnv("SETUP_VP_EXECUTION_MARKER", marker);
       vi.stubEnv("RUNNER_TEMP", root);
       vi.stubEnv("SETUP_VP_SFW_CACHE_DIR", undefined);
       vi.stubEnv("NoDefaultCurrentDirectoryInExePath", undefined);
 
       if (isWindows()) {
-        const hook = path.join(root, "record.cjs");
-        writeFileSync(
-          hook,
+        setNodePreload(
+          root,
           `const fs = require('node:fs');
 fs.writeFileSync(process.env.SETUP_VP_EXECUTION_MARKER, [process.argv0, ...process.argv.slice(1)].join('\\n') + '\\n');
 process.exit(0);`,
         );
-        vi.stubEnv("NODE_OPTIONS", `--require ${JSON.stringify(hook)}`);
       }
 
-      function writeExecutable(file: string): void {
-        mkdirSync(path.dirname(file), { recursive: true });
-        if (isWindows()) {
-          copyFileSync(process.execPath, file);
-        } else {
-          writeFileSync(
-            file,
-            '#!/bin/sh\nprintf "%s\\n" "$0" "$@" > "$SETUP_VP_EXECUTION_MARKER"\n',
-            {
-              mode: 0o755,
-            },
-          );
-        }
-      }
       writeExecutable(path.join(workspace, filename));
       writeExecutable(path.join(installDir, filename));
       const existing = path.join(trustedBin, filename);
@@ -142,11 +159,7 @@ process.exit(0);`,
           else await runViteInstall(inputs, command);
           expect(setFailed).not.toHaveBeenCalled();
           const [executed, wrapped, ...args] = readFileSync(marker, "utf8").trimEnd().split("\n");
-          const expected = statSync(command.executable, { bigint: true });
-          expect(statSync(executed!, { bigint: true })).toMatchObject({
-            dev: expected.dev,
-            ino: expected.ino,
-          });
+          expectSameFile(executed!, command.executable);
           // Node normalizes the first argument to a path before the Windows preload hook.
           expect(path.basename(wrapped!)).toBe("vp");
           expect(args).toEqual(["install", "--frozen-lockfile", "", "two words"]);
@@ -162,28 +175,19 @@ process.exit(0);`,
 it.skipIf(!isWindows())(
   "rejects a drive-root-relative PATH entry before executing on a different Windows drive",
   async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "setup-vp-sfw-drives-"));
-    directories.push(root);
-    const workspace = path.join(root, "workspace");
-    const trustedBin = path.join(root, "trusted");
+    const { root, workspace, trustedBin, filename } = createFixture("setup-vp-sfw-drives-");
     const otherDriveRoot = path.join(root, "other-drive");
-    mkdirSync(workspace);
-    mkdirSync(trustedBin);
     mkdirSync(otherDriveRoot);
-    const trusted = path.join(trustedBin, "sfw.exe");
-    copyFileSync(process.execPath, trusted);
+    const trusted = path.join(trustedBin, filename);
+    writeExecutable(trusted);
     const relativeBin = trustedBin.slice(path.parse(trustedBin).root.length - 1);
-    const otherBinary = path.join(otherDriveRoot, relativeBin.slice(1), "sfw.exe");
-    mkdirSync(path.dirname(otherBinary), { recursive: true });
-    copyFileSync(process.execPath, otherBinary);
+    writeExecutable(path.join(otherDriveRoot, relativeBin.slice(1), filename));
     const marker = path.join(root, "executed");
-    const hook = path.join(root, "record.cjs");
-    writeFileSync(
-      hook,
+    setNodePreload(
+      root,
       "require('node:fs').writeFileSync(process.env.SETUP_VP_EXECUTION_MARKER, process.execPath); process.exit(0);",
     );
     vi.stubEnv("SETUP_VP_EXECUTION_MARKER", marker);
-    vi.stubEnv("NODE_OPTIONS", `--require ${JSON.stringify(hook)}`);
     vi.stubEnv("PATH", `${relativeBin};${trustedBin}`);
 
     // SUBST creates a second drive without needing another physical volume.
@@ -203,12 +207,7 @@ it.skipIf(!isWindows())(
 
       await runInstall([{}], installCwd, command);
 
-      const executed = readFileSync(marker, "utf8");
-      const expected = statSync(trusted, { bigint: true });
-      expect(statSync(executed, { bigint: true })).toMatchObject({
-        dev: expected.dev,
-        ino: expected.ino,
-      });
+      expectSameFile(readFileSync(marker, "utf8"), trusted);
     } finally {
       process.chdir(originalCwd);
       execFileSync(subst, [drive!, "/D"]);
@@ -218,15 +217,9 @@ it.skipIf(!isWindows())(
 );
 
 it("does not execute planted lookup tools or reuse sfw from the working directory", async () => {
-  const root = mkdtempSync(path.join(tmpdir(), "setup-vp-sfw-path-"));
-  directories.push(root);
-  const workspace = path.join(root, "workspace");
-  const trustedBin = path.join(root, "trusted bin");
+  const { root, workspace, trustedBin, filename } = createFixture("setup-vp-sfw-path-");
   const alias = path.join(root, "workspace-alias");
   const marker = path.join(root, "lookup-executed");
-  const filename = isWindows() ? "sfw.exe" : "sfw";
-  mkdirSync(workspace);
-  mkdirSync(trustedBin);
   symlinkSync(workspace, alias, isWindows() ? "junction" : "dir");
   writeFileSync(path.join(workspace, filename), "workspace executable", { mode: 0o755 });
   vi.stubEnv("SETUP_VP_LOOKUP_MARKER", marker);
@@ -235,12 +228,10 @@ it("does not execute planted lookup tools or reuse sfw from the working director
     // A real PE executable makes a regressed execFileSync/spawnSync('where')
     // run the harmless marker hook, even without invoking a shell.
     copyFileSync(process.execPath, path.join(workspace, "where.exe"));
-    const hook = path.join(root, "marker.cjs");
-    writeFileSync(
-      hook,
+    setNodePreload(
+      root,
       "require('node:fs').writeFileSync(process.env.SETUP_VP_LOOKUP_MARKER, 'called'); process.exit(1);",
     );
-    vi.stubEnv("NODE_OPTIONS", `--require ${JSON.stringify(hook)}`);
     writeFileSync(
       path.join(workspace, "where.cmd"),
       '@echo called > "%SETUP_VP_LOOKUP_MARKER%"\r\n@exit /b 1\r\n',

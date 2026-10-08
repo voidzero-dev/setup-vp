@@ -1,5 +1,5 @@
 import { startGroup, endGroup, setFailed, info, warning, error as logError } from "@actions/core";
-import { getExecOutput } from "@actions/exec";
+import { getExecOutput, type ExecOutput } from "@actions/exec";
 import type { Inputs } from "./types.js";
 import type { InstallCommand } from "./ci/types.js";
 import { getConfiguredProjectDir, getInstallCwd } from "./utils.js";
@@ -45,56 +45,53 @@ export async function runViteInstall(
   installCommand: InstallCommand,
 ): Promise<void> {
   const projectDir = getConfiguredProjectDir(inputs);
-  const { executable: cmd, sfw } = installCommand;
+  const { executable, sfw } = installCommand;
+  // @actions/exec parses its first parameter as a command line.
+  const commandLine = `"${executable.replaceAll('"', '\\"')}"`;
 
   for (const options of inputs.runInstall) {
-    const installArgs = ["install"];
-    if (options.args) {
-      installArgs.push(...options.args);
-    }
-
+    const installArgs = ["install", ...(options.args || [])];
     const args = sfw ? ["vp", ...installArgs] : installArgs;
     const cwd = getInstallCwd(projectDir, options.cwd);
-    const cmdStr = `${cmd} ${args.join(" ")}`;
+    const commandLabel = `${executable} ${args.join(" ")}`;
 
-    const attempt = async (label: string) => {
+    async function attempt(label: string): Promise<ExecOutput> {
       startGroup(`Running ${label} in ${cwd}...`);
       try {
-        // @actions/exec parses its first parameter as a command line.
-        return await getExecOutput(`"${cmd.replaceAll('"', '\\"')}"`, args, {
+        return await getExecOutput(commandLine, args, {
           cwd,
           ignoreReturnCode: true,
         });
       } finally {
         endGroup();
       }
-    };
+    }
 
     try {
-      let result = await attempt(cmdStr);
+      let result = await attempt(commandLabel);
 
       if (result.exitCode !== 0 && sfw && isSfwVpNotFoundFlake(result.stdout, result.stderr)) {
         warning(
           "sfw reported vp as not found even though it is on PATH. This is a known sfw flake on Windows: a cold PowerShell start exceeds sfw's 10s command-resolution timeout and the timeout is misreported as not-found. Warming the PowerShell command cache and retrying once.",
         );
         await warmPowerShellCommandCache();
-        result = await attempt(`${cmdStr} (retry)`);
+        result = await attempt(`${commandLabel} (retry)`);
       }
 
       if (result.exitCode === 0) {
-        info(`Successfully ran ${cmdStr}`);
+        info(`Successfully ran ${commandLabel}`);
         continue;
       }
 
       const detail = result.stderr.trim() || result.stdout.trim();
       if (detail) {
         logError(tailOutput(detail, MAX_ERROR_TAIL), {
-          title: `${cmdStr} failed`,
+          title: `${commandLabel} failed`,
         });
       }
-      setFailed(`Command "${cmdStr}" (cwd: ${cwd}) exited with code ${result.exitCode}`);
+      setFailed(`Command "${commandLabel}" (cwd: ${cwd}) exited with code ${result.exitCode}`);
     } catch (error) {
-      setFailed(`Failed to run ${cmdStr}: ${String(error)}`);
+      setFailed(`Failed to run ${commandLabel}: ${String(error)}`);
     }
   }
 }

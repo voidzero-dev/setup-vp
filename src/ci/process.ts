@@ -1,5 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
-import type { SpawnOptions, SpawnSyncOptions } from "node:child_process";
+import { spawn, spawnSync, type SpawnOptions, type SpawnSyncOptions } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
 import path from "node:path";
 import { isWindows } from "./platform.js";
@@ -47,9 +46,10 @@ export function commandPath(
         .sort()
         .find((key) => key.toUpperCase() === "PATH")
     : "PATH";
-  const searchPath = (pathKey && env[pathKey]) || "";
+  const searchPath = pathKey ? env[pathKey] || "" : "";
   const filename = windows && !command.toLowerCase().endsWith(".exe") ? `${command}.exe` : command;
-  const cwd = statSync(process.cwd(), { bigint: true });
+  const cwdStat = statSync(process.cwd(), { bigint: true });
+  const accessMode = windows ? constants.F_OK : constants.X_OK;
 
   for (const entry of searchPath.split(path.delimiter)) {
     const directory = windows ? entry.replace(/^"(.*)"$/, "$1") : entry;
@@ -62,11 +62,11 @@ export function commandPath(
       // Filesystem identity covers case aliases and symlinks without assuming
       // that all volumes on the same operating system use the same case rules.
       const directoryStat = statSync(directory, { bigint: true });
-      if (directoryStat.dev === cwd.dev && directoryStat.ino === cwd.ino) continue;
+      if (directoryStat.dev === cwdStat.dev && directoryStat.ino === cwdStat.ino) continue;
 
       const candidate = path.join(directory, filename);
       if (!statSync(candidate).isFile()) continue;
-      accessSync(candidate, windows ? constants.F_OK : constants.X_OK);
+      accessSync(candidate, accessMode);
       return candidate;
     } catch {
       // Missing or inaccessible entries do not prevent searching the rest of PATH.
