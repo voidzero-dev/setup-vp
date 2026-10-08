@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -157,6 +158,64 @@ process.exit(0);`,
     30_000,
   );
 });
+
+it.skipIf(!isWindows())(
+  "rejects a drive-root-relative PATH entry before executing on a different Windows drive",
+  async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "setup-vp-sfw-drives-"));
+    directories.push(root);
+    const workspace = path.join(root, "workspace");
+    const trustedBin = path.join(root, "trusted");
+    const otherDriveRoot = path.join(root, "other-drive");
+    mkdirSync(workspace);
+    mkdirSync(trustedBin);
+    mkdirSync(otherDriveRoot);
+    const trusted = path.join(trustedBin, "sfw.exe");
+    copyFileSync(process.execPath, trusted);
+    const relativeBin = trustedBin.slice(path.parse(trustedBin).root.length - 1);
+    const otherBinary = path.join(otherDriveRoot, relativeBin.slice(1), "sfw.exe");
+    mkdirSync(path.dirname(otherBinary), { recursive: true });
+    copyFileSync(process.execPath, otherBinary);
+    const marker = path.join(root, "executed");
+    const hook = path.join(root, "record.cjs");
+    writeFileSync(
+      hook,
+      "require('node:fs').writeFileSync(process.env.SETUP_VP_EXECUTION_MARKER, process.execPath); process.exit(0);",
+    );
+    vi.stubEnv("SETUP_VP_EXECUTION_MARKER", marker);
+    vi.stubEnv("NODE_OPTIONS", `--require ${JSON.stringify(hook)}`);
+    vi.stubEnv("PATH", `${relativeBin};${trustedBin}`);
+
+    // SUBST creates a second drive without needing another physical volume.
+    const drive = ["Z:", "Y:", "X:", "W:"].find((candidate) => !existsSync(`${candidate}\\`));
+    expect(drive, "a free drive letter is required for the native regression").toBeDefined();
+    const subst = path.join(process.env.SystemRoot!, "System32", "subst.exe");
+    execFileSync(subst, [drive!, otherDriveRoot]);
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(workspace);
+      const installCwd = `${drive}\\project`;
+      mkdirSync(installCwd);
+      expect(path.parse(installCwd).root).not.toBe(path.parse(workspace).root);
+      expect(commandPath("sfw", { PATH: relativeBin })).toBeUndefined();
+      const command = await setupSfw([{}], { sfwEnabled: true });
+      expect(command).toEqual({ executable: trusted, sfw: true });
+
+      await runInstall([{}], installCwd, command);
+
+      const executed = readFileSync(marker, "utf8");
+      const expected = statSync(trusted, { bigint: true });
+      expect(statSync(executed, { bigint: true })).toMatchObject({
+        dev: expected.dev,
+        ino: expected.ino,
+      });
+    } finally {
+      process.chdir(originalCwd);
+      execFileSync(subst, [drive!, "/D"]);
+    }
+  },
+  30_000,
+);
 
 it("does not execute planted lookup tools or reuse sfw from the working directory", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "setup-vp-sfw-path-"));

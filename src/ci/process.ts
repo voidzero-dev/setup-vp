@@ -55,6 +55,9 @@ export function commandPath(
     const directory = windows ? entry.replace(/^"(.*)"$/, "$1") : entry;
     // Empty and relative entries can refer to attacker-controlled checkout files.
     if (!path.isAbsolute(directory)) continue;
+    // On Windows, isAbsolute also accepts drive-root-relative paths such as
+    // \trusted. These change meaning when the install cwd is on another drive.
+    if (windows && path.parse(directory).root.length === 1) continue;
     try {
       // Filesystem identity covers case aliases and symlinks without assuming
       // that all volumes on the same operating system use the same case rules.
