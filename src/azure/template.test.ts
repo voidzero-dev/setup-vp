@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -23,25 +23,52 @@ const { version } = JSON.parse(
 ) as { version: string };
 
 type Shell = "bash" | "powershell";
-const prepareSteps = docs.steps.filter((step: { displayName?: string }) =>
-  step.displayName?.startsWith("setup-vp prepare"),
-) as Array<{ bash?: string; powershell?: string; env: Record<string, string> }>;
-const finalizeSteps = docs.steps.filter((step: { displayName?: string }) =>
-  step.displayName?.startsWith("setup-vp finalize"),
-) as Array<{ bash?: string; powershell?: string; env: Record<string, unknown> }>;
-
-function prepareStep(shell: Shell) {
-  return prepareSteps.find((step) => step[shell])!;
+interface TemplateStep {
+  displayName?: string;
+  bash?: string;
+  powershell?: string;
+  env: Record<string, unknown>;
 }
 
-function runPrepare(shell: Shell, setupRef: string) {
+interface PrepareResult extends SpawnSyncReturns<string> {
+  download: string | undefined;
+  bootstrap: string | undefined;
+  injected: boolean;
+}
+
+function templateStep(phase: "prepare" | "finalize", shell: Shell): TemplateStep {
+  return (docs.steps as TemplateStep[]).find(
+    (step) => step.displayName?.startsWith(`setup-vp ${phase}`) && step[shell],
+  )!;
+}
+
+function runShellScript(
+  shell: Shell,
+  scriptPath: string,
+  env: NodeJS.ProcessEnv,
+  cwd?: string,
+): SpawnSyncReturns<string> {
+  const executable = shell === "bash" ? "bash" : "powershell.exe";
+  const args =
+    shell === "bash"
+      ? [scriptPath]
+      : ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath];
+  return spawnSync(executable, args, {
+    encoding: "utf8",
+    timeout: 10_000,
+    cwd,
+    env: { ...process.env, ...env },
+  });
+}
+
+function runPrepare(shell: Shell, setupRef: string): PrepareResult {
   const directory = mkdtempSync(join(tmpdir(), "setup-vp-azure-template-"));
   const download = join(directory, "download");
   const bootstrap = join(directory, "bootstrap");
   const marker = join(directory, "injected");
   // Render the real template source as Azure would, so reintroducing inline
   // parameter interpolation makes the injection payloads executable again.
-  const script = prepareStep(shell)
+  const script = templateStep("prepare", shell)
     [shell]!.replaceAll("${{ parameters.setupRef }}", () => setupRef)
     .replaceAll("$(Agent.TempDirectory)", () => directory);
   const prelude =
@@ -62,24 +89,13 @@ function Invoke-WebRequest {
   const scriptPath = join(directory, shell === "bash" ? "prepare.sh" : "prepare.ps1");
   writeFileSync(scriptPath, prelude + script);
   try {
-    const result = spawnSync(
-      shell === "bash" ? "bash" : "powershell.exe",
-      shell === "bash"
-        ? [scriptPath]
-        : ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
-      {
-        encoding: "utf8",
-        timeout: 10_000,
-        env: {
-          ...process.env,
-          AGENT_TEMPDIRECTORY: directory,
-          SETUP_VP_SETUP_REF: setupRef,
-          SETUP_VP_TEST_DOWNLOAD: download,
-          SETUP_VP_TEST_BOOTSTRAP: bootstrap,
-          SETUP_VP_TEST_MARKER: marker,
-        },
-      },
-    );
+    const result = runShellScript(shell, scriptPath, {
+      AGENT_TEMPDIRECTORY: directory,
+      SETUP_VP_SETUP_REF: setupRef,
+      SETUP_VP_TEST_DOWNLOAD: download,
+      SETUP_VP_TEST_BOOTSTRAP: bootstrap,
+      SETUP_VP_TEST_MARKER: marker,
+    });
     expect(result.error).toBeUndefined();
     return {
       ...result,
@@ -94,8 +110,10 @@ function Invoke-WebRequest {
 
 // Expand only the authEnv insertion from the real template. Support the old
 // direct insertion too, so the execution test detects a return to that behavior.
-function renderAuthEnv(shell: Shell, authEnv: Record<string, string>): Record<string, string> {
-  const step = finalizeSteps.find((step) => step[shell])!;
+function renderAuthEnv(
+  step: TemplateStep,
+  authEnv: Record<string, string>,
+): Record<string, string> {
   if (step.env["${{ insert }}"] === "${{ parameters.authEnv }}") return authEnv;
   const mapping = step.env["${{ each pair in parameters.authEnv }}"] as Record<string, string>;
   const entries = Object.entries(mapping);
@@ -109,7 +127,7 @@ function renderAuthEnv(shell: Shell, authEnv: Record<string, string>): Record<st
   );
 }
 
-function runFinalizeWithAuthEnv(shell: Shell, name: "NODE_OPTIONS" | "BASH_ENV") {
+function assertFinalizeRejectsAuthEnv(shell: Shell, name: "NODE_OPTIONS" | "BASH_ENV"): void {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), "setup-vp-azure-auth-env-")));
   const marker = join(directory, "injected");
   const hook = join(directory, "hook.sh");
@@ -121,15 +139,17 @@ function runFinalizeWithAuthEnv(shell: Shell, name: "NODE_OPTIONS" | "BASH_ENV")
       join(runtimeDir, "index.mjs"),
     );
     writeFileSync(hook, 'printf injected > "$SETUP_VP_TEST_MARKER"\n');
-    const preload =
-      "import{writeFileSync}from'node:fs';writeFileSync(process.env.SETUP_VP_TEST_MARKER,'injected');";
+    const preload = `
+      import { writeFileSync } from "node:fs";
+      writeFileSync(process.env.SETUP_VP_TEST_MARKER, "injected");
+    `;
     const authEnv = {
       [name]:
         name === "BASH_ENV"
           ? hook
           : `--import=data:text/javascript;base64,${Buffer.from(preload).toString("base64")}`,
     };
-    const step = finalizeSteps.find((step) => step[shell])!;
+    const step = templateStep("finalize", shell);
     const script = step[shell]!.replaceAll(
       "$(SETUP_VP_BOOTSTRAP_NODE)",
       () => process.execPath,
@@ -137,22 +157,15 @@ function runFinalizeWithAuthEnv(shell: Shell, name: "NODE_OPTIONS" | "BASH_ENV")
     const scriptPath = join(directory, shell === "bash" ? "finalize.sh" : "finalize.ps1");
     // PowerShell@2's wrapper propagates the last native command's exit code.
     writeFileSync(scriptPath, script + (shell === "powershell" ? "\nexit $LASTEXITCODE\n" : ""));
-    const result = spawnSync(
-      shell === "bash" ? "bash" : "powershell.exe",
-      shell === "bash"
-        ? [scriptPath]
-        : ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
+    const result = runShellScript(
+      shell,
+      scriptPath,
       {
-        encoding: "utf8",
-        timeout: 10_000,
-        cwd: directory,
-        env: {
-          ...process.env,
-          SETUP_VP_RUN_INSTALL: "false",
-          SETUP_VP_TEST_MARKER: marker,
-          ...renderAuthEnv(shell, authEnv),
-        },
+        SETUP_VP_RUN_INSTALL: "false",
+        SETUP_VP_TEST_MARKER: marker,
+        ...renderAuthEnv(step, authEnv),
       },
+      directory,
     );
     expect(result.error).toBeUndefined();
     expect(existsSync(marker)).toBe(false);
@@ -229,7 +242,7 @@ describe("azure/setup-vp.yml", () => {
     "keeps authEnv names outside the %s launcher environment",
     (shell) => {
       const authEnv = { NODE_OPTIONS: "--require=./hook.cjs", CUSTOM_TOKEN: "$(CUSTOM_TOKEN)" };
-      expect(renderAuthEnv(shell, authEnv)).toEqual({
+      expect(renderAuthEnv(templateStep("finalize", shell), authEnv)).toEqual({
         SETUP_VP_AUTH_ENV_NODE_OPTIONS: "--require=./hook.cjs",
         SETUP_VP_AUTH_ENV_CUSTOM_TOKEN: "$(CUSTOM_TOKEN)",
       });
@@ -250,7 +263,7 @@ describe("azure/setup-vp.yml", () => {
   it.each(["bash", "powershell"] as const)(
     "passes setupRef only through %s's environment",
     (shell) => {
-      const step = prepareStep(shell);
+      const step = templateStep("prepare", shell);
       expect(step.env.SETUP_VP_SETUP_REF).toBe("${{ parameters.setupRef }}");
       expect(step[shell]).not.toContain("${{");
     },
@@ -262,7 +275,7 @@ describe("azure/setup-vp.yml", () => {
       () => {
         it.each(["NODE_OPTIONS", "BASH_ENV"] as const)(
           "rejects %s without executing startup code",
-          (name) => runFinalizeWithAuthEnv(shell, name),
+          (name) => assertFinalizeRejectsAuthEnv(shell, name),
         );
       },
     );

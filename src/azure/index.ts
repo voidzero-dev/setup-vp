@@ -14,10 +14,10 @@ import { getSfwAssetName, isMuslLinux, setupSfw, SFW_VERSION } from "../ci/insta
 import { getCommandOutput, run } from "../ci/process.js";
 import { parseRunInstall, runInstall } from "../ci/run-install.js";
 import { parseInstalledVpVersion } from "../ci/version.js";
+import { applyAuthEnv } from "./auth-env.js";
 import { logInfo, logWarning, prependPath, setVariable } from "./commands.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { parseAzureInputs, resolveProjectDirFromInputs } from "./inputs.js";
-import { applyAuthEnv } from "./auth-env.js";
 
 export type AzurePhase = "prepare" | "finalize";
 

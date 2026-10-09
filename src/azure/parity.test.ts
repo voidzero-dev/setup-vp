@@ -1,5 +1,5 @@
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -45,14 +45,16 @@ describe("Azure parity", () => {
     writeFileSync(path.join(project, ".npmrc"), "//registry.example/:_authToken=${CUSTOM_TOKEN}\n");
     const target: NodeJS.ProcessEnv = { ...env, SETUP_VP_AUTH_ENV_CUSTOM_TOKEN: secret };
     ports.runInstall.mockImplementation((_entries, _project, _command, installEnv) => {
-      const result = spawnSync(
-        process.execPath,
-        [
-          "-e",
-          "process.stdout.write(JSON.stringify({token:process.env.CUSTOM_TOKEN,transport:process.env.SETUP_VP_AUTH_ENV_CUSTOM_TOKEN}))",
-        ],
-        { env: installEnv, encoding: "utf8" },
-      );
+      const script = `
+        process.stdout.write(JSON.stringify({
+          token: process.env.CUSTOM_TOKEN,
+          transport: process.env.SETUP_VP_AUTH_ENV_CUSTOM_TOKEN,
+        }));
+      `;
+      const result = spawnSync(process.execPath, ["-e", script], {
+        env: installEnv,
+        encoding: "utf8",
+      });
       expect(result.status, result.stderr).toBe(0);
       expect(JSON.parse(result.stdout)).toEqual({ token: secret });
     });

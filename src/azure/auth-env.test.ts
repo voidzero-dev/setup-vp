@@ -128,8 +128,9 @@ describe("Azure authEnv", () => {
     };
     const original = { ...env };
 
-    expect(() => applyAuthEnv(env)).toThrow("is not a supported credential name");
-    expect(() => applyAuthEnv(env)).not.toThrow("sensitive-value");
+    expect(() => applyAuthEnv(env)).toThrow(
+      new Error(`authEnv variable ${JSON.stringify(name)} is not a supported credential name`),
+    );
     expect(env).toEqual(original);
   });
 
