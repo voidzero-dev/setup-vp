@@ -34,7 +34,7 @@ parameters:
     default: ""
   - name: setupRef
     type: string
-    default: v1.21.1
+    default: v1.21.2
   - name: nodeVersion
     type: string
     default: ""

@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $runtimeNode = (Get-Command node -ErrorAction Stop).Source
-$setupRef = if ($env:SETUP_VP_SETUP_REF) { $env:SETUP_VP_SETUP_REF } else { 'v1.21.1' }
+$setupRef = if ($env:SETUP_VP_SETUP_REF) { $env:SETUP_VP_SETUP_REF } else { 'v1.21.2' }
 if ($setupRef -cnotmatch '\A[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*\z') {
   throw 'setup-vp: invalid setup-ref; use a tag, branch or commit SHA with safe ref characters.'
 }

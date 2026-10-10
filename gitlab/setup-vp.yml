@@ -46,7 +46,7 @@ spec:
       default: ""
     setup-ref:
       description: "setup-vp ref used to download the GitLab bootstrap and compiled runtime. Pin this to the same tag or commit as the remote template; the default is the latest release when this template was published."
-      default: "v1.21.1"
+      default: "v1.21.2"
       regex: '\A[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*\z'
 ---
 .setup-vp-bootstrap:
@@ -80,7 +80,7 @@ spec:
       export SETUP_VP_NODE_MANAGER="${SETUP_VP_NODE_MANAGER:-}"
       export SETUP_VP_REGISTRY_URL="${SETUP_VP_REGISTRY_URL:-}"
       export SETUP_VP_SCOPE="${SETUP_VP_SCOPE:-}"
-      export SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1.21.1}"
+      export SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1.21.2}"
 
       # Keep this check POSIX-compatible: the runner may use sh before Bash starts.
       case "$SETUP_VP_SETUP_REF" in

@@ -46,14 +46,14 @@ spec:
       default: ""
     setup-ref:
       description: "setup-vp ref used to download the GitLab bootstrap and compiled runtime. Pin this to the same tag or commit as the remote template; the default is the latest release when this template was published."
-      default: "v1.21.1"
+      default: "v1.21.2"
       regex: '\A[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*\z'
 ---
 .setup-vp-bootstrap:
   before_script:
     - |
       $ErrorActionPreference = 'Stop'
-      if (-not $env:SETUP_VP_SETUP_REF) { $env:SETUP_VP_SETUP_REF = 'v1.21.1' }
+      if (-not $env:SETUP_VP_SETUP_REF) { $env:SETUP_VP_SETUP_REF = 'v1.21.2' }
       if ($env:SETUP_VP_SETUP_REF -cnotmatch '\A[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*\z') {
         throw 'setup-vp: invalid setup-ref; use a tag, branch or commit SHA with safe ref characters.'
       }
