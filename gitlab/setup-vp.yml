@@ -101,74 +101,62 @@ spec:
       . "$setup_vp_env_tmp"
 
 .setup-vp:
+  # Keep string inputs out of shell source and disable variable expansion.
+  variables:
+    SETUP_VP_INPUT_VERSION:
+      value: $[[ inputs.version ]]
+      expand: false
+    SETUP_VP_INPUT_VERSION_FILE:
+      value: $[[ inputs.version-file ]]
+      expand: false
+    SETUP_VP_INPUT_NODE_VERSION:
+      value: $[[ inputs.node-version ]]
+      expand: false
+    SETUP_VP_INPUT_NODE_VERSION_FILE:
+      value: $[[ inputs.node-version-file ]]
+      expand: false
+    SETUP_VP_INPUT_CACHE_DEPENDENCY_PATH:
+      value: $[[ inputs.cache-dependency-path ]]
+      expand: false
+    SETUP_VP_INPUT_WORKING_DIRECTORY:
+      value: $[[ inputs.working-directory ]]
+      expand: false
+    SETUP_VP_INPUT_RUN_INSTALL:
+      value: $[[ inputs.run-install ]]
+      expand: false
+    SETUP_VP_INPUT_PACKAGE_MANAGER:
+      value: $[[ inputs.package-manager ]]
+      expand: false
+    SETUP_VP_INPUT_NODE_MANAGER:
+      value: $[[ inputs.node-manager ]]
+      expand: false
+    SETUP_VP_INPUT_REGISTRY_URL:
+      value: $[[ inputs.registry-url ]]
+      expand: false
+    SETUP_VP_INPUT_SCOPE:
+      value: $[[ inputs.scope ]]
+      expand: false
+    SETUP_VP_INPUT_SETUP_REF:
+      value: $[[ inputs.setup-ref ]]
+      expand: false
   before_script:
     - |
-      SETUP_VP_VERSION="$(cat <<'SETUP_VP_VERSION_EOF'
-      $[[ inputs.version ]]
-      SETUP_VP_VERSION_EOF
-      )"
-      export SETUP_VP_VERSION
-      SETUP_VP_VERSION_FILE="$(cat <<'SETUP_VP_VERSION_FILE_EOF'
-      $[[ inputs.version-file ]]
-      SETUP_VP_VERSION_FILE_EOF
-      )"
-      export SETUP_VP_VERSION_FILE
-      SETUP_VP_NODE_VERSION="$(cat <<'SETUP_VP_NODE_VERSION_EOF'
-      $[[ inputs.node-version ]]
-      SETUP_VP_NODE_VERSION_EOF
-      )"
-      export SETUP_VP_NODE_VERSION
-      SETUP_VP_NODE_VERSION_FILE="$(cat <<'SETUP_VP_NODE_VERSION_FILE_EOF'
-      $[[ inputs.node-version-file ]]
-      SETUP_VP_NODE_VERSION_FILE_EOF
-      )"
-      export SETUP_VP_NODE_VERSION_FILE
-      SETUP_VP_CACHE_DEPENDENCY_PATH="$(cat <<'SETUP_VP_CACHE_DEPENDENCY_PATH_EOF'
-      $[[ inputs.cache-dependency-path ]]
-      SETUP_VP_CACHE_DEPENDENCY_PATH_EOF
-      )"
-      export SETUP_VP_CACHE_DEPENDENCY_PATH
+      # Copy inputs at runtime so they still override SETUP_VP_* variables.
+      export SETUP_VP_VERSION="$SETUP_VP_INPUT_VERSION"
+      export SETUP_VP_VERSION_FILE="$SETUP_VP_INPUT_VERSION_FILE"
+      export SETUP_VP_NODE_VERSION="$SETUP_VP_INPUT_NODE_VERSION"
+      export SETUP_VP_NODE_VERSION_FILE="$SETUP_VP_INPUT_NODE_VERSION_FILE"
+      export SETUP_VP_CACHE_DEPENDENCY_PATH="$SETUP_VP_INPUT_CACHE_DEPENDENCY_PATH"
+      export SETUP_VP_WORKING_DIRECTORY="$SETUP_VP_INPUT_WORKING_DIRECTORY"
+      export SETUP_VP_RUN_INSTALL="$SETUP_VP_INPUT_RUN_INSTALL"
+      export SETUP_VP_PACKAGE_MANAGER="$SETUP_VP_INPUT_PACKAGE_MANAGER"
+      export SETUP_VP_NODE_MANAGER="$SETUP_VP_INPUT_NODE_MANAGER"
+      export SETUP_VP_REGISTRY_URL="$SETUP_VP_INPUT_REGISTRY_URL"
+      export SETUP_VP_SCOPE="$SETUP_VP_INPUT_SCOPE"
+      export SETUP_VP_SETUP_REF="$SETUP_VP_INPUT_SETUP_REF"
+      # GitLab validates these inputs as a boolean and a fixed option list.
+      export SETUP_VP_SFW='$[[ inputs.sfw ]]'
       if [ '$[[ inputs.cache-policy ]]' = 'pull' ]; then export SETUP_VP_CACHE_SAVE=false; fi
-      SETUP_VP_WORKING_DIRECTORY="$(cat <<'SETUP_VP_WORKING_DIRECTORY_EOF'
-      $[[ inputs.working-directory ]]
-      SETUP_VP_WORKING_DIRECTORY_EOF
-      )"
-      export SETUP_VP_WORKING_DIRECTORY
-      SETUP_VP_RUN_INSTALL="$(cat <<'SETUP_VP_RUN_INSTALL_EOF'
-      $[[ inputs.run-install ]]
-      SETUP_VP_RUN_INSTALL_EOF
-      )"
-      export SETUP_VP_RUN_INSTALL
-      SETUP_VP_SFW="$(cat <<'SETUP_VP_SFW_EOF'
-      $[[ inputs.sfw ]]
-      SETUP_VP_SFW_EOF
-      )"
-      export SETUP_VP_SFW
-      SETUP_VP_PACKAGE_MANAGER="$(cat <<'SETUP_VP_PACKAGE_MANAGER_EOF'
-      $[[ inputs.package-manager ]]
-      SETUP_VP_PACKAGE_MANAGER_EOF
-      )"
-      export SETUP_VP_PACKAGE_MANAGER
-      SETUP_VP_NODE_MANAGER="$(cat <<'SETUP_VP_NODE_MANAGER_EOF'
-      $[[ inputs.node-manager ]]
-      SETUP_VP_NODE_MANAGER_EOF
-      )"
-      export SETUP_VP_NODE_MANAGER
-      SETUP_VP_REGISTRY_URL="$(cat <<'SETUP_VP_REGISTRY_URL_EOF'
-      $[[ inputs.registry-url ]]
-      SETUP_VP_REGISTRY_URL_EOF
-      )"
-      export SETUP_VP_REGISTRY_URL
-      SETUP_VP_SCOPE="$(cat <<'SETUP_VP_SCOPE_EOF'
-      $[[ inputs.scope ]]
-      SETUP_VP_SCOPE_EOF
-      )"
-      export SETUP_VP_SCOPE
-      SETUP_VP_SETUP_REF="$(cat <<'SETUP_VP_SETUP_REF_EOF'
-      $[[ inputs.setup-ref ]]
-      SETUP_VP_SETUP_REF_EOF
-      )"
-      export SETUP_VP_SETUP_REF
     - !reference [.setup-vp-bootstrap, before_script]
 
 # Opt in to native GitLab persistence without replacing an existing job cache.
