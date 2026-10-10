@@ -60,6 +60,8 @@ After reviewing the commit, a maintainer with write access can add `run-e2e` to 
 
 For each new commit, review the changes and remove and re-add `run-e2e`. Read the PR result comment for the status and GitLab pipeline link after each run.
 
+Release PRs must pass the full suite on their current head commit before merging. Follow the [release procedure](#releasing) to request and confirm this result.
+
 Pushes, merge queue commits, merges, and release tags do not automatically start GitLab pipelines.
 
 For a manual run, use `workflow_dispatch`. Set `setup_ref` to an exact commit SHA or release tag, or leave it empty to test the selected workflow commit. Select `suite` (`full` by default) and `vite_plus_version` (`latest` by default).
@@ -82,9 +84,21 @@ Publish releases as Git tags, not as an npm package. Keep `package.json.version`
    - The `setupRef` parameter in `azure/setup-vp.yml`.
    - The `SETUP_VP_SETUP_REF` fallbacks in `gitlab/bootstrap.sh`, `gitlab/bootstrap.ps1`, `azure/bootstrap.sh`, and `azure/bootstrap.ps1`.
 
-   Run `vp run test` before merging the release PR. The bootstrap and template tests compare these defaults with `package.json.version`, so an omitted update fails CI. Merge all version changes before creating the tag; do not resolve `latest` at runtime or reuse the frozen `v1` tag.
+   Run the [required checks](#before-committing) and commit the release changes, including any updated bundles. The bootstrap and template tests compare these defaults with `package.json.version`, so an omitted update fails CI. Do not resolve `latest` at runtime or reuse the frozen `v1` tag.
 
-2. Update `main` and confirm that all three bundles in `dist/` are in sync. The working tree must stay clean after building:
+2. Review the release PR's current head commit, then add the `run-e2e` label to request the full GitLab suite. From the release PR branch:
+
+   ```bash
+   gh pr edit --add-label run-e2e
+   ```
+
+   Follow the [GitLab E2E procedures](#gitlab-end-to-end-tests). After any new commit, including an update from `main`, review the changes and remove and re-add `run-e2e`.
+
+3. Merge the release PR only after GitHub CI and the full GitLab suite pass. Confirm that the latest PR result comment says **GitLab E2E passed**, reports `Suite: full`, and names the current PR head SHA. A successful `GitLab E2E request` workflow only confirms the request; it does not confirm that GitLab tests passed.
+
+   Keep the PR open if verification fails, is cancelled, or has no result for the current head. Fix the failure, including outdated fixtures in the dedicated GitLab test project when needed, then remove and re-add `run-e2e`. Wait for a passing result before merging. Do not defer this check to a manual run after merging or bypass it with an administrator merge.
+
+4. Update `main` and confirm that `HEAD` is the release PR's merge commit. Confirm that all three bundles in `dist/` are in sync. The working tree must stay clean after building:
 
    ```bash
    git checkout main
@@ -93,9 +107,7 @@ Publish releases as Git tags, not as an npm package. Keep `package.json.version`
    git status --short   # must be empty
    ```
 
-3. Confirm that the release commit on `main` passes the full GitLab E2E workflow. Use `workflow_dispatch` with the exact commit SHA and `suite: full`.
-
-4. Create the new annotated version tag and push it. For example:
+5. Create the new annotated version tag on the release PR's merge commit and push it. For example:
 
    ```bash
    git tag -a v1.21.2 -m "v1.21.2"
