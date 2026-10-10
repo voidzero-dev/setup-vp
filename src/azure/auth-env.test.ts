@@ -139,4 +139,42 @@ describe("Azure authEnv", () => {
     expect(() => applyAuthEnv(env)).toThrow("duplicate credential name");
     expect(env).toEqual({ SETUP_VP_AUTH_ENV_TOKEN: "one", SETUP_VP_AUTH_ENV_Token: "two" });
   });
+
+  it.each(["TOKEN", "Token"])(
+    "rejects original duplicate names after Windows retains only %s",
+    (name) => {
+      const env = {
+        SETUP_VP_AUTH_ENV: JSON.stringify({ TOKEN: "$(FIRST)", Token: "$(SECOND)" }),
+        [`SETUP_VP_AUTH_ENV_${name}`]: "surviving-secret",
+      };
+      const original = { ...env };
+
+      expect(() => applyAuthEnv(env)).toThrow('authEnv contains duplicate credential name "Token"');
+      expect(env).toEqual(original);
+    },
+  );
+
+  it("uses metadata only for names and removes it before passing credentials onward", () => {
+    const env = {
+      SETUP_VP_AUTH_ENV: JSON.stringify({ CUSTOM_TOKEN: "$(MY_SECRET)" }),
+      SETUP_VP_AUTH_ENV_CUSTOM_TOKEN: 'resolved "secret" with \\ and\nnewlines',
+    };
+
+    applyAuthEnv(env);
+
+    expect(env).toEqual({ CUSTOM_TOKEN: 'resolved "secret" with \\ and\nnewlines' });
+  });
+
+  it.each(["sensitive-value", "null", "[]", "42", '"sensitive-value"'])(
+    "rejects invalid metadata without exposing its contents (%s)",
+    (value) => {
+      const env = { SETUP_VP_AUTH_ENV: value, SETUP_VP_AUTH_ENV_CUSTOM_TOKEN: "secret" };
+      const original = { ...env };
+
+      expect(() => applyAuthEnv(env)).toThrow(
+        new Error("Invalid authEnv metadata: expected a JSON object"),
+      );
+      expect(env).toEqual(original);
+    },
+  );
 });

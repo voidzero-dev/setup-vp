@@ -43,12 +43,17 @@ describe("Azure parity", () => {
     const { project, env, ports } = fixture();
     const secret = 'token with "quotes", \\ and\nnewlines';
     writeFileSync(path.join(project, ".npmrc"), "//registry.example/:_authToken=${CUSTOM_TOKEN}\n");
-    const target: NodeJS.ProcessEnv = { ...env, SETUP_VP_AUTH_ENV_CUSTOM_TOKEN: secret };
+    const target: NodeJS.ProcessEnv = {
+      ...env,
+      SETUP_VP_AUTH_ENV: JSON.stringify({ CUSTOM_TOKEN: "$(CUSTOM_TOKEN)" }),
+      SETUP_VP_AUTH_ENV_CUSTOM_TOKEN: secret,
+    };
     ports.runInstall.mockImplementation((_entries, _project, _command, installEnv) => {
       const script = `
         process.stdout.write(JSON.stringify({
           token: process.env.CUSTOM_TOKEN,
           transport: process.env.SETUP_VP_AUTH_ENV_CUSTOM_TOKEN,
+          metadata: process.env.SETUP_VP_AUTH_ENV,
         }));
       `;
       const result = spawnSync(process.execPath, ["-e", script], {

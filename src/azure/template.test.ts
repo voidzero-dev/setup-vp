@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vite-plus/test";
 import { parse as parseYaml } from "yaml";
+import { applyAuthEnv } from "./auth-env.js";
 
 const templatePath = fileURLToPath(new URL("../../azure/setup-vp.yml", import.meta.url));
 const template = readFileSync(templatePath, "utf8");
@@ -122,8 +123,46 @@ function renderAuthEnv(
   expect(value).toBe("${{ pair.value }}");
   const format = key.match(/^\$\{\{ format\('([^']*)', pair\.key\) \}\}$/)?.[1];
   expect(format).toBeDefined();
-  return Object.fromEntries(
+  const rendered = Object.fromEntries(
     Object.entries(authEnv).map(([name, token]) => [format!.replaceAll("{0}", name), token]),
+  );
+  if (step.env.SETUP_VP_AUTH_ENV !== undefined) {
+    expect(step.env.SETUP_VP_AUTH_ENV).toBe(
+      "${{ replace(convertToJson(parameters.authEnv), '$', '\\u0024') }}",
+    );
+    rendered.SETUP_VP_AUTH_ENV = JSON.stringify(authEnv).replaceAll("$", "\\u0024");
+  }
+  return rendered;
+}
+
+function runFinalize(
+  shell: Shell,
+  authEnv: Record<string, string>,
+  directory: string,
+): SpawnSyncReturns<string> {
+  const runtimeDir = join(directory, "setup-vp-azure", "dist", "azure");
+  mkdirSync(runtimeDir, { recursive: true });
+  copyFileSync(
+    new URL("../../dist/azure/index.mjs", import.meta.url),
+    join(runtimeDir, "index.mjs"),
+  );
+  const step = templateStep("finalize", shell);
+  const script = step[shell]!.replaceAll(
+    "$(SETUP_VP_BOOTSTRAP_NODE)",
+    () => process.execPath,
+  ).replaceAll("$(Agent.TempDirectory)", () => directory);
+  const scriptPath = join(directory, shell === "bash" ? "finalize.sh" : "finalize.ps1");
+  // PowerShell@2's wrapper propagates the last native command's exit code.
+  writeFileSync(scriptPath, script + (shell === "powershell" ? "\nexit $LASTEXITCODE\n" : ""));
+  return runShellScript(
+    shell,
+    scriptPath,
+    {
+      SETUP_VP_RUN_INSTALL: "false",
+      SETUP_VP_TEST_MARKER: join(directory, "injected"),
+      ...renderAuthEnv(step, authEnv),
+    },
+    directory,
   );
 }
 
@@ -132,12 +171,6 @@ function assertFinalizeRejectsAuthEnv(shell: Shell, name: "NODE_OPTIONS" | "BASH
   const marker = join(directory, "injected");
   const hook = join(directory, "hook.sh");
   try {
-    const runtimeDir = join(directory, "setup-vp-azure", "dist", "azure");
-    mkdirSync(runtimeDir, { recursive: true });
-    copyFileSync(
-      new URL("../../dist/azure/index.mjs", import.meta.url),
-      join(runtimeDir, "index.mjs"),
-    );
     writeFileSync(hook, 'printf injected > "$SETUP_VP_TEST_MARKER"\n');
     const preload = `
       import { writeFileSync } from "node:fs";
@@ -149,24 +182,7 @@ function assertFinalizeRejectsAuthEnv(shell: Shell, name: "NODE_OPTIONS" | "BASH
           ? hook
           : `--import=data:text/javascript;base64,${Buffer.from(preload).toString("base64")}`,
     };
-    const step = templateStep("finalize", shell);
-    const script = step[shell]!.replaceAll(
-      "$(SETUP_VP_BOOTSTRAP_NODE)",
-      () => process.execPath,
-    ).replaceAll("$(Agent.TempDirectory)", () => directory);
-    const scriptPath = join(directory, shell === "bash" ? "finalize.sh" : "finalize.ps1");
-    // PowerShell@2's wrapper propagates the last native command's exit code.
-    writeFileSync(scriptPath, script + (shell === "powershell" ? "\nexit $LASTEXITCODE\n" : ""));
-    const result = runShellScript(
-      shell,
-      scriptPath,
-      {
-        SETUP_VP_RUN_INSTALL: "false",
-        SETUP_VP_TEST_MARKER: marker,
-        ...renderAuthEnv(step, authEnv),
-      },
-      directory,
-    );
+    const result = runFinalize(shell, authEnv, directory);
     expect(result.error).toBeUndefined();
     expect(existsSync(marker)).toBe(false);
     expect(result.status).not.toBe(0);
@@ -243,9 +259,31 @@ describe("azure/setup-vp.yml", () => {
     (shell) => {
       const authEnv = { NODE_OPTIONS: "--require=./hook.cjs", CUSTOM_TOKEN: "$(CUSTOM_TOKEN)" };
       expect(renderAuthEnv(templateStep("finalize", shell), authEnv)).toEqual({
+        SETUP_VP_AUTH_ENV:
+          '{"NODE_OPTIONS":"--require=./hook.cjs","CUSTOM_TOKEN":"\\u0024(CUSTOM_TOKEN)"}',
         SETUP_VP_AUTH_ENV_NODE_OPTIONS: "--require=./hook.cjs",
         SETUP_VP_AUTH_ENV_CUSTOM_TOKEN: "$(CUSTOM_TOKEN)",
       });
+    },
+  );
+
+  it.each(["bash", "powershell"] as const)(
+    "keeps %s metadata valid when Azure expands a secret containing JSON syntax",
+    (shell) => {
+      const secret = 'quotes " and \\ and\nnewlines $(literal)';
+      const taskEnv = renderAuthEnv(templateStep("finalize", shell), {
+        CUSTOM_TOKEN: "$(MY_SECRET)",
+      });
+      const expanded = Object.fromEntries(
+        Object.entries(taskEnv).map(([key, value]) => [
+          key,
+          value.replaceAll("$(MY_SECRET)", () => secret),
+        ]),
+      );
+
+      expect(JSON.parse(expanded.SETUP_VP_AUTH_ENV!)).toEqual({ CUSTOM_TOKEN: "$(MY_SECRET)" });
+      applyAuthEnv(expanded);
+      expect(expanded).toEqual({ CUSTOM_TOKEN: secret });
     },
   );
 
@@ -273,6 +311,17 @@ describe("azure/setup-vp.yml", () => {
     describe.skipIf((shell === "powershell") !== (process.platform === "win32"))(
       `${shell} finalize`,
       () => {
+        it("rejects case-insensitive duplicate names through the native task environment", () => {
+          const directory = realpathSync(mkdtempSync(join(tmpdir(), "setup-vp-azure-auth-env-")));
+          try {
+            const result = runFinalize(shell, { TOKEN: "one", Token: "two" }, directory);
+            expect(result.error).toBeUndefined();
+            expect(result.status).not.toBe(0);
+            expect(result.stderr).toContain('authEnv contains duplicate credential name "Token"');
+          } finally {
+            rmSync(directory, { recursive: true, force: true });
+          }
+        });
         it.each(["NODE_OPTIONS", "BASH_ENV"] as const)(
           "rejects %s without executing startup code",
           (name) => assertFinalizeRejectsAuthEnv(shell, name),

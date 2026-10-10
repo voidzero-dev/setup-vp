@@ -154,6 +154,9 @@ steps:
       SETUP_VP_SCOPE: ${{ parameters.scope }}
       NODE_AUTH_TOKEN: $(NODE_AUTH_TOKEN)
       # Keep credential mappings inert until the runtime validates their names.
+      # Preserve original names when Windows folds environment keys. Escape
+      # dollars so Azure cannot expand secret macros inside this JSON metadata.
+      SETUP_VP_AUTH_ENV: ${{ replace(convertToJson(parameters.authEnv), '$', '\u0024') }}
       ${{ each pair in parameters.authEnv }}:
         ${{ format('SETUP_VP_AUTH_ENV_{0}', pair.key) }}: ${{ pair.value }}
       SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
@@ -174,6 +177,9 @@ steps:
       SETUP_VP_SCOPE: ${{ parameters.scope }}
       NODE_AUTH_TOKEN: $(NODE_AUTH_TOKEN)
       # Keep credential mappings inert until the runtime validates their names.
+      # Preserve original names when Windows folds environment keys. Escape
+      # dollars so Azure cannot expand secret macros inside this JSON metadata.
+      SETUP_VP_AUTH_ENV: ${{ replace(convertToJson(parameters.authEnv), '$', '\u0024') }}
       ${{ each pair in parameters.authEnv }}:
         ${{ format('SETUP_VP_AUTH_ENV_{0}', pair.key) }}: ${{ pair.value }}
       SETUP_VP_CACHE: ${{ iif(eq(parameters.cache, true), 'true', 'false') }}
