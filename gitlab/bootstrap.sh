@@ -18,7 +18,7 @@ setup_vp_download() {
     return 127
   fi
 }
-SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1.21.1}"
+SETUP_VP_SETUP_REF="${SETUP_VP_SETUP_REF:-v1.21.2}"
 if [[ ! "$SETUP_VP_SETUP_REF" =~ ^[A-Za-z0-9_-]+([./][A-Za-z0-9_-]+)*$ ]]; then
   echo 'setup-vp: invalid setup-ref; use a tag, branch or commit SHA with safe ref characters.' >&2
   exit 1
