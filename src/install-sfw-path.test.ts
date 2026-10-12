@@ -116,6 +116,8 @@ process.exit(0);`,
         sfw: true,
         cache: false,
         cacheSave: true,
+        taskCache: false,
+        taskCacheSave: true,
         workingDirectory: workspace,
         runInstall: [{ cwd: "install directory", args: ["--frozen-lockfile", "", "two words"] }],
       };

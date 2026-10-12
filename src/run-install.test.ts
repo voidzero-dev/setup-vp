@@ -33,6 +33,8 @@ const baseInputs: Inputs = {
   runInstall: [{}],
   sfw: true,
   cache: false,
+  taskCache: false,
+  taskCacheSave: true,
   cacheSave: true,
 };
 

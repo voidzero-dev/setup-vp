@@ -730,6 +730,186 @@ jobs:
           echo "Installed version: ${{ steps.setup.outputs.version }}"
           echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
 
+  test-task-cache-populate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_RUN_ID: task-cache-e2e-${{ github.run_id }}
+      GITHUB_RUN_ATTEMPT: "1"
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      # The fixture lives under $RUNNER_TEMP, outside the repository, and
+      # `working-directory` points the action (and with it the task cache
+      # path) at it. The task cache is independent of the dependency cache,
+      # so no lock file is needed and `run-install` stays off.
+      - name: Create test project
+        shell: bash
+        run: |
+          PROJECT="$RUNNER_TEMP/task-cache-project"
+          mkdir -p "$PROJECT"
+          echo '{"name":"task-cache-project","private":true}' > "$PROJECT/package.json"
+          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
+
+      - name: Setup Vite+ with task cache
+        uses: ./
+        id: setup
+        with:
+          working-directory: ${{ runner.temp }}/task-cache-project
+          task-cache: true
+          run-install: false
+
+      # The post action saves the task cache once the job finishes, so the
+      # entry content a later run must find is written here. The key is
+      # scoped to this workflow run, so no earlier entry can share it.
+      - name: Write task cache content for the entry to save
+        shell: bash
+        run: |
+          mkdir -p "$PROJECT/node_modules/.vite/task-cache"
+          echo "populate-${{ github.run_id }}" > "$PROJECT/node_modules/.vite/task-cache/marker.txt"
+          echo "populate-${{ github.run_id }}" > "$PROJECT/node_modules/.vite/task-cache/from-populate.txt"
+
+  test-task-cache-hit:
+    needs: test-task-cache-populate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_RUN_ID: task-cache-e2e-${{ github.run_id }}
+      GITHUB_RUN_ATTEMPT: "1"
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create test project
+        shell: bash
+        run: |
+          PROJECT="$RUNNER_TEMP/task-cache-project"
+          mkdir -p "$PROJECT"
+          echo '{"name":"task-cache-project","private":true}' > "$PROJECT/package.json"
+          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
+
+      # Same run-scoped key as the populate job, so the restore resolves the
+      # exact primary key of the entry that job saved.
+      - name: Setup Vite+ with the same task cache key
+        uses: ./
+        id: setup
+        with:
+          working-directory: ${{ runner.temp }}/task-cache-project
+          task-cache: true
+          run-install: false
+
+      - name: Verify the saved task cache entry is restored
+        shell: bash
+        env:
+          ACTUAL_HIT: ${{ steps.setup.outputs.task-cache-hit }}
+        run: |
+          if [ "$ACTUAL_HIT" != "true" ]; then
+            echo "::error::task-cache-hit was '$ACTUAL_HIT'; the populate job did not save a restorable task cache entry"
+            exit 1
+          fi
+          if [ "$(cat "$PROJECT/node_modules/.vite/task-cache/marker.txt" 2>/dev/null)" != "populate-${{ github.run_id }}" ]; then
+            echo "::error::the restored task cache does not contain the content saved by the populate job"
+            exit 1
+          fi
+          echo "OK: task cache hit restored the saved entry"
+
+  test-task-cache-refresh:
+    needs: test-task-cache-hit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_RUN_ID: task-cache-e2e-${{ github.run_id }}
+      GITHUB_RUN_ATTEMPT: "2"
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create test project
+        shell: bash
+        run: |
+          PROJECT="$RUNNER_TEMP/task-cache-project"
+          mkdir -p "$PROJECT"
+          echo '{"name":"task-cache-project","private":true}' > "$PROJECT/package.json"
+          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
+
+      # A new attempt means a new primary key, so the restore resolves through
+      # the `vite-task-Linux-x64-` restore keys to the entry saved earlier in
+      # this run. That entry is stale for this attempt, and the job replaces
+      # its contents below the way `vp run` task results would.
+      - name: Setup Vite+ with a new task cache attempt
+        uses: ./
+        id: setup
+        with:
+          working-directory: ${{ runner.temp }}/task-cache-project
+          task-cache: true
+          run-install: false
+
+      - name: Verify the restore keys resolve the earlier entry
+        shell: bash
+        env:
+          ACTUAL_HIT: ${{ steps.setup.outputs.task-cache-hit }}
+        run: |
+          if [ "$ACTUAL_HIT" != "true" ]; then
+            echo "::error::task-cache-hit was '$ACTUAL_HIT'; the restore keys did not resolve the entry saved earlier in this run"
+            exit 1
+          fi
+          echo "OK: restore keys resolved an earlier task cache entry"
+
+      # The post action saves the task cache after the job finishes. Replacing
+      # the restored (stale) content makes the saved entry differ from it; the
+      # save must happen because the primary key no longer matches.
+      - name: Change the task cache contents
+        shell: bash
+        run: |
+          rm -rf "$PROJECT/node_modules/.vite/task-cache"
+          mkdir -p "$PROJECT/node_modules/.vite/task-cache"
+          echo "refresh-${{ github.run_id }}" > "$PROJECT/node_modules/.vite/task-cache/marker.txt"
+
+  test-task-cache-updated:
+    needs: test-task-cache-refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_RUN_ID: task-cache-e2e-${{ github.run_id }}
+      GITHUB_RUN_ATTEMPT: "2"
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - name: Create test project
+        shell: bash
+        run: |
+          PROJECT="$RUNNER_TEMP/task-cache-project"
+          mkdir -p "$PROJECT"
+          echo '{"name":"task-cache-project","private":true}' > "$PROJECT/package.json"
+          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
+
+      # Same attempt as the refresh job, so the restore resolves the exact
+      # primary key of the entry that job saved with the updated content.
+      - name: Setup Vite+ with the refreshed task cache key
+        uses: ./
+        id: setup
+        with:
+          working-directory: ${{ runner.temp }}/task-cache-project
+          task-cache: true
+          run-install: false
+
+      - name: Verify the updated task cache entry replaced the stale one
+        shell: bash
+        env:
+          ACTUAL_HIT: ${{ steps.setup.outputs.task-cache-hit }}
+        run: |
+          if [ "$ACTUAL_HIT" != "true" ]; then
+            echo "::error::task-cache-hit was '$ACTUAL_HIT'; the refresh job did not save a restorable task cache entry"
+            exit 1
+          fi
+          if [ "$(cat "$PROJECT/node_modules/.vite/task-cache/marker.txt" 2>/dev/null)" != "refresh-${{ github.run_id }}" ]; then
+            echo "::error::the restored task cache is stale: the updated content saved by the refresh job is missing"
+            exit 1
+          fi
+          if [ -e "$PROJECT/node_modules/.vite/task-cache/from-populate.txt" ]; then
+            echo "::error::stale content from the populate entry survived the refresh save"
+            exit 1
+          fi
+          echo "OK: a later run restores the updated task cache, not the stale entry"
+
   test-vp-exec:
     strategy:
       fail-fast: false

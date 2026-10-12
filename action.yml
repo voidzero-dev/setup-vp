@@ -41,6 +41,14 @@ inputs:
     description: "Enable caching of project dependencies"
     required: false
     default: "false"
+  task-cache:
+    description: "Enable task caching via GitHub Actions. Restores node_modules/.vite/task-cache from a previous run and saves it again in the post action (see task-cache-save). Independent of cache."
+    required: false
+    default: "false"
+  task-cache-save:
+    description: "Whether to save the task cache in the post action. Has no effect when task-cache is false."
+    required: false
+    default: "true"
   cache-save:
     description: "Whether to save the dependency cache in the post action. Has no effect when cache is false."
     required: false
@@ -60,6 +68,8 @@ outputs:
     description: "The installed version of Vite+"
   cache-hit:
     description: "Boolean indicating if cache was restored"
+  task-cache-hit:
+    description: "Boolean indicating if task cache was restored"
 
 runs:
   using: node24

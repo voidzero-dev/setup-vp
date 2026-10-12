@@ -635,6 +635,8 @@ describe("resolveVitePlusVersion (precedence)", () => {
     cache: false,
     cacheSave: true,
     cacheDependencyPath: undefined,
+    taskCache: false,
+    taskCacheSave: true,
     registryUrl: undefined,
     scope: undefined,
   };

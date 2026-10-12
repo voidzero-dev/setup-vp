@@ -8,6 +8,8 @@ import { setupSfw } from "./install-sfw.js";
 import { runViteInstall } from "./run-install.js";
 import { restoreCache } from "./cache-restore.js";
 import { saveCache } from "./cache-save.js";
+import { restoreTaskCache } from "./task-cache-restore.js";
+import { saveTaskCache } from "./task-cache-save.js";
 import { State, Outputs } from "./types.js";
 import type { Inputs } from "./types.js";
 import { resolveNodeVersionFile } from "./node-version-file.js";
@@ -63,6 +65,11 @@ export async function runMain(inputs: Inputs): Promise<void> {
     await restoreCache(inputs);
   }
 
+  // Step 5.5: Restore task cache if enabled
+  if (inputs.taskCache) {
+    await restoreTaskCache(inputs);
+  }
+
   // Step 6: Install Socket Firewall Free if requested (must run before vp install).
   // Use the resolved version so preview pins in files also disable sfw.
   const installCommand = await setupSfw({ ...inputs, version });
@@ -93,14 +100,21 @@ async function printViteVersion(cwd: string): Promise<void> {
 }
 
 export async function runPost(inputs: Inputs): Promise<void> {
-  if (!inputs.cache) return;
-
-  if (!inputs.cacheSave) {
-    info("Cache saving is disabled. Skipping cache save.");
-    return;
+  if (inputs.cache) {
+    if (!inputs.cacheSave) {
+      info("Cache saving is disabled. Skipping cache save.");
+    } else {
+      await saveCache();
+    }
   }
 
-  await saveCache();
+  if (inputs.taskCache) {
+    if (!inputs.taskCacheSave) {
+      info("Task cache saving is disabled. Skipping task cache save.");
+    } else {
+      await saveTaskCache();
+    }
+  }
 }
 
 async function main(): Promise<void> {

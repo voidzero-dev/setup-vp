@@ -61,6 +61,8 @@ describe("getInputs", () => {
       cache: false,
       cacheSave: false,
       cacheDependencyPath: undefined,
+      taskCache: false,
+      taskCacheSave: false,
     });
   });
 
@@ -158,6 +160,18 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs.cacheSave).toBe(true);
+  });
+
+  it("should parse task-cache-save input", () => {
+    vi.mocked(getInput).mockReturnValue("");
+    vi.mocked(getBooleanInput).mockImplementation((name) => {
+      if (name === "task-cache-save") return true;
+      return false;
+    });
+
+    const inputs = getInputs();
+
+    expect(inputs.taskCacheSave).toBe(true);
   });
 
   it("should parse sfw input", () => {

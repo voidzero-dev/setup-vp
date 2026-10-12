@@ -145,6 +145,8 @@ function makeInputs(overrides: Partial<Inputs> = {}): Inputs {
     cache: false,
     cacheSave: true,
     cacheDependencyPath: undefined,
+    taskCache: false,
+    taskCacheSave: true,
     registryUrl: undefined,
     scope: undefined,
     ...overrides,
