@@ -274,7 +274,7 @@ Native caching remains provider-specific. Extend `.setup-vp-cached` to persist `
 
 The `cache-dependency-path` input selects a lock file. `cache-policy: pull` restores without uploading; the default is `pull-push`. Cache policy is static YAML because GitLab restores before any job scripts run. Existing jobs can override the native cache mapping. See [GitLab caching](https://docs.gitlab.com/ci/caching/).
 
-`SETUP_VP_INSTALLED_VERSION` and `SETUP_VP_CACHE_HIT` are exported to the job shell and written to `.setup-vp-outputs.env`. Consumers can publish that file as a dotenv report. Auth values are not included.
+`SETUP_VP_INSTALLED_VERSION`, `SETUP_VP_CACHE_HIT`, `SETUP_VP_INSTALLED_NODE_VERSION`, `SETUP_VP_PACKAGE_MANAGER_NAME`, and `SETUP_VP_PACKAGE_MANAGER_VERSION` are exported to the job shell and written to `.setup-vp-outputs.env`. Consumers can publish that file as a dotenv report. Auth values are not included.
 
 ## Security
 

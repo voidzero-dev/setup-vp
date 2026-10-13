@@ -14,6 +14,7 @@ import { getSfwAssetName, isMuslLinux, setupSfw, SFW_VERSION } from "../ci/insta
 import { getCommandOutput, run } from "../ci/process.js";
 import { parseRunInstall, runInstall } from "../ci/run-install.js";
 import { parseInstalledVpVersion } from "../ci/version.js";
+import { ENV_CURRENT_ARGS, readEnvCurrent } from "../ci/env-current.js";
 import { logInfo, logWarning, prependPath, setVariable } from "./commands.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { parseAzureInputs, resolveProjectDirFromInputs } from "./inputs.js";
@@ -213,6 +214,18 @@ export async function runFinalize(
   ports.setVariable("SETUP_VP_INSTALLED_VERSION", installedVersion);
   ports.setVariable("version", installedVersion, { isOutput: true });
   ports.setVariable("cacheHit", String(env.SETUP_VP_CACHE_HIT === "true"), { isOutput: true });
+
+  const current = await readEnvCurrent(
+    versionOutput,
+    () => ports.getCommandOutput("vp", ENV_CURRENT_ARGS, { cwd: projectDir }),
+    ports.logWarning,
+  );
+  ports.setVariable("SETUP_VP_INSTALLED_NODE_VERSION", current.nodeVersion);
+  ports.setVariable("SETUP_VP_PACKAGE_MANAGER_NAME", current.packageManager);
+  ports.setVariable("SETUP_VP_PACKAGE_MANAGER_VERSION", current.packageManagerVersion);
+  ports.setVariable("nodeVersion", current.nodeVersion, { isOutput: true });
+  ports.setVariable("packageManager", current.packageManager, { isOutput: true });
+  ports.setVariable("packageManagerVersion", current.packageManagerVersion, { isOutput: true });
 }
 
 export async function main(phase: AzurePhase): Promise<void> {

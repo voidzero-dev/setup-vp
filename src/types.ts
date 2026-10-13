@@ -51,6 +51,9 @@ export enum State {
 export enum Outputs {
   Version = "version",
   CacheHit = "cache-hit",
+  NodeVersion = "node-version",
+  PackageManager = "package-manager",
+  PackageManagerVersion = "package-manager-version",
 }
 
 // Package constants

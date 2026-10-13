@@ -9,6 +9,7 @@ import { prepareCacheMetadata } from "../ci/cache.js";
 import type { CacheMetadata } from "../ci/cache.js";
 import { restoreCacheSnapshot } from "../ci/cache-snapshot.js";
 import { parseInstalledVpVersion } from "../ci/version.js";
+import { ENV_CURRENT_ARGS, readEnvCurrent } from "../ci/env-current.js";
 import { packageManagerArgs, parsePackageManager } from "../ci/package-manager.js";
 import { getCommandOutput } from "../ci/process.js";
 import { nodeManagerOffArgs, parseNodeManager } from "../ci/node-manager.js";
@@ -120,9 +121,17 @@ export async function main(phase = "setup"): Promise<void> {
       "Failed to verify Vite+ installation: vp --version failed or returned no output.",
     );
   console.log(output);
+  const current = await readEnvCurrent(
+    output,
+    () => getCommandOutput("vp", ENV_CURRENT_ARGS, { cwd: projectDir }),
+    console.warn,
+  );
   const outputs = {
     SETUP_VP_INSTALLED_VERSION: parseInstalledVpVersion(output),
     SETUP_VP_CACHE_HIT: String(cache.hit),
+    SETUP_VP_INSTALLED_NODE_VERSION: current.nodeVersion,
+    SETUP_VP_PACKAGE_MANAGER_NAME: current.packageManager,
+    SETUP_VP_PACKAGE_MANAGER_VERSION: current.packageManagerVersion,
   };
   for (const [name, value] of Object.entries(outputs)) {
     env[name] = value;

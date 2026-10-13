@@ -374,10 +374,15 @@ Separate package-manager modes require Vite+ 0.3.1+. Any explicit configuration,
 
 ## Outputs
 
-| Output      | Description                              |
-| ----------- | ---------------------------------------- |
-| `version`   | The installed version of Vite+           |
-| `cache-hit` | Boolean indicating if cache was restored |
+| Output                    | Description                                                 |
+| ------------------------- | ----------------------------------------------------------- |
+| `version`                 | The installed version of Vite+                              |
+| `cache-hit`               | Boolean indicating if cache was restored                    |
+| `node-version`            | The Node.js version Vite+ resolved, such as `24.20.0`       |
+| `package-manager`         | The package manager Vite+ resolved, such as `pnpm` or `bun` |
+| `package-manager-version` | The version of that package manager, such as `10.33.0`      |
+
+The last three come from `vp env current --json` in `working-directory` at the end of setup. They require Vite+ 0.3.1+ and are `unknown` on older versions or when Vite+ reports no value. With `node-manager: false`, `node-version` is the version of the Node.js found on `PATH`.
 
 ## Caching
 
@@ -594,12 +599,15 @@ test:
   script:
     - vp run test
     - echo "$SETUP_VP_INSTALLED_VERSION / $SETUP_VP_CACHE_HIT"
+    - echo "$SETUP_VP_INSTALLED_NODE_VERSION / $SETUP_VP_PACKAGE_MANAGER_NAME $SETUP_VP_PACKAGE_MANAGER_VERSION"
   artifacts:
     reports:
       dotenv: .setup-vp-outputs.env
 ```
 
-The two output variables are available in the current job. The optional dotenv report passes them to downstream jobs; it contains no auth tokens. Keep `.setup-vp-cache/` as the only cache path. The generated `.setup-vp-runtime.mjs` and `.setup-vp-cache-state.json` support post-job saving and must not be cached. If you replace `after_script`, include `!reference [.setup-vp-cached, after_script]` in your own array. Override the job's native `cache` mapping when you need different keys or additional cache paths. [GitLab cache behavior](https://docs.gitlab.com/ci/caching/)
+On refs containing these changes, `SETUP_VP_INSTALLED_NODE_VERSION`, `SETUP_VP_PACKAGE_MANAGER_NAME`, and `SETUP_VP_PACKAGE_MANAGER_VERSION` match the GitHub `node-version`, `package-manager`, and `package-manager-version` outputs, including the Vite+ 0.3.1 requirement and the `unknown` fallback.
+
+The output variables are available in the current job. The optional dotenv report passes them to downstream jobs; it contains no auth tokens. Keep `.setup-vp-cache/` as the only cache path. The generated `.setup-vp-runtime.mjs` and `.setup-vp-cache-state.json` support post-job saving and must not be cached. If you replace `after_script`, include `!reference [.setup-vp-cached, after_script]` in your own array. Override the job's native `cache` mapping when you need different keys or additional cache paths. [GitLab cache behavior](https://docs.gitlab.com/ci/caching/)
 
 ### GitLab Windows Runners
 
@@ -679,14 +687,17 @@ On refs containing these changes, `nodeVersion` selects the managed project runt
 
 ### Azure Job Variables
 
-| Variable                     | Purpose                                                               |
-| ---------------------------- | --------------------------------------------------------------------- |
-| `SETUP_VP_INSTALLED_VERSION` | Installed global Vite+ version (`unknown` when parsing fails).        |
-| `SETUP_VP_CACHE_HIT`         | `true`, `inexact`, or `false` from `Cache@2` when caching is enabled. |
+| Variable                           | Purpose                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `SETUP_VP_INSTALLED_VERSION`       | Installed global Vite+ version (`unknown` when parsing fails).                    |
+| `SETUP_VP_CACHE_HIT`               | `true`, `inexact`, or `false` from `Cache@2` when caching is enabled.             |
+| `SETUP_VP_INSTALLED_NODE_VERSION`  | Node.js version resolved by `vp env current` (Vite+ 0.3.1+, otherwise `unknown`). |
+| `SETUP_VP_PACKAGE_MANAGER_NAME`    | Package manager resolved by `vp env current` (Vite+ 0.3.1+, otherwise `unknown`). |
+| `SETUP_VP_PACKAGE_MANAGER_VERSION` | Version of that package manager (Vite+ 0.3.1+, otherwise `unknown`).              |
 
 `vp`, `NPM_CONFIG_USERCONFIG`, and `PNPM_CONFIG_USERCONFIG` are available to later steps in the same job. Define `NODE_AUTH_TOKEN` as an Azure secret pipeline variable when private registry auth is required; the template maps it into both finalize tasks.
 
-Finalize tasks also expose `version` and `cacheHit` as named outputs. Use `$(setupVpUnix.version)` on Linux/macOS or `$(setupVpWindows.version)` on Windows; `stepName` changes the prefix. `cacheHit` is `true` only for an exact match, while the job variable retains Azure's `inexact` value. Cross-job consumers use Azure's `dependencies.<job>.outputs['setupVpUnix.version']` syntax. [Azure output variables](https://learn.microsoft.com/en-us/azure/devops/pipelines/process/set-variables-scripts?view=azure-devops)
+Finalize tasks also expose `version`, `cacheHit`, `nodeVersion`, `packageManager`, and `packageManagerVersion` as named outputs. Use `$(setupVpUnix.version)` on Linux/macOS or `$(setupVpWindows.version)` on Windows; `stepName` changes the prefix. `cacheHit` is `true` only for an exact match, while the job variable retains Azure's `inexact` value. Cross-job consumers use Azure's `dependencies.<job>.outputs['setupVpUnix.version']` syntax. [Azure output variables](https://learn.microsoft.com/en-us/azure/devops/pipelines/process/set-variables-scripts?view=azure-devops)
 
 Without `registryUrl`, the runtime preserves existing project `.npmrc` auth entries but does not generate token entries for its registry URLs. Set `registryUrl` to generate auth configuration for a registry. Referenced custom token variables are propagated as secret pipeline variables, not public outputs. Pass custom secret mappings through `authEnv`, for example `authEnv: { CUSTOM_TOKEN: "$(CUSTOM_TOKEN)" }`. Azure does not automatically put secret pipeline variables in task environments.
 
