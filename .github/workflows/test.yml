@@ -353,6 +353,7 @@ jobs:
 
       # Runs `vp env use <version>` then `vp install` in the test project.
       - name: Setup Vite+ with Node.js ${{ matrix.node-version }}
+        id: setup
         uses: ./
         with:
           node-version: ${{ matrix.node-version }}
@@ -372,6 +373,19 @@ jobs:
             echo "$ACTUAL" | grep -q "^v${{ matrix.node-version }}\." || (echo "Expected Node.js v${{ matrix.node-version }}.x but got $ACTUAL" && exit 1)
           fi
 
+      # The outputs describe the action's project directory (this repository),
+      # not the run-install cwd.
+      - name: Verify Node.js and package-manager outputs
+        shell: bash
+        env:
+          OUTPUT_NODE_VERSION: ${{ steps.setup.outputs.node-version }}
+          OUTPUT_PACKAGE_MANAGER: ${{ steps.setup.outputs.package-manager }}
+          OUTPUT_PACKAGE_MANAGER_VERSION: ${{ steps.setup.outputs.package-manager-version }}
+        run: |
+          test "v$OUTPUT_NODE_VERSION" = "$(node --version)"
+          expected="$(node -p "require('./package.json').packageManager.split('+')[0]")"
+          test "$OUTPUT_PACKAGE_MANAGER@$OUTPUT_PACKAGE_MANAGER_VERSION" = "$expected"
+
   # Reproduces https://github.com/voidzero-dev/setup-vp/issues/128: with no
   # explicit Node.js input, the managed `node` shim should use Vite+'s normal
   # project resolution and honor package.json#devEngines.runtime.
@@ -388,6 +402,7 @@ jobs:
           echo '{"name":"test-project","private":true,"devEngines":{"runtime":{"name":"node","version":"22.18.0"}}}' > "$DIR/package.json"
 
       - name: Setup Vite+ without a Node.js input
+        id: setup
         uses: ./
         with:
           working-directory: ${{ runner.temp }}/test-project
@@ -397,6 +412,8 @@ jobs:
       - name: Verify project Node.js version
         working-directory: ${{ runner.temp }}/test-project
         shell: bash
+        env:
+          OUTPUT_NODE_VERSION: ${{ steps.setup.outputs.node-version }}
         run: |
           ACTUAL=$(node --version)
           echo "Node.js version: $ACTUAL"
@@ -404,6 +421,7 @@ jobs:
             echo "::error::expected Node.js v22.18.0 from devEngines.runtime, got $ACTUAL"
             exit 1
           fi
+          test "$OUTPUT_NODE_VERSION" = "22.18.0"
 
   # End-to-end check of node-manager: false. Node.js management is disabled
   # while package-manager management keeps the installer defaults. Shims may
@@ -433,6 +451,7 @@ jobs:
           echo '{"name":"test-project","private":true}' > "$DIR/package.json"
 
       - name: Setup Vite+ without Node.js manager
+        id: setup
         uses: ./
         with:
           node-manager: false
@@ -445,6 +464,8 @@ jobs:
 
       - name: Verify system Node.js is untouched
         shell: bash
+        env:
+          OUTPUT_NODE_VERSION: ${{ steps.setup.outputs.node-version }}
         run: |
           ACTUAL_PATH=$(node -p 'process.execPath' | tr -d '\r')
           ACTUAL_VERSION=$(node --version | tr -d '\r')
@@ -458,6 +479,7 @@ jobs:
             echo "::error::node is $ACTUAL_VERSION; expected ${{ steps.before.outputs.version }}"
             exit 1
           fi
+          test "v$OUTPUT_NODE_VERSION" = "${{ steps.before.outputs.version }}"
 
       - name: Verify vp commands use the system Node.js
         shell: bash

@@ -82,7 +82,7 @@ Pin `ref` and `setupRef` to the same immutable tag or commit SHA for strict repr
 1. Optional `UseNode@1` when `bootstrapNodeVersion` is non-empty.
 2. `prepare`: install Vite+, prepend Vite+ bin to PATH, compute cache metadata.
 3. Optional `Cache@2` when `cache: true` and `SETUP_VP_CACHE_READY=true`.
-4. `finalize`: configure npm auth, install/reuse `sfw`, run `vp install`, emit `SETUP_VP_INSTALLED_VERSION`.
+4. `finalize`: configure npm auth, install/reuse `sfw`, run `vp install`, emit `SETUP_VP_INSTALLED_VERSION` and the Node.js and package-manager versions from `vp env current --json`.
 
 ### Shared Portable Runtime
 
@@ -105,10 +105,13 @@ Provider-independent logic lives in `src/ci/` and is reused by GitLab (`src/gitl
 
 Provider-visible variables:
 
-| Variable                     | Purpose                                      |
-| ---------------------------- | -------------------------------------------- |
-| `SETUP_VP_INSTALLED_VERSION` | Installed global Vite+ version               |
-| `SETUP_VP_CACHE_HIT`         | `true`, `inexact`, or `false` from `Cache@2` |
+| Variable                           | Purpose                                              |
+| ---------------------------------- | ---------------------------------------------------- |
+| `SETUP_VP_INSTALLED_VERSION`       | Installed global Vite+ version                       |
+| `SETUP_VP_CACHE_HIT`               | `true`, `inexact`, or `false` from `Cache@2`         |
+| `SETUP_VP_INSTALLED_NODE_VERSION`  | Node.js version from `vp env current` (Vite+ 0.3.1+) |
+| `SETUP_VP_PACKAGE_MANAGER_NAME`    | Package manager from `vp env current` (Vite+ 0.3.1+) |
+| `SETUP_VP_PACKAGE_MANAGER_VERSION` | Version of that package manager (Vite+ 0.3.1+)       |
 
 For private registries, consumers define `NODE_AUTH_TOKEN` as an Azure secret
 pipeline variable. Both finalize branches explicitly map that secret into the
@@ -140,7 +143,7 @@ When `cache: true`, prepare detects the lock file, resolves `vp pm cache dir`, a
 
 The template also restores a separate version/platform-specific `sfw` cache before finalize. Azure `Cache@2` automatically registers post-job saving and has no supported restore-only input. A `cacheSave` parameter would not be enforceable with this backend, so none is exposed. [Azure pipeline caching](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops)
 
-Finalize tasks are named `<stepName>Unix` and `<stepName>Windows`. Both publish `version` and a boolean `cacheHit`; the existing `SETUP_VP_CACHE_HIT` variable retains Azure's `inexact` value. The default prefix is `setupVp`.
+Finalize tasks are named `<stepName>Unix` and `<stepName>Windows`. Both publish `version`, a boolean `cacheHit`, `nodeVersion`, `packageManager`, and `packageManagerVersion`; the existing `SETUP_VP_CACHE_HIT` variable retains Azure's `inexact` value. The default prefix is `setupVp`.
 
 `nodeVersion` now selects the managed runtime; `bootstrapNodeVersion` retains the former `UseNode@1` role. The prepare phase records its actual Node executable so finalize does not depend on the selected project Node version.
 

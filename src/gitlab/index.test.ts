@@ -29,6 +29,20 @@ afterEach(() => {
   for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
+function mockVp(version: string, envCurrent: string | undefined) {
+  vi.mocked(getCommandOutput).mockImplementation((_command, args) =>
+    args[0] === "env" ? envCurrent : `vp v${version}`,
+  );
+}
+
+function callOrder(mock: { calls: unknown[][]; invocationCallOrder: number[] }, args: string) {
+  const index = mock.calls.findIndex(
+    (call) => Array.isArray(call[1]) && call[1].join(" ") === args,
+  );
+  expect(index, args).not.toBe(-1);
+  return mock.invocationCallOrder[index]!;
+}
+
 describe("GitLab setup parity", () => {
   function fixture() {
     const root = mkdtempSync(path.join(tmpdir(), "setup-vp-gitlab-lifecycle-"));
@@ -50,6 +64,9 @@ describe("GitLab setup parity", () => {
       "SFW_CACHE_DIR",
       "INSTALLED_VERSION",
       "CACHE_HIT",
+      "INSTALLED_NODE_VERSION",
+      "PACKAGE_MANAGER_NAME",
+      "PACKAGE_MANAGER_VERSION",
     ])
       vi.stubEnv("SETUP_VP_" + name, "");
     vi.stubEnv("CI_PROJECT_DIR", root);
@@ -57,7 +74,7 @@ describe("GitLab setup parity", () => {
     vi.stubEnv("SETUP_VP_RUN_INSTALL", "false");
     vi.stubEnv("SETUP_VP_ENV_FILE", path.join(root, "shell.env"));
     vi.stubEnv("SETUP_VP_ENV_FORMAT", "");
-    vi.mocked(getCommandOutput).mockReturnValue("vp v0.3.1");
+    mockVp("0.3.1", "{}");
     return root;
   }
 
@@ -69,20 +86,80 @@ describe("GitLab setup parity", () => {
     );
     writeFileSync(path.join(root, "app/.nvmrc"), "v22.15.0");
     vi.stubEnv("SETUP_VP_NODE_VERSION_FILE", ".nvmrc");
+    mockVp(
+      "0.3.1",
+      JSON.stringify({
+        node: { version: "22.15.0", source: "session" },
+        package_manager: { name: "pnpm", version: "10.33.0", source: "packageManager" },
+      }),
+    );
     await main();
     expect(installVitePlus).toHaveBeenCalledWith("0.3.1", expect.any(Object));
     expect(run).toHaveBeenCalledWith("vp", ["env", "use", "22.15.0"], {
       cwd: path.join(root, "app"),
     });
-    expect(getCommandOutput).toHaveBeenLastCalledWith("vp", ["--version"], {
+    expect(getCommandOutput).toHaveBeenCalledWith("vp", ["--version"], {
+      cwd: path.join(root, "app"),
+    });
+    expect(getCommandOutput).toHaveBeenLastCalledWith("vp", ["env", "current", "--json"], {
       cwd: path.join(root, "app"),
     });
     expect(readFileSync(path.join(root, ".setup-vp-outputs.env"), "utf8")).toBe(
-      "SETUP_VP_INSTALLED_VERSION=0.3.1\nSETUP_VP_CACHE_HIT=false\n",
+      "SETUP_VP_INSTALLED_VERSION=0.3.1\nSETUP_VP_CACHE_HIT=false\n" +
+        "SETUP_VP_INSTALLED_NODE_VERSION=22.15.0\nSETUP_VP_PACKAGE_MANAGER_NAME=pnpm\n" +
+        "SETUP_VP_PACKAGE_MANAGER_VERSION=10.33.0\n",
     );
+    expect(process.env.SETUP_VP_PACKAGE_MANAGER_NAME).toBe("pnpm");
     expect(readFileSync(path.join(root, "shell.env"), "utf8")).toContain(
       "export SETUP_VP_INSTALLED_VERSION='0.3.1'",
     );
+  });
+
+  it("reports unknown Node.js and package-manager versions on Vite+ before 0.3.1", async () => {
+    const root = fixture();
+    mockVp("0.3.0", "{}");
+
+    await main();
+
+    expect(getCommandOutput).not.toHaveBeenCalledWith(
+      "vp",
+      ["env", "current", "--json"],
+      expect.anything(),
+    );
+    expect(readFileSync(path.join(root, ".setup-vp-outputs.env"), "utf8")).toBe(
+      "SETUP_VP_INSTALLED_VERSION=0.3.0\nSETUP_VP_CACHE_HIT=false\n" +
+        "SETUP_VP_INSTALLED_NODE_VERSION=unknown\nSETUP_VP_PACKAGE_MANAGER_NAME=unknown\n" +
+        "SETUP_VP_PACKAGE_MANAGER_VERSION=unknown\n",
+    );
+  });
+
+  it("warns and reports unknown versions when vp env current fails", async () => {
+    const root = fixture();
+    mockVp("0.3.1", undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await main();
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining("Could not read the Node.js and package manager versions"),
+    );
+    expect(readFileSync(path.join(root, ".setup-vp-outputs.env"), "utf8")).toContain(
+      "SETUP_VP_INSTALLED_NODE_VERSION=unknown\n",
+    );
+  });
+
+  it("reads vp env current after environment modes, Node.js setup, and install", async () => {
+    fixture();
+    vi.stubEnv("SETUP_VP_PACKAGE_MANAGER", "false");
+    vi.stubEnv("SETUP_VP_NODE_VERSION", "22");
+    vi.stubEnv("SETUP_VP_RUN_INSTALL", "true");
+
+    await main();
+
+    const envCurrent = callOrder(vi.mocked(getCommandOutput).mock, "env current --json");
+    expect(callOrder(vi.mocked(run).mock, "env off pm")).toBeLessThan(envCurrent);
+    expect(callOrder(vi.mocked(run).mock, "env use 22")).toBeLessThan(envCurrent);
+    expect(callOrder(vi.mocked(runWithOutput).mock, "install")).toBeLessThan(envCurrent);
   });
 
   it("executes the selected sfw path when running the install", async () => {
@@ -146,7 +223,7 @@ describe("GitLab setup parity", () => {
       vi.stubEnv("SETUP_VP_SFW", "true");
       vi.stubEnv("SETUP_VP_RUN_INSTALL", "true");
       vi.mocked(commandPath).mockReturnValue("/bin/sfw");
-      vi.mocked(getCommandOutput).mockReturnValue(`vp v${version}`);
+      mockVp(version, "{}");
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       await main();

@@ -2,6 +2,7 @@ import { saveState, getState, setFailed, info, setOutput, warning } from "@actio
 import { exec, getExecOutput } from "@actions/exec";
 import { packageManagerArgs } from "./ci/package-manager.js";
 import { nodeManagerOffArgs } from "./ci/node-manager.js";
+import { ENV_CURRENT_ARGS, readEnvCurrent } from "./ci/env-current.js";
 import { getInputs } from "./inputs.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { setupSfw } from "./install-sfw.js";
@@ -73,10 +74,10 @@ export async function runMain(inputs: Inputs): Promise<void> {
   }
 
   // Print version info at the end
-  await printViteVersion(projectDir);
+  await setEnvironmentOutputs(projectDir, await printViteVersion(projectDir));
 }
 
-async function printViteVersion(cwd: string): Promise<void> {
+async function printViteVersion(cwd: string): Promise<string> {
   try {
     const result = await getExecOutput("vp", ["--version"], { cwd, silent: true });
     const versionOutput = result.stdout.trim();
@@ -86,10 +87,23 @@ async function printViteVersion(cwd: string): Promise<void> {
     const version = parseInstalledVpVersion(versionOutput);
     saveState(State.InstalledVersion, version);
     setOutput(Outputs.Version, version);
+    return versionOutput;
   } catch (error) {
     warning(`Could not get vp version: ${String(error)}`);
     setOutput(Outputs.Version, "unknown");
+    return "";
   }
+}
+
+async function setEnvironmentOutputs(cwd: string, versionOutput: string): Promise<void> {
+  const current = await readEnvCurrent(
+    versionOutput,
+    async () => (await getExecOutput("vp", ENV_CURRENT_ARGS, { cwd, silent: true })).stdout,
+    warning,
+  );
+  setOutput(Outputs.NodeVersion, current.nodeVersion);
+  setOutput(Outputs.PackageManager, current.packageManager);
+  setOutput(Outputs.PackageManagerVersion, current.packageManagerVersion);
 }
 
 export async function runPost(inputs: Inputs): Promise<void> {

@@ -26,7 +26,9 @@ function fixture() {
     setupSfw: vi.fn<typeof setupSfw>().mockResolvedValue({ executable: "vp", sfw: false }),
     parseRunInstall,
     runInstall: vi.fn(),
-    getCommandOutput: vi.fn((): string | undefined => "vp v0.3.1"),
+    getCommandOutput: vi.fn((_command: string, args: string[]): string | undefined =>
+      args[0] === "env" ? "{}" : "vp v0.3.1",
+    ),
     run: vi.fn(),
     parseInstalledVpVersion: vi.fn(() => "0.3.1"),
     prependPath: vi.fn(),
@@ -103,6 +105,73 @@ describe("Azure parity", () => {
     expect(ports.setVariable).toHaveBeenCalledWith("version", "0.3.1", { isOutput: true });
     expect(ports.setVariable).toHaveBeenCalledWith("cacheHit", "false", { isOutput: true });
     expect(ports.getCommandOutput).toHaveBeenCalledWith("vp", ["--version"], { cwd: project });
+  });
+
+  it("emits Node.js and package-manager versions from vp env current", async () => {
+    const { project, env, ports } = fixture();
+    ports.getCommandOutput.mockImplementation((_command, args) =>
+      args[0] === "env"
+        ? JSON.stringify({
+            node: { version: "22.15.0", source: "session" },
+            package_manager: { name: "yarn", version: "4.9.1", source: "packageManager" },
+          })
+        : "vp v0.3.1",
+    );
+
+    await runFinalize(env, ports);
+
+    const envCurrent = ports.getCommandOutput.mock.calls.findIndex(([, args]) => args[0] === "env");
+    expect(ports.getCommandOutput.mock.calls[envCurrent]).toEqual([
+      "vp",
+      ["env", "current", "--json"],
+      { cwd: project },
+    ]);
+    expect(ports.runInstall.mock.invocationCallOrder[0]).toBeLessThan(
+      ports.getCommandOutput.mock.invocationCallOrder[envCurrent]!,
+    );
+    expect(ports.setVariable).toHaveBeenCalledWith("SETUP_VP_INSTALLED_NODE_VERSION", "22.15.0");
+    expect(ports.setVariable).toHaveBeenCalledWith("SETUP_VP_PACKAGE_MANAGER_NAME", "yarn");
+    expect(ports.setVariable).toHaveBeenCalledWith("SETUP_VP_PACKAGE_MANAGER_VERSION", "4.9.1");
+    expect(ports.setVariable).toHaveBeenCalledWith("nodeVersion", "22.15.0", { isOutput: true });
+    expect(ports.setVariable).toHaveBeenCalledWith("packageManager", "yarn", { isOutput: true });
+    expect(ports.setVariable).toHaveBeenCalledWith("packageManagerVersion", "4.9.1", {
+      isOutput: true,
+    });
+  });
+
+  it("warns and reports unknown versions when vp env current fails", async () => {
+    const { env, ports } = fixture();
+    ports.getCommandOutput.mockImplementation((_command, args) =>
+      args[0] === "env" ? undefined : "vp v0.3.1",
+    );
+
+    await runFinalize(env, ports);
+
+    expect(ports.logWarning).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining("Could not read the Node.js and package manager versions"),
+    );
+    expect(ports.setVariable).toHaveBeenCalledWith("nodeVersion", "unknown", { isOutput: true });
+  });
+
+  it("reports unknown Node.js and package-manager versions on Vite+ before 0.3.1", async () => {
+    const { env, ports } = fixture();
+    ports.getCommandOutput.mockReturnValue("vp v0.3.0");
+
+    await runFinalize(env, ports);
+
+    expect(ports.getCommandOutput).not.toHaveBeenCalledWith(
+      "vp",
+      ["env", "current", "--json"],
+      expect.anything(),
+    );
+    expect(ports.setVariable).toHaveBeenCalledWith("SETUP_VP_INSTALLED_NODE_VERSION", "unknown");
+    expect(ports.setVariable).toHaveBeenCalledWith("nodeVersion", "unknown", { isOutput: true });
+    expect(ports.setVariable).toHaveBeenCalledWith("packageManager", "unknown", {
+      isOutput: true,
+    });
+    expect(ports.setVariable).toHaveBeenCalledWith("packageManagerVersion", "unknown", {
+      isOutput: true,
+    });
   });
 
   it("does not treat an undefined Azure secret macro as an auth token", async () => {

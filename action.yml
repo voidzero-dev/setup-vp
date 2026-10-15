@@ -60,6 +60,12 @@ outputs:
     description: "The installed version of Vite+"
   cache-hit:
     description: "Boolean indicating if cache was restored"
+  node-version:
+    description: "The Node.js version Vite+ resolved for working-directory, from `vp env current` (0.3.1+). `unknown` on older versions or when Vite+ reports none."
+  package-manager:
+    description: "The package manager Vite+ resolved for working-directory, such as pnpm or bun (0.3.1+). `unknown` on older versions or when Vite+ reports none."
+  package-manager-version:
+    description: "The version of that package manager (0.3.1+). `unknown` on older versions or when Vite+ reports none."
 
 runs:
   using: node24
