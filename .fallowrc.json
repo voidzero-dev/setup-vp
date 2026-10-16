@@ -1,4 +1,5 @@
 {
   "$schema": "./node_modules/fallow/schema.json",
-  "entry": ["src/index.ts", "src/gitlab/index.ts", "src/azure/index.ts"]
+  "entry": ["src/index.ts", "src/gitlab/index.ts", "src/azure/index.ts"],
+  "ignoreDependencies": ["@e18e/eslint-plugin"]
 }

@@ -19,6 +19,8 @@ import { logInfo, logWarning, prependPath, setVariable } from "./commands.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { parseAzureInputs, resolveProjectDirFromInputs } from "./inputs.js";
 
+const UNEXPANDED_MACRO_RE = /^\$\([^)]+\)$/;
+
 export type AzurePhase = "prepare" | "finalize";
 
 export interface AzurePorts {
@@ -172,7 +174,8 @@ export async function runFinalize(
   const authVariables = analyzeProjectNpmrc(npmrc).envVarRefs;
   authVariables.add("NODE_AUTH_TOKEN");
   for (const name of authVariables) {
-    if (!isReservedAuthVariable(name) && /^\$\([^)]+\)$/.test(env[name] || "")) delete env[name];
+    if (!isReservedAuthVariable(name) && UNEXPANDED_MACRO_RE.test(env[name] || ""))
+      delete env[name];
   }
 
   ports.configureAuth(

@@ -3,6 +3,9 @@ import { accessSync, constants, statSync } from "node:fs";
 import path from "node:path";
 import { isWindows } from "./platform.js";
 
+const PATH_SEPARATOR_RE = /[\\/:]/;
+const QUOTED_PATH_RE = /^"(.*)"$/;
+
 export function run(command: string, args: string[], options: SpawnSyncOptions = {}): void {
   const result = spawnSync(command, args, { stdio: "inherit", ...options });
   if (result.error) throw result.error;
@@ -38,7 +41,8 @@ export function commandPath(
   command: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
-  if (!command || command === "." || command === ".." || /[\\/:]/.test(command)) return undefined;
+  if (!command || command === "." || command === ".." || PATH_SEPARATOR_RE.test(command))
+    return undefined;
 
   const windows = isWindows();
   const pathKey = windows
@@ -52,7 +56,7 @@ export function commandPath(
   const accessMode = windows ? constants.F_OK : constants.X_OK;
 
   for (const entry of searchPath.split(path.delimiter)) {
-    const directory = windows ? entry.replace(/^"(.*)"$/, "$1") : entry;
+    const directory = windows ? entry.replace(QUOTED_PATH_RE, "$1") : entry;
     // Empty and relative entries can refer to attacker-controlled checkout files.
     if (!path.isAbsolute(directory)) continue;
     // On Windows, isAbsolute also accepts drive-root-relative paths such as

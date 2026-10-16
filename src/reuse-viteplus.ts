@@ -12,6 +12,8 @@ import { getVitePlusBinDirs, parseVitePlusDirs, supportsVitePlusDirs } from "./c
 import type { VitePlusBinDirs, VitePlusDirs } from "./ci/vp-dirs.js";
 
 const EXACT_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const LAYOUT_RE = /^layout\t(single-root|split)\r?$/m;
+const LINE_BREAK_RE = /\r?\n/;
 const COMMON_SHIMS = ["vp", "node", "npm", "npx", "vpx", "vpr"];
 const PACKAGE_MANAGER_SHIMS = ["pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"];
 const MANAGER_OVERRIDES = [
@@ -81,7 +83,7 @@ export function findReusableVitePlus(
       };
       const output = execFileSync(binary, [], { ...options, env: { ...env, VP_DUMP_DIRS: "1" } });
       const dirs = parseVitePlusDirs(output);
-      const layout = /^layout\t(single-root|split)\r?$/m.exec(output)?.[1];
+      const layout = LAYOUT_RE.exec(output)?.[1];
       if (!dirs || !Object.values(dirs).every(isAbsolute)) continue;
       if (!layout) continue;
       if (realpathSync(dirs.data) !== realpathSync(dataDir)) continue;
@@ -226,7 +228,7 @@ function hasValidShims(
       const shim = readFileSync(join(dirs.bin, `${tool}.exe`));
       const [header, ...lines] = readFileSync(join(dirs.bin, `${tool}.shim`), "utf8")
         .trim()
-        .split(/\r?\n/);
+        .split(LINE_BREAK_RE);
       const fields = new Map(
         lines.map((line) => {
           const separator = line.indexOf("=");
