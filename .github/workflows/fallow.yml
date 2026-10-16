@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Vite+ and install dependencies
-        uses: ./
+        uses: $/.
         with:
           node-version-file: .node-version
 
