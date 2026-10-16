@@ -76,7 +76,7 @@ export async function runPrepare(
     warning: ports.logWarning,
   };
   const version = createVersionResolver(context).resolveVitePlusVersion(inputs, projectDir);
-  const nodeVersion =
+  let nodeVersion =
     inputs.nodeVersion ||
     (inputs.nodeVersionFile
       ? createNodeVersionResolver(context).resolveNodeVersionFile(
@@ -91,12 +91,16 @@ export async function runPrepare(
   // Keep the setup runtime independent of the project's selected Node version.
   ports.setVariable("SETUP_VP_BOOTSTRAP_NODE", process.execPath);
 
-  await ports.installVitePlus(version, {
-    env,
-    prependPath: (binDir) => ports.prependPath(binDir),
-    exportPath: (value) => ports.setVariable("PATH", value),
-    logWarningFn: ports.logWarning,
-  });
+  nodeVersion =
+    (await ports.installVitePlus(version, {
+      env,
+      projectDir,
+      nodeVersion,
+      nodeManager: inputs.nodeManager,
+      prependPath: (binDir) => ports.prependPath(binDir),
+      exportPath: (value) => ports.setVariable("PATH", value),
+      logWarningFn: ports.logWarning,
+    })) ?? nodeVersion;
   // Finalize must use the resolved version, including pins from files or lockfiles.
   ports.setVariable("SETUP_VP_RESOLVED_VERSION", version);
 

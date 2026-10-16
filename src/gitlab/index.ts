@@ -70,7 +70,7 @@ export async function main(phase = "setup"): Promise<void> {
   if (nodeManager === false && (env.SETUP_VP_NODE_VERSION || env.SETUP_VP_NODE_VERSION_FILE)) {
     throw new Error("node-version and node-version-file cannot be used with node-manager: false");
   }
-  const nodeVersion =
+  let nodeVersion =
     env.SETUP_VP_NODE_VERSION ||
     (env.SETUP_VP_NODE_VERSION_FILE
       ? createNodeVersionResolver(context).resolveNodeVersionFile(
@@ -87,7 +87,14 @@ export async function main(phase = "setup"): Promise<void> {
     projectDir,
   );
 
-  await installVitePlus(version, { env, exportPath: (value) => exportShellEnv("PATH", value) });
+  nodeVersion =
+    (await installVitePlus(version, {
+      env,
+      projectDir,
+      nodeVersion,
+      nodeManager,
+      exportPath: (value) => exportShellEnv("PATH", value),
+    })) ?? nodeVersion;
 
   applyEnvironmentModes();
   if (nodeVersion) run("vp", ["env", "use", nodeVersion], { cwd: projectDir });
