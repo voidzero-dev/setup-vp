@@ -1,15 +1,24 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveProjectNodeVersion } from "./project-node-version.js";
 
 /** Exchange the explicit Node selection with installers that support runtime reuse. */
-export function createInstallerNodeContext(nodeVersion?: string, nodeManager?: boolean) {
+export function createInstallerNodeContext(
+  nodeVersion?: string,
+  nodeManager?: boolean,
+  projectDir?: string,
+) {
+  const selector =
+    nodeManager === false
+      ? undefined
+      : nodeVersion || (projectDir ? resolveProjectNodeVersion(projectDir) : undefined);
   const directory = mkdtempSync(join(tmpdir(), "setup-vp-node-"));
   const resultFile = join(directory, "version");
   return {
     env: {
-      // Keep bootstrap independent of project pins when management is disabled.
-      VP_SETUP_NODE_VERSION: nodeManager === false ? "lts" : nodeVersion || "",
+      // Empty clears inherited overrides and keeps the installer's LTS default.
+      VP_SETUP_NODE_VERSION: selector || "",
       VP_SETUP_NODE_VERSION_FILE: resultFile,
     },
     reset(): void {

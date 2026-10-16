@@ -25,7 +25,7 @@ describe("installer Node selection", () => {
     (manager) => {
       const context = createInstallerNodeContext(undefined, manager);
       try {
-        expect(context.env.VP_SETUP_NODE_VERSION).toBe(manager === false ? "lts" : "");
+        expect(context.env.VP_SETUP_NODE_VERSION).toBe("");
         writeFileSync(context.env.VP_SETUP_NODE_VERSION_FILE, "22.23.1");
         expect(context.resolvedVersion()).toBeUndefined();
       } finally {

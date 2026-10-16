@@ -122,6 +122,30 @@ describe("GitLab setup parity", () => {
     );
   });
 
+  it("passes discovered Node to the GitLab installer without creating a session override", async () => {
+    const root = fixture();
+    writeFileSync(path.join(root, "app/.node-version"), "22.18.0");
+    const actual = await vi.importActual<typeof import("../ci/install-viteplus.js")>(
+      "../ci/install-viteplus.js",
+    );
+    vi.mocked(installVitePlus).mockImplementationOnce((version, options) =>
+      actual.installVitePlus(version, {
+        ...options,
+        runInstall: (_url, env) => {
+          expect(env.VP_SETUP_NODE_VERSION).toBe("22.18.0");
+          writeFileSync(env.VP_SETUP_NODE_VERSION_FILE!, "22.18.0");
+          writeFileSync(
+            env.SETUP_VP_DIRS_FILE!,
+            `data\t${root}\nbin\t${path.join(root, "bin")}\ncache\t${root}\nconfig\t${root}\nstate\t${root}\n`,
+          );
+          return 0;
+        },
+      }),
+    );
+    await main();
+    expect(run).not.toHaveBeenCalledWith("vp", ["env", "use", "22.18.0"], expect.anything());
+  });
+
   it("activates the exact Node version returned by bootstrap", async () => {
     const root = fixture();
     vi.stubEnv("SETUP_VP_NODE_VERSION", "22");

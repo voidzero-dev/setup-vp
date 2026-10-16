@@ -73,7 +73,11 @@ export async function installVitePlus(
   const runInstall = options.runInstall ?? runInstallCommand;
   const warn = options.logWarningFn ?? console.warn;
 
-  const nodeContext = createInstallerNodeContext(options.nodeVersion, options.nodeManager);
+  const nodeContext = createInstallerNodeContext(
+    options.nodeVersion,
+    options.nodeManager,
+    options.projectDir,
+  );
   const env: Record<string, string> = {
     ...Object.fromEntries(
       Object.entries(targetEnv).filter(

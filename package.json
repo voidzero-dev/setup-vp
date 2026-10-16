@@ -17,11 +17,13 @@
     "@actions/core": "^3.0.0",
     "@actions/exec": "^3.0.0",
     "@actions/glob": "^0.7.0",
+    "semver": "^7.8.5",
     "yaml": "^2.8.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/semver": "^7.8.0",
     "typescript": "^7.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"

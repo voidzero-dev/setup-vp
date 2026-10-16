@@ -41,7 +41,12 @@ export async function installVitePlus(inputs: Inputs): Promise<string | undefine
 
   // TODO: Remove VITE_PLUS_VERSION once vite-plus versions before the VP_* env var
   // rename (see https://github.com/voidzero-dev/vite-plus/pull/1166) are no longer supported.
-  const nodeContext = createInstallerNodeContext(inputs.nodeVersion, inputs.nodeManager);
+  const projectDir = getConfiguredProjectDir(inputs);
+  const nodeContext = createInstallerNodeContext(
+    inputs.nodeVersion,
+    inputs.nodeManager,
+    projectDir,
+  );
   const env = {
     ...process.env,
     ...nodeContext.env,
@@ -81,7 +86,7 @@ export async function installVitePlus(inputs: Inputs): Promise<string | undefine
         attempt++;
         try {
           nodeContext.reset();
-          const exitCode = await runInstallCommand(url, env, getConfiguredProjectDir(inputs));
+          const exitCode = await runInstallCommand(url, env, projectDir);
           if (exitCode === 0) return true;
           failureReason = `exit code ${exitCode}`;
         } catch (error) {
