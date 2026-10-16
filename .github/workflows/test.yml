@@ -12,6 +12,9 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+
 # Push / PR / merge_group runs always test the latest published Vite+. A manual
 # workflow_dispatch can set pr_version to a PR number or commit SHA; the install
 # script picks it up via VP_PR_VERSION, which overrides VP_VERSION and pulls the
@@ -22,6 +25,19 @@ env:
   VP_PR_VERSION: ${{ github.event.inputs.pr_version }}
 
 jobs:
+  zizmor:
+    name: Audit GitHub Actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
+        with:
+          advanced-security: false
+          annotations: true
+
   test:
     strategy:
       fail-fast: false
@@ -32,7 +48,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Setup Vite+
-        uses: ./
+        uses: $/.
         with:
           run-install: false
           cache: false
@@ -97,7 +113,7 @@ jobs:
 
       - name: Setup Vite+ for the first time
         id: first-setup
-        uses: ./
+        uses: $/.
         with:
           working-directory: ${{ runner.temp }}/reuse-project
           node-version: "22.23.1"
@@ -126,7 +142,7 @@ jobs:
 
       - name: Setup the same Vite+ version again
         id: second-setup
-        uses: ./
+        uses: $/.
         with:
           working-directory: ${{ runner.temp }}/reuse-project
           node-version: "22.23.1"
@@ -171,7 +187,7 @@ jobs:
         run: node test/reuse-installation-integrity.mjs prepare
 
       - name: Install Vite+
-        uses: ./
+        uses: $/.
         with:
           version: "0.3.3"
           run-install: false
@@ -181,7 +197,7 @@ jobs:
         run: node test/reuse-installation-integrity.mjs remove-binding
 
       - name: Repair the incomplete installation
-        uses: ./
+        uses: $/.
         with:
           version: "0.3.3"
           run-install: false
@@ -206,7 +222,7 @@ jobs:
           echo "VP_HOME=$RUNNER_TEMP/setup-vp-restored" >> "$GITHUB_ENV"
           bash test/record-cli-downloads.sh
       - name: Install from the user's version-file inputs
-        uses: ./
+        uses: $/.
         with:
           working-directory: test/reuse-project
           version-file: package.json
@@ -253,7 +269,7 @@ jobs:
           bash test/record-cli-downloads.sh
       - name: Reuse the restored installation
         id: setup
-        uses: ./
+        uses: $/.
         with:
           working-directory: test/reuse-project
           version-file: package.json
@@ -322,11 +338,13 @@ jobs:
 
       - name: Verify installation
         shell: bash
+        env:
+          PREVIEW_VERSION: ${{ steps.preview.outputs.version }}
         run: |
           vp env current
           vp i -g cowsay@1.6.0
           vp env doctor
-          vp --version | grep -F "${{ steps.preview.outputs.version }}"
+          vp --version | grep -F -- "$PREVIEW_VERSION"
 
   test-node-version:
     strategy:
@@ -354,7 +372,7 @@ jobs:
       # Runs `vp env use <version>` then `vp install` in the test project.
       - name: Setup Vite+ with Node.js ${{ matrix.node-version }}
         id: setup
-        uses: ./
+        uses: $/.
         with:
           node-version: ${{ matrix.node-version }}
           run-install: |
@@ -403,7 +421,7 @@ jobs:
 
       - name: Setup Vite+ without a Node.js input
         id: setup
-        uses: ./
+        uses: $/.
         with:
           working-directory: ${{ runner.temp }}/test-project
           run-install: false
@@ -452,7 +470,7 @@ jobs:
 
       - name: Setup Vite+ without Node.js manager
         id: setup
-        uses: ./
+        uses: $/.
         with:
           node-manager: false
           run-install: |
@@ -466,34 +484,39 @@ jobs:
         shell: bash
         env:
           OUTPUT_NODE_VERSION: ${{ steps.setup.outputs.node-version }}
+          BEFORE_NODE_PATH: ${{ steps.before.outputs.path }}
+          BEFORE_NODE_VERSION: ${{ steps.before.outputs.version }}
         run: |
           ACTUAL_PATH=$(node -p 'process.execPath' | tr -d '\r')
           ACTUAL_VERSION=$(node --version | tr -d '\r')
-          echo "node before: ${{ steps.before.outputs.path }} (${{ steps.before.outputs.version }})"
+          echo "node before: $BEFORE_NODE_PATH ($BEFORE_NODE_VERSION)"
           echo "node after:  $ACTUAL_PATH ($ACTUAL_VERSION)"
-          if [ "$ACTUAL_PATH" != "${{ steps.before.outputs.path }}" ]; then
-            echo "::error::node resolves to $ACTUAL_PATH; expected ${{ steps.before.outputs.path }}"
+          if [ "$ACTUAL_PATH" != "$BEFORE_NODE_PATH" ]; then
+            echo "::error::node resolves to $ACTUAL_PATH; expected $BEFORE_NODE_PATH"
             exit 1
           fi
-          if [ "$ACTUAL_VERSION" != "${{ steps.before.outputs.version }}" ]; then
-            echo "::error::node is $ACTUAL_VERSION; expected ${{ steps.before.outputs.version }}"
+          if [ "$ACTUAL_VERSION" != "$BEFORE_NODE_VERSION" ]; then
+            echo "::error::node is $ACTUAL_VERSION; expected $BEFORE_NODE_VERSION"
             exit 1
           fi
-          test "v$OUTPUT_NODE_VERSION" = "${{ steps.before.outputs.version }}"
+          test "v$OUTPUT_NODE_VERSION" = "$BEFORE_NODE_VERSION"
 
       - name: Verify vp commands use the system Node.js
         shell: bash
+        env:
+          BEFORE_NODE_PATH: ${{ steps.before.outputs.path }}
+          BEFORE_NODE_VERSION: ${{ steps.before.outputs.version }}
         run: |
           EXEC_PATH=$(vp exec node -p 'process.execPath' | tr -d '\r')
           EXEC_VERSION=$(vp exec node --version | tr -d '\r')
           echo "vp exec node -p process.execPath: $EXEC_PATH"
           echo "vp exec node --version: $EXEC_VERSION"
-          if [ "$EXEC_PATH" != "${{ steps.before.outputs.path }}" ]; then
-            echo "::error::vp resolved Node.js at $EXEC_PATH; expected system ${{ steps.before.outputs.path }}"
+          if [ "$EXEC_PATH" != "$BEFORE_NODE_PATH" ]; then
+            echo "::error::vp resolved Node.js at $EXEC_PATH; expected system $BEFORE_NODE_PATH"
             exit 1
           fi
-          if [ "$EXEC_VERSION" != "${{ steps.before.outputs.version }}" ]; then
-            echo "::error::vp resolved Node.js $EXEC_VERSION; expected system ${{ steps.before.outputs.version }}"
+          if [ "$EXEC_VERSION" != "$BEFORE_NODE_VERSION" ]; then
+            echo "::error::vp resolved Node.js $EXEC_VERSION; expected system $BEFORE_NODE_VERSION"
             exit 1
           fi
 
@@ -514,7 +537,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Setup Vite+ with package-manager configuration
-        uses: ./
+        uses: $/.
         with:
           package-manager: ${{ matrix.config.input }}
           run-install: false
@@ -608,7 +631,7 @@ jobs:
           esac
 
       - name: Setup Vite+ (auto-detect, no version input)
-        uses: ./
+        uses: $/.
         id: setup
         with:
           working-directory: ${{ runner.temp }}/default-version-${{ matrix.scenario }}
@@ -656,7 +679,7 @@ jobs:
           touch pnpm-lock.yaml
 
       - name: Setup Vite+ with pnpm cache (cache-save=${{ matrix.cache-save }})
-        uses: ./
+        uses: $/.
         id: setup
         with:
           run-install: false
@@ -665,10 +688,14 @@ jobs:
           cache-dependency-path: test-project/pnpm-lock.yaml
 
       - name: Verify installation
+        shell: bash
+        env:
+          INSTALLED_VERSION: ${{ steps.setup.outputs.version }}
+          CACHE_HIT: ${{ steps.setup.outputs.cache-hit }}
         run: |
           vp --version
-          echo "Installed version: ${{ steps.setup.outputs.version }}"
-          echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
+          echo "Installed version: $INSTALLED_VERSION"
+          echo "Cache hit: $CACHE_HIT"
 
   test-cache-npm:
     runs-on: ubuntu-latest
@@ -683,7 +710,7 @@ jobs:
           echo '{"name":"test-project","lockfileVersion":3}' > package-lock.json
 
       - name: Setup Vite+ with npm cache
-        uses: ./
+        uses: $/.
         id: setup
         with:
           run-install: false
@@ -691,10 +718,14 @@ jobs:
           cache-dependency-path: test-project/package-lock.json
 
       - name: Verify installation
+        shell: bash
+        env:
+          INSTALLED_VERSION: ${{ steps.setup.outputs.version }}
+          CACHE_HIT: ${{ steps.setup.outputs.cache-hit }}
         run: |
           vp --version
-          echo "Installed version: ${{ steps.setup.outputs.version }}"
-          echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
+          echo "Installed version: $INSTALLED_VERSION"
+          echo "Cache hit: $CACHE_HIT"
 
   test-cache-yarn:
     runs-on: ubuntu-latest
@@ -709,7 +740,7 @@ jobs:
           touch yarn.lock
 
       - name: Setup Vite+ with yarn cache
-        uses: ./
+        uses: $/.
         id: setup
         with:
           run-install: false
@@ -717,10 +748,14 @@ jobs:
           cache-dependency-path: test-project/yarn.lock
 
       - name: Verify installation
+        shell: bash
+        env:
+          INSTALLED_VERSION: ${{ steps.setup.outputs.version }}
+          CACHE_HIT: ${{ steps.setup.outputs.cache-hit }}
         run: |
           vp --version
-          echo "Installed version: ${{ steps.setup.outputs.version }}"
-          echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
+          echo "Installed version: $INSTALLED_VERSION"
+          echo "Cache hit: $CACHE_HIT"
 
   test-cache-bun:
     strategy:
@@ -739,7 +774,7 @@ jobs:
           touch ${{ matrix.lockfile }}
 
       - name: Setup Vite+ with bun cache (${{ matrix.lockfile }})
-        uses: ./
+        uses: $/.
         id: setup
         with:
           run-install: false
@@ -747,10 +782,14 @@ jobs:
           cache-dependency-path: test-project/${{ matrix.lockfile }}
 
       - name: Verify installation
+        shell: bash
+        env:
+          INSTALLED_VERSION: ${{ steps.setup.outputs.version }}
+          CACHE_HIT: ${{ steps.setup.outputs.cache-hit }}
         run: |
           vp --version
-          echo "Installed version: ${{ steps.setup.outputs.version }}"
-          echo "Cache hit: ${{ steps.setup.outputs.cache-hit }}"
+          echo "Installed version: $INSTALLED_VERSION"
+          echo "Cache hit: $CACHE_HIT"
 
   test-vp-exec:
     strategy:
@@ -762,7 +801,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Setup Vite+
-        uses: ./
+        uses: $/.
         with:
           run-install: false
           cache: false
@@ -789,7 +828,7 @@ jobs:
           echo '{"name":"test-project","private":true,"scripts":{"hello":"node -e \"console.log(1+1)\""}}' > "$DIR/package.json"
 
       - name: Setup Vite+ with install
-        uses: ./
+        uses: $/.
         with:
           run-install: |
             - cwd: ${{ runner.temp }}/test-project
@@ -809,7 +848,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Setup Vite+ with registry-url
-        uses: ./
+        uses: $/.
         with:
           run-install: false
           cache: false
@@ -838,7 +877,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Setup Vite+
-        uses: ./
+        uses: $/.
         with:
           run-install: false
           cache: false
@@ -910,7 +949,7 @@ jobs:
           } > "${RUNNER_TEMP//\\//}/test-project/.yarnrc.yml"
 
       - name: Setup Vite+ with sfw + ${{ matrix.package-manager }}
-        uses: ./
+        uses: $/.
         with:
           sfw: true
           run-install: |
@@ -953,7 +992,7 @@ jobs:
           echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > /tmp/test-project/package.json
 
       - name: Setup Vite+ with sfw (musl)
-        uses: ./
+        uses: $/.
         with:
           sfw: true
           run-install: |
@@ -970,7 +1009,7 @@ jobs:
   test-sfw-blocks-malicious:
     # Temporarily skip while Socket alert lookups fail. Restore in #161:
     # https://github.com/voidzero-dev/setup-vp/issues/161
-    if: ${{ false }}
+    if: false
     # Verifies sfw actually intercepts a known-malicious package, not just
     # that it wraps the install. Uses `lodahs` (lodash typosquat), the same
     # canary SocketDev's own workflows use:
@@ -1003,7 +1042,7 @@ jobs:
           echo '{"name":"test-project","private":true,"dependencies":{"is-odd":"^3.0.1"}}' > "$DIR/package.json"
 
       - name: Setup Vite+ with sfw and install benign dep
-        uses: ./
+        uses: $/.
         with:
           sfw: true
           run-install: |
@@ -1068,7 +1107,7 @@ jobs:
           mode: firewall-free
 
       - name: Setup Vite+ with sfw (composition path)
-        uses: ./
+        uses: $/.
         id: setup-vp
         with:
           sfw: true
@@ -1097,7 +1136,7 @@ jobs:
       - name: Assert composed sfw blocks malicious package (lodahs)
         # Temporarily skip while Socket alert lookups fail. Restore in #161:
         # https://github.com/voidzero-dev/setup-vp/issues/161
-        if: ${{ false }}
+        if: false
         shell: bash
         working-directory: ${{ runner.temp }}/test-project
         # Proves the composition path actually enforces, not just that sfw is
@@ -1150,7 +1189,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Setup Vite+
-        uses: ./
+        uses: $/.
         with:
           run-install: true
           cache: false
@@ -1190,7 +1229,7 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - name: Setup Vite+ and test dependencies
-        uses: ./
+        uses: $/.
         with:
           node-version-file: .node-version
       # Some tests inspect or execute dist/, so build on each runner first.
@@ -1211,7 +1250,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Setup Vite+ with cache
-        uses: ./
+        uses: $/.
         id: setup
         with:
           cache: true

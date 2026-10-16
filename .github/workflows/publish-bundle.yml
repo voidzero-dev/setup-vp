@@ -3,7 +3,9 @@ name: Publish rebuilt action bundle
 # workflow_run loads this publisher from the default branch. Never check out
 # PR code, restore its caches, or execute anything from the downloaded artifact.
 on:
-  workflow_run:
+  # Default-branch code validates the workflow blob, current PR head, and bundle
+  # allowlist before creating the App token. Downloaded bundles are never run.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: [Rebuild action bundle]
     types: [completed]
 

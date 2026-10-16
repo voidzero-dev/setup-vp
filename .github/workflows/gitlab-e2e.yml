@@ -1,7 +1,9 @@
 name: GitLab E2E
 
 on:
-  workflow_run:
+  # Default-branch code verifies the request workflow blob, labeler's write
+  # access, and current PR head. It never loads PR code, artifacts, or caches.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: [GitLab E2E request]
     types: [completed]
   workflow_dispatch:
