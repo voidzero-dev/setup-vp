@@ -24,6 +24,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Setup Vite+ and install dependencies
+        uses: ./
+        with:
+          node-version-file: .node-version
+
       - name: Audit pull request
         uses: fallow-rs/fallow@fccff887da0d83db1711379e0a3696dfc2460fdd # v3.33.1
         with:
