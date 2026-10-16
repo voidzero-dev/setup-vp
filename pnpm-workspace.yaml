@@ -1,6 +1,8 @@
 minimumReleaseAgeExclude:
   - vite-plus
   - "@voidzero-dev/vite-plus-*"
+  - vitest
+  - "@vitest/*"
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@1.3.0
   vite-plus: 1.3.0
