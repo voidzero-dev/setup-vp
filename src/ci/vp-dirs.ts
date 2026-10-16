@@ -6,6 +6,9 @@ import { pkgPrNewCommitSha } from "./install-script-urls.js";
 import { isWindows } from "./platform.js";
 import { parseInstalledVpVersion } from "./version.js";
 
+const LINE_BREAK_RE = /\r?\n/;
+const BOM_RE = /^\uFEFF/;
+
 // Keep installer network calls bounded so a hung source fails over quickly.
 const CURL_TIMEOUT_FLAGS = "--connect-timeout 5 --max-time 15";
 const PWSH_TIMEOUT_SEC = 15;
@@ -110,10 +113,10 @@ export function resolveVitePlusBinDirs(
 export function parseVitePlusDirs(output: string): VitePlusDirs | undefined {
   const dirs = new Map<string, string>();
 
-  for (const line of output.split(/\r?\n/)) {
+  for (const line of output.split(LINE_BREAK_RE)) {
     const separator = line.indexOf("\t");
     if (separator < 1) continue;
-    const key = line.slice(0, separator).replace(/^\uFEFF/, "");
+    const key = line.slice(0, separator).replace(BOM_RE, "");
     const value = line.slice(separator + 1).trim();
     if (value) dirs.set(key, value);
   }

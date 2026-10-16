@@ -8,6 +8,9 @@ import { LockFileType } from "./types.js";
 import type { LockFileInfo } from "./types.js";
 import { isWindows } from "./ci/platform.js";
 
+const VP_VERSION_RE = /^\s*vp\s+v?(\d[^\s]*)/im;
+const LEGACY_GLOBAL_VERSION_RE = /Global:\s*v?(\d[^\s]*)/i;
+
 export function getVitePlusHome(): string {
   const home = isWindows() ? process.env.USERPROFILE : process.env.HOME;
   return join(home || homedir(), ".vite-plus");
@@ -32,9 +35,7 @@ export function isWithin(child: string, parent: string): boolean {
  * when the format changed). Returns "unknown" when neither shape matches.
  */
 export function parseInstalledVpVersion(versionOutput: string): string {
-  const match =
-    versionOutput.match(/^\s*vp\s+v?(\d[^\s]*)/im) ??
-    versionOutput.match(/Global:\s*v?(\d[^\s]*)/i);
+  const match = versionOutput.match(VP_VERSION_RE) ?? versionOutput.match(LEGACY_GLOBAL_VERSION_RE);
   return match?.[1] ?? "unknown";
 }
 

@@ -7,12 +7,15 @@ import { analyzeProjectNpmrc } from "./ci/npmrc.js";
 // Literal written into `.npmrc`; pnpm/npm expand it against the env at install time.
 const NODE_AUTH_TOKEN_REF = "${NODE_AUTH_TOKEN}";
 
+const URL_PROTOCOL_RE = /^\w+:/;
+const LINE_BREAK_RE = /\r?\n/;
+
 function getRunnerNpmrcPath(): string {
   return resolve(process.env.RUNNER_TEMP || process.cwd(), ".npmrc");
 }
 
 function stripProtocol(url: string): string {
-  return url.replace(/^\w+:/, "");
+  return url.replace(URL_PROTOCOL_RE, "");
 }
 
 function buildAuthLine(registryUrl: string): string {
@@ -65,7 +68,7 @@ function writeRegistryToFile(registryUrl: string, fileLocation: string, scope?: 
   const lines: string[] = [];
   const existing = readNpmrc(fileLocation);
   if (existing !== undefined) {
-    for (const line of existing.split(/\r?\n/)) {
+    for (const line of existing.split(LINE_BREAK_RE)) {
       const lower = line.toLowerCase();
       if (lower.startsWith(`${scopePrefix}registry`)) continue;
       if (lower.startsWith(authPrefix) && lower.includes("_authtoken")) continue;

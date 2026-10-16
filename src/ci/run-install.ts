@@ -4,6 +4,8 @@ import { isWindows } from "./platform.js";
 import { runWithOutput } from "./process.js";
 import type { InstallCommand, RunInstallEntry, RunInstallInput } from "./types.js";
 
+const VP_NOT_FOUND_RE = /Command 'vp' not found in PATH/;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -62,7 +64,7 @@ export function parseRunInstall(value: string): RunInstallEntry[] {
 export const parseYamlSubset = parseRunInstall;
 
 export function isSfwVpNotFoundFlake(stdout: string, stderr: string): boolean {
-  return /Command 'vp' not found in PATH/.test(stdout + "\n" + stderr);
+  return VP_NOT_FOUND_RE.test(stdout + "\n" + stderr);
 }
 
 export async function runInstall(

@@ -6,6 +6,11 @@ import type { ExportVariable, RuntimeEnv } from "./types.js";
 
 const NODE_AUTH_TOKEN_REF = "${NODE_AUTH_TOKEN}";
 
+const LINE_BREAK_RE = /\r?\n/;
+const RESERVED_ENV_NAME_RE = /^(?:PATH|HOME|USERPROFILE|TMPDIR|CI)$/i;
+const RESERVED_ENV_PREFIX_RE = /^(?:SETUP_VP_|RUNNER_|GITHUB_|CI_|SYSTEM_|AGENT_|BUILD_|RELEASE_)/i;
+const URL_PROTOCOL_RE = /^\w+:/;
+
 function readUserConfigLines(env: RuntimeEnv, replacedKeys: Set<string>): string[] {
   const homeDir = env.HOME || env.USERPROFILE;
   const file =
@@ -14,16 +19,13 @@ function readUserConfigLines(env: RuntimeEnv, replacedKeys: Set<string>): string
     (homeDir && path.join(homeDir, ".npmrc"));
   const contents = file ? readNpmrc(file) : "";
   return contents
-    .split(/\r?\n/)
+    .split(LINE_BREAK_RE)
     .filter((line) => !replacedKeys.has(line.split("=")[0]!.trim().toLowerCase()));
 }
 
 export function isReservedAuthVariable(name: string): boolean {
   if (["GITHUB_TOKEN", "CI_JOB_TOKEN", "SYSTEM_ACCESSTOKEN"].includes(name)) return false;
-  return (
-    /^(?:PATH|HOME|USERPROFILE|TMPDIR|CI)$/i.test(name) ||
-    /^(?:SETUP_VP_|RUNNER_|GITHUB_|CI_|SYSTEM_|AGENT_|BUILD_|RELEASE_)/i.test(name)
-  );
+  return RESERVED_ENV_NAME_RE.test(name) || RESERVED_ENV_PREFIX_RE.test(name);
 }
 
 function writeUserConfig(
@@ -73,7 +75,7 @@ export function configureAuth(
     scopePrefix = `${scope.toLowerCase()}:`;
   }
 
-  const authUrl = registryUrl.replace(/^\w+:/, "").toLowerCase();
+  const authUrl = registryUrl.replace(URL_PROTOCOL_RE, "").toLowerCase();
   const replacedKeys = new Set([`${scopePrefix}registry`, `${authUrl}:_authtoken`]);
   const lines = readUserConfigLines(targetEnv, replacedKeys);
   lines.push(

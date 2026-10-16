@@ -7,6 +7,16 @@ import type { LockFileInfo } from "./types.js";
 import { isWithin } from "./project.js";
 import type { ResolutionContext } from "./resolution.js";
 
+// Lockfiles always record fully-resolved versions, so a valid result starts with
+// major.minor.patch; use this to sanity-check extracted values.
+const VERSION_START_RE = /^\d+\.\d+\.\d+/;
+const PNPM_PACKAGE_VERSION_RE = /^\s*\/?vite-plus@(\d+\.\d+\.\d+[^\s():'"]*)/m;
+const PNPM_PEER_SUFFIX_RE = /\(.*$/;
+const LINE_BREAK_RE = /\r?\n/;
+const INDENTED_LINE_RE = /^\s/;
+const YARN_PACKAGE_HEADER_RE = /(?:^|[",\s])vite-plus@/;
+const YARN_VERSION_RE = /^\s+version:?\s+"?(\d+\.\d+\.\d+[^"\s]*)"?/;
+
 export interface LockfileResolver {
   tryResolveVitePlusVersionFromLockfile: (
     projectDir: string,
@@ -17,9 +27,6 @@ export interface LockfileResolver {
 
 export function createLockfileResolver(context: ResolutionContext): LockfileResolver {
   const { getWorkspaceDir, info, debug } = context;
-  // Lockfiles always record fully-resolved versions, so a valid result starts with
-  // major.minor.patch; use this to sanity-check extracted values.
-  const VERSION_START_RE = /^\d+\.\d+\.\d+/;
 
   /**
    * Resolve the exact `vite-plus` version from the project's lockfile, as a
@@ -219,7 +226,7 @@ export function createLockfileResolver(context: ResolutionContext): LockfileReso
     // matched.
     const rootVersion = pnpmImporterVersion(root);
     if (rootVersion) return rootVersion;
-    const match = content.match(/^\s*\/?vite-plus@(\d+\.\d+\.\d+[^\s():'"]*)/m);
+    const match = content.match(PNPM_PACKAGE_VERSION_RE);
     return match?.[1];
   }
 
@@ -233,7 +240,7 @@ export function createLockfileResolver(context: ResolutionContext): LockfileReso
         const raw =
           typeof dep === "string" ? dep : (dep as { version?: unknown } | undefined)?.version;
         if (typeof raw === "string") {
-          const clean = raw.replace(/\(.*$/, "").trim(); // strip pnpm peer suffix
+          const clean = raw.replace(PNPM_PEER_SUFFIX_RE, "").trim(); // strip pnpm peer suffix
           if (VERSION_START_RE.test(clean)) return clean;
         }
       }
@@ -248,12 +255,12 @@ export function createLockfileResolver(context: ResolutionContext): LockfileReso
   // let the caller fall back rather than guess another workspace's version.
   function fromYarnLock(content: string): string | undefined {
     const versions = new Set<string>();
-    const lines = content.split(/\r?\n/);
+    const lines = content.split(LINE_BREAK_RE);
     for (let i = 0; i < lines.length; i++) {
-      if (/^\s/.test(lines[i])) continue; // skip indented (in-block) lines
-      if (!/(?:^|[",\s])vite-plus@/.test(lines[i])) continue; // not a vite-plus entry header
-      for (let j = i + 1; j < lines.length && /^\s/.test(lines[j]); j++) {
-        const m = lines[j].match(/^\s+version:?\s+"?(\d+\.\d+\.\d+[^"\s]*)"?/);
+      if (INDENTED_LINE_RE.test(lines[i])) continue; // skip indented (in-block) lines
+      if (!YARN_PACKAGE_HEADER_RE.test(lines[i])) continue; // not a vite-plus entry header
+      for (let j = i + 1; j < lines.length && INDENTED_LINE_RE.test(lines[j]); j++) {
+        const m = lines[j].match(YARN_VERSION_RE);
         if (m) {
           versions.add(m[1]);
           break;
