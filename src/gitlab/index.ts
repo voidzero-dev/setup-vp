@@ -70,14 +70,13 @@ export async function main(phase = "setup"): Promise<void> {
   if (nodeManager === false && (env.SETUP_VP_NODE_VERSION || env.SETUP_VP_NODE_VERSION_FILE)) {
     throw new Error("node-version and node-version-file cannot be used with node-manager: false");
   }
-  let nodeVersion =
-    env.SETUP_VP_NODE_VERSION ||
-    (env.SETUP_VP_NODE_VERSION_FILE
-      ? createNodeVersionResolver(context).resolveNodeVersionFile(
-          env.SETUP_VP_NODE_VERSION_FILE,
-          projectDir,
-        )
-      : undefined);
+  let nodeVersion = createNodeVersionResolver(context).resolveNodeVersionInput(
+    {
+      nodeVersion: env.SETUP_VP_NODE_VERSION,
+      nodeVersionFile: env.SETUP_VP_NODE_VERSION_FILE,
+    },
+    projectDir,
+  );
   const version = createVersionResolver(context).resolveVitePlusVersion(
     {
       version: env.SETUP_VP_VERSION,

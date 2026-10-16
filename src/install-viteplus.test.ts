@@ -120,6 +120,22 @@ describe("installVitePlus", () => {
     expect(await installVitePlus({ ...baseInputs, nodeVersion: "22" })).toBeUndefined();
   });
 
+  it("discovers the project Node before invoking the GitHub installer without creating a session override", async () => {
+    const root = mkdtempSync(join(tmpdir(), "setup-vp-node-discovery-"));
+    writeFileSync(join(root, ".node-version"), "22.18.0");
+    vi.mocked(exec).mockImplementationOnce(async (_command, _args, options) => {
+      expect(options?.env?.VP_SETUP_NODE_VERSION).toBe("22.18.0");
+      writeFileSync(options!.env!.VP_SETUP_NODE_VERSION_FILE!, "22.18.0");
+      writeDirsFile(options, "/test/data/bin");
+      return 0;
+    });
+    try {
+      expect(await installVitePlus({ ...baseInputs, workingDirectory: root })).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("reuses a validated installation and puts it first on PATH", async () => {
     vi.stubEnv("PATH", "/other/bin:/existing/bin");
     vi.mocked(findReusableVitePlus).mockReturnValue({ bin: "/existing/bin" });

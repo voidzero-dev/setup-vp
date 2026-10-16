@@ -76,14 +76,7 @@ export async function runPrepare(
     warning: ports.logWarning,
   };
   const version = createVersionResolver(context).resolveVitePlusVersion(inputs, projectDir);
-  let nodeVersion =
-    inputs.nodeVersion ||
-    (inputs.nodeVersionFile
-      ? createNodeVersionResolver(context).resolveNodeVersionFile(
-          inputs.nodeVersionFile,
-          projectDir,
-        )
-      : undefined);
+  let nodeVersion = createNodeVersionResolver(context).resolveNodeVersionInput(inputs, projectDir);
 
   ports.setVariable("SETUP_VP_CACHE_HIT", "false");
   ports.setVariable("SETUP_VP_CACHE_READY", "false");

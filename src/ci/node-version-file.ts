@@ -8,12 +8,26 @@ const WHITESPACE_RE = /\s+/;
 
 export interface NodeVersionResolver {
   resolveNodeVersionFile: (filePath: string, baseDir?: string) => string;
+  resolveNodeVersionInput: (
+    inputs: { nodeVersion?: string; nodeVersionFile?: string },
+    baseDir?: string,
+  ) => string | undefined;
 }
 
 export function createNodeVersionResolver(
   context: Pick<ResolutionContext, "getWorkspaceDir" | "info">,
 ): NodeVersionResolver {
   const { getWorkspaceDir, info } = context;
+
+  function resolveNodeVersionInput(
+    inputs: { nodeVersion?: string; nodeVersionFile?: string },
+    baseDir?: string,
+  ): string | undefined {
+    return (
+      inputs.nodeVersion ||
+      (inputs.nodeVersionFile ? resolveNodeVersionFile(inputs.nodeVersionFile, baseDir) : undefined)
+    );
+  }
   /**
    * Resolve a Node.js version from a version file.
    *
@@ -154,5 +168,5 @@ export function createNodeVersionResolver(
     return undefined;
   }
 
-  return { resolveNodeVersionFile };
+  return { resolveNodeVersionFile, resolveNodeVersionInput };
 }

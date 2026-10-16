@@ -2,15 +2,12 @@ import { info, warning, addPath, exportVariable } from "@actions/core";
 import { exec } from "@actions/exec";
 import { delimiter, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { getInstallScriptUrls, pkgPrNewCommitSha } from "./ci/install-script-urls.js";
+import { getInstallScriptUrls } from "./ci/install-script-urls.js";
 import {
   appendFallbackBinToPath,
-  createVitePlusDirsFile,
   getInstallScriptCommand,
   removeVitePlusDirsFile,
   resolveVitePlusBinDirs,
-  supportsVitePlusDirs,
-  VP_DIRS_FILE_ENV,
   type VitePlusBinDirs,
 } from "./ci/vp-dirs.js";
 import type { Inputs } from "./types.js";
@@ -18,6 +15,7 @@ import { DISPLAY_NAME } from "./types.js";
 import { getConfiguredProjectDir, getVitePlusHome } from "./utils.js";
 import { findReusableVitePlus } from "./reuse-viteplus.js";
 import { createInstallerNodeContext } from "./ci/installer-node.js";
+import { createInstallerEnvironment } from "./ci/installer-env.js";
 
 // Try each group's URLs in order, for up to N rounds per group (max attempts
 // per group = rounds * URLs). Two rounds × two URLs = 4 attempts, ~1 minute
@@ -39,32 +37,13 @@ export async function installVitePlus(inputs: Inputs): Promise<string | undefine
 
   info(`Installing ${DISPLAY_NAME}@${version}...`);
 
-  // TODO: Remove VITE_PLUS_VERSION once vite-plus versions before the VP_* env var
-  // rename (see https://github.com/voidzero-dev/vite-plus/pull/1166) are no longer supported.
-  const nodeContext = createInstallerNodeContext(inputs.nodeVersion, inputs.nodeManager);
-  const env = {
-    ...process.env,
-    ...nodeContext.env,
-    VP_VERSION: version,
-    VITE_PLUS_VERSION: version,
-  } as { [key: string]: string };
-
-  const detectDirs = supportsVitePlusDirs(version);
-  const dirsFile = detectDirs ? createVitePlusDirsFile() : undefined;
-  if (dirsFile) {
-    env.VP_VPDIRS_AWARE = "1";
-    env[VP_DIRS_FILE_ENV] = dirsFile;
-  } else {
-    delete env.VP_VPDIRS_AWARE;
-    delete env[VP_DIRS_FILE_ENV];
-  }
-
-  // For pkg.pr.new preview builds, tell the install script to fetch from
-  // pkg.pr.new (bypassing the npm registry) instead of resolving VP_VERSION.
-  const prVersion = pkgPrNewCommitSha(version);
-  if (prVersion) {
-    env.VP_PR_VERSION = prVersion;
-  }
+  const projectDir = getConfiguredProjectDir(inputs);
+  const nodeContext = createInstallerNodeContext(
+    inputs.nodeVersion,
+    inputs.nodeManager,
+    projectDir,
+  );
+  const { env, dirsFile } = createInstallerEnvironment(version, process.env, nodeContext.env);
 
   // Prefer the install script pinned to the requested version's git ref. Fall
   // back to the latest script only after all pinned sources fail (see
@@ -81,7 +60,7 @@ export async function installVitePlus(inputs: Inputs): Promise<string | undefine
         attempt++;
         try {
           nodeContext.reset();
-          const exitCode = await runInstallCommand(url, env, getConfiguredProjectDir(inputs));
+          const exitCode = await runInstallCommand(url, env, projectDir);
           if (exitCode === 0) return true;
           failureReason = `exit code ${exitCode}`;
         } catch (error) {

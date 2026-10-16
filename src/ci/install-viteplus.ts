@@ -2,17 +2,15 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { spawnSync } from "node:child_process";
-import { getInstallScriptUrls, pkgPrNewCommitSha } from "./install-script-urls.js";
+import { getInstallScriptUrls } from "./install-script-urls.js";
 import { isWindows } from "./platform.js";
 import { createInstallerNodeContext } from "./installer-node.js";
+import { createInstallerEnvironment } from "./installer-env.js";
 import {
   appendFallbackBinToPath,
-  createVitePlusDirsFile,
   getInstallScriptCommand,
   removeVitePlusDirsFile,
   resolveVitePlusBinDirs,
-  supportsVitePlusDirs,
-  VP_DIRS_FILE_ENV,
 } from "./vp-dirs.js";
 
 const INSTALL_MAX_ROUNDS = 2;
@@ -73,32 +71,12 @@ export async function installVitePlus(
   const runInstall = options.runInstall ?? runInstallCommand;
   const warn = options.logWarningFn ?? console.warn;
 
-  const nodeContext = createInstallerNodeContext(options.nodeVersion, options.nodeManager);
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(targetEnv).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    ...nodeContext.env,
-    VP_VERSION: version,
-    VITE_PLUS_VERSION: version,
-  };
-
-  const detectDirs = supportsVitePlusDirs(version);
-  const dirsFile = detectDirs ? createVitePlusDirsFile() : undefined;
-  if (dirsFile) {
-    env.VP_VPDIRS_AWARE = "1";
-    env[VP_DIRS_FILE_ENV] = dirsFile;
-  } else {
-    delete env.VP_VPDIRS_AWARE;
-    delete env[VP_DIRS_FILE_ENV];
-  }
-
-  const prVersion = pkgPrNewCommitSha(version);
-  if (prVersion) {
-    env.VP_PR_VERSION = prVersion;
-  }
+  const nodeContext = createInstallerNodeContext(
+    options.nodeVersion,
+    options.nodeManager,
+    options.projectDir,
+  );
+  const { env, dirsFile } = createInstallerEnvironment(version, targetEnv, nodeContext.env);
 
   // Prefer the install script pinned to the requested version's git ref. Fall
   // back to the latest script only after all pinned sources fail (see
