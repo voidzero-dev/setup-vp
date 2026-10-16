@@ -64,11 +64,21 @@ Use the shared primitives under [`src/ci/`](src/ci/) for portable runtime behavi
 
 ## GitLab End-to-End Tests
 
-Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. The [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) runs only through `workflow_dispatch` on `main`. A maintainer selects the exact commit to test. The job uses the GitLab trigger secret without checking out or executing PR code on the GitHub runner.
+Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. The [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) accepts `run-e2e` label requests for same-repository PRs and manual `workflow_dispatch` requests on `main`. The job uses the GitLab trigger secret without checking out or executing PR files on the GitHub runner.
 
 ### Request a Run
 
-Set the PR number and record its current head SHA. Review that commit before starting the workflow:
+For a same-repository PR, review its current head commit, including workflow changes, then add `run-e2e`:
+
+```bash
+gh pr edit 123 --add-label run-e2e
+```
+
+The workflow checks that the labeler has repository write access and runs the full suite at the label event's head SHA. After each new commit, review the changes, then remove and re-add `run-e2e`. Keeping the label on a PR does not approve later pushes. The handler rejects stale heads, closed PRs, and requests whose label was removed.
+
+### Manual Runs and Fork PRs
+
+Fork PRs use manual dispatch because `pull_request` workflows do not receive the GitLab secret from the base repository. For a manual PR run, set the PR number and record its current head SHA. Review that commit before starting the workflow:
 
 ```bash
 pr_number=123
@@ -84,11 +94,11 @@ gh workflow run gitlab-e2e.yml --ref main \
   -f suite=full
 ```
 
-This works for same-repository and fork PRs. The workflow rejects a request if the PR head changes before validation. Each new commit needs another review and dispatch. Check the workflow's logs and job summary for the tested commit, suite, pipeline link, and result. The workflow does not write PR comments.
+Manual dispatch works for same-repository and fork PRs. The workflow rejects a request if the PR head changes before validation. Each new commit needs another review and request. For both label and manual requests, check the workflow's logs and job summary for the tested commit, suite, pipeline link, and result. The workflow does not write PR comments.
 
-For a standalone run, omit `pull_request`. Set `setup_ref` to an exact commit SHA or release tag, or leave it empty to test the workflow commit. Select `suite` (`full` by default) and `vite_plus_version` (`latest` by default). Runs selected on branches other than `main` skip the privileged job.
+For a standalone run, omit `pull_request`. Set `setup_ref` to an exact commit SHA or release tag, or leave it empty to test the workflow commit. Select `suite` (`full` by default) and `vite_plus_version` (`latest` by default). Manual runs selected on branches other than `main` skip the job.
 
-Pushes, PR labels, merge queue commits, merges, and release tags do not automatically start GitLab pipelines. Release PRs must pass the full suite on their current head commit before merging; follow the [release procedure](#releasing).
+Pushes, merge queue commits, merges, and release tags do not automatically start GitLab pipelines. Release PRs must pass the full suite on their current head commit before merging; follow the [release procedure](#releasing).
 
 ## Dependency Updates
 
@@ -118,11 +128,11 @@ Publish releases as Git tags, not as an npm package. Keep `package.json.version`
 
    Run the [required checks](#before-committing) and commit the release changes, including any updated bundles. The bootstrap and template tests compare these defaults with `package.json.version`, so an omitted update fails CI. Do not resolve `latest` at runtime or reuse the frozen `v1` tag.
 
-2. Review the release PR's current head commit, then dispatch the full suite from `main` as described in the [GitLab E2E procedures](#gitlab-end-to-end-tests). After any new commit, including an update from `main`, review the changes and dispatch another run for the new SHA.
+2. Review the release PR's current head commit, then add `run-e2e` for a same-repository PR or dispatch the full suite from `main` for a fork. Follow the [GitLab E2E procedures](#gitlab-end-to-end-tests). After any new commit, including an update from `main`, review the changes and remove and re-add the label or dispatch another run for the new SHA.
 
 3. Merge the release PR only after GitHub CI and the full GitLab suite pass. Check the GitLab E2E job summary: its result must be `success`, its suite must be `full`, and its tested commit must still match the PR head.
 
-   Keep the PR open if verification fails, is cancelled, or has no result for the current head. Fix the failure, including outdated fixtures in the dedicated GitLab test project when needed, then dispatch another run. Wait for a passing result before merging. Do not defer this check until after merging or bypass it with an administrator merge.
+   Keep the PR open if verification fails, is cancelled, or has no result for the current head. Fix the failure, including outdated fixtures in the dedicated GitLab test project when needed, then request another run. Wait for a passing result before merging. Do not defer this check until after merging or bypass it with an administrator merge.
 
 4. Update `main` and confirm that `HEAD` is the release PR's merge commit. Confirm that all three bundles in `dist/` are in sync. The working tree must stay clean after building:
 

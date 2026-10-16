@@ -1,7 +1,10 @@
 name: GitLab E2E
-run-name: "GitLab E2E: ${{ inputs.setup_ref || github.sha }} / ${{ inputs.suite }}"
+run-name: "GitLab E2E: ${{ github.event.pull_request.head.sha || inputs.setup_ref || github.sha }} / ${{ inputs.suite || 'full' }}"
 
 on:
+  pull_request:
+    branches: [main]
+    types: [labeled]
   workflow_dispatch:
     inputs:
       pull_request:
@@ -29,21 +32,49 @@ permissions:
 jobs:
   gitlab-e2e:
     name: GitLab E2E
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+       github.event.label.name == 'run-e2e' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    # Only trusted main-branch code handles the trigger secret; never load PR code.
+    # Fork PRs use manual dispatch on main. Never check out or execute PR files.
     steps:
       - name: Resolve test parameters
         id: parameters
         env:
-          PR_NUMBER: ${{ inputs.pull_request }}
-          SETUP_REF: ${{ inputs.setup_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_LABEL: ${{ github.event.label.name }}
+          LABEL_ACTOR: ${{ github.event.sender.login }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pull_request }}
+          SETUP_REF: ${{ github.event.pull_request.head.sha || inputs.setup_ref }}
           TEST_SUITE: ${{ inputs.suite }}
           VITE_PLUS_VERSION: ${{ inputs.vite_plus_version }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+
+          case "$EVENT_NAME" in
+            workflow_dispatch) ;;
+            pull_request)
+              if [ "$EVENT_ACTION" != labeled ] || [ "$EVENT_LABEL" != run-e2e ] ||
+                ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ && "$SETUP_REF" =~ ^[0-9a-f]{40}$ ]]; then
+                echo "::error::GitLab E2E requires a run-e2e label event with an exact PR head SHA."
+                exit 1
+              fi
+              # Check the original labeler, including when someone reruns this job.
+              permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${LABEL_ACTOR}/permission" --jq '.permission')"
+              case "$permission" in
+                admin | write) ;;
+                *) echo "::error::Adding run-e2e requires repository write access."; exit 1 ;;
+              esac
+              TEST_SUITE=full
+              VITE_PLUS_VERSION=latest
+              ;;
+            *) echo "::error::Unsupported GitLab E2E event."; exit 1 ;;
+          esac
 
           setup_vp_ref="${SETUP_REF:-$GITHUB_SHA}"
           suite="${TEST_SUITE:-full}"
@@ -73,6 +104,12 @@ jobs:
                .base.repo.full_name == $repo and .base.ref == "main"' \
               <<< "$pull_request" > /dev/null; then
               echo "::error::The PR changed or no longer targets main. Review its current head and start a new run."
+              exit 1
+            fi
+            if [ "$EVENT_NAME" = pull_request ] && ! jq -e --arg repo "$GITHUB_REPOSITORY" \
+              '.head.repo.full_name == $repo and any(.labels[]; .name == "run-e2e")' \
+              <<< "$pull_request" > /dev/null; then
+              echo "::error::Label requests require a same-repository PR with run-e2e. Use manual dispatch on main for forks."
               exit 1
             fi
           fi
