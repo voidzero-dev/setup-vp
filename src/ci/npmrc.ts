@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 
+const LINE_BREAK_RE = /\r?\n/;
+
 export function readNpmrc(file: string): string {
   try {
     return readFileSync(file, "utf8");
@@ -14,7 +16,7 @@ export function analyzeProjectNpmrc(content: string): {
 } {
   const envVarRefs = new Set<string>();
 
-  for (const rawLine of content.split(/\r?\n/)) {
+  for (const rawLine of content.split(LINE_BREAK_RE)) {
     const line = rawLine.trim();
     if (!line || line.startsWith(";") || line.startsWith("#")) continue;
 

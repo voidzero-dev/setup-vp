@@ -3,6 +3,9 @@ import { basename } from "node:path";
 import { resolvePath } from "./project.js";
 import type { ResolutionContext } from "./resolution.js";
 
+const VERSION_PREFIX_RE = /^v/i;
+const WHITESPACE_RE = /\s+/;
+
 export interface NodeVersionResolver {
   resolveNodeVersionFile: (filePath: string, baseDir?: string) => string;
 }
@@ -44,7 +47,7 @@ export function createNodeVersionResolver(
     }
 
     // Strip leading 'v' prefix (e.g., "v20.11.0" -> "20.11.0")
-    version = version.replace(/^v/i, "");
+    version = version.replace(VERSION_PREFIX_RE, "");
 
     info(`Resolved Node.js version '${version}' from ${filePath}`);
     return version;
@@ -86,7 +89,7 @@ export function createNodeVersionResolver(
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
 
-      const [tool, ...versions] = trimmed.split(/\s+/);
+      const [tool, ...versions] = trimmed.split(WHITESPACE_RE);
       if (tool !== "nodejs" && tool !== "node") continue;
 
       // asdf allows multiple fallback versions; pick the first installable one

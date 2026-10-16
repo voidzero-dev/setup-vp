@@ -1,6 +1,8 @@
 import { supportsScopedEnv } from "./node-manager.js";
 import type { LogFn } from "./types.js";
 
+const PLAIN_VALUE_RE = /^[\w.+-]+$/;
+
 export const ENV_CURRENT_ARGS = ["env", "current", "--json"];
 
 export interface CurrentEnv {
@@ -52,5 +54,5 @@ function supportsEnvCurrent(versionOutput: string): boolean {
 
 // Values are written to a GitLab dotenv report, so accept only plain names and versions.
 function plainValue(value: unknown): string {
-  return typeof value === "string" && /^[\w.+-]+$/.test(value) ? value : "unknown";
+  return typeof value === "string" && PLAIN_VALUE_RE.test(value) ? value : "unknown";
 }

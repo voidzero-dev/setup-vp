@@ -6,6 +6,11 @@ import { isWithin, resolvePath } from "./project.js";
 import { createLockfileResolver } from "./lockfile-version.js";
 import type { ResolutionContext } from "./resolution.js";
 
+const NON_REGISTRY_SPEC_RE = /[:/@\\]/;
+const VERSION_PREFIX_RE = /^v(?=\d)/;
+const EXACT_VERSION_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
+const DIST_TAG_RE = /^[A-Za-z][0-9A-Za-z._-]*$/;
+
 interface Inputs {
   readonly version?: string;
   readonly versionFile?: string;
@@ -100,7 +105,7 @@ export function createVersionResolver(context: ResolutionContext): VersionResolv
     // Exclude non-registry protocols/aliases (contain ':' or '@') and repo/path
     // shorthands (the '/' and '\\' in the class are intentional); only plain
     // semver ranges qualify.
-    return !/[:/@\\]/.test(spec);
+    return !NON_REGISTRY_SPEC_RE.test(spec);
   }
 
   /**
@@ -158,7 +163,7 @@ export function createVersionResolver(context: ResolutionContext): VersionResolv
     // Strip a leading lowercase 'v' prefix from a version (e.g. "v0.2.0" ->
     // "0.2.0"), but only before a digit so v-prefixed dist-tags like "vnext" (or a
     // capitalized "V2beta") are preserved.
-    version = version.replace(/^v(?=\d)/, "");
+    version = version.replace(VERSION_PREFIX_RE, "");
     assertInstallableVersion(version, filePath);
 
     info(`Resolved ${DISPLAY_NAME} version '${version}' from ${filePath}`);
@@ -376,9 +381,6 @@ export function createVersionResolver(context: ResolutionContext): VersionResolv
   // (`^0.2.0`, `>=0.2.0`, `*`, `||`), marker-less ranges npm still treats as
   // ranges (partial `0.2` / `1`, x-ranges `0.2.x`), and non-registry aliases
   // (`npm:`, `git:`, `file:`, which fail the letter-led tag shape on `:` / `@`).
-  const EXACT_VERSION_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/;
-  const DIST_TAG_RE = /^[A-Za-z][0-9A-Za-z._-]*$/;
-
   function assertInstallableVersion(version: string, filePath: string): void {
     if (EXACT_VERSION_RE.test(version) || DIST_TAG_RE.test(version)) return;
     throw new Error(

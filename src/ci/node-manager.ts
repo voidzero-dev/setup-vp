@@ -1,5 +1,7 @@
 import { parseInstalledVpVersion } from "./version.js";
 
+const VERSION_PARTS_RE = /^(\d+)\.(\d+)\.(\d+)/;
+
 // True and unset leave the installer default unchanged (enabled on CI).
 // False switches to system Node.js after installation via vp env off node
 // (vp env off before 0.3.1), without disabling package-manager management.
@@ -21,7 +23,7 @@ export function parseNodeManager(input: string | undefined): boolean | undefined
 export function supportsScopedEnv(versionOutput: string): boolean {
   const version = parseInstalledVpVersion(versionOutput);
   if (version.startsWith("0.0.0-commit.")) return true;
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)/);
+  const match = version.match(VERSION_PARTS_RE);
   if (!match)
     throw new Error("Could not determine the installed Vite+ version for env configuration.");
   const [, major, minor, patch] = match.map(Number);
