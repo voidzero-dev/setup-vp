@@ -2,6 +2,40 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { runFinalize, runPrepare } from "./index.js";
 
 describe("Azure lifecycle", () => {
+  it("passes the Node selector to bootstrap and activates its exact result", async () => {
+    const run = vi.fn();
+    const installVitePlus = vi.fn(async () => "22.23.1");
+    await runPrepare(
+      {
+        SETUP_VP_VERSION: "1.3.0",
+        SETUP_VP_NODE_VERSION: "22",
+        SYSTEM_DEFAULTWORKINGDIRECTORY: process.cwd(),
+      },
+      {
+        installVitePlus,
+        prepareCacheMetadata: () => ({ ready: false }),
+        configureAuth: () => undefined,
+        setupSfw: async () => ({ executable: "vp", sfw: false }),
+        parseRunInstall: () => [],
+        runInstall: () => undefined,
+        getCommandOutput: () => "vp v1.3.0",
+        run,
+        parseInstalledVpVersion: () => "1.3.0",
+        prependPath: () => undefined,
+        setVariable: () => undefined,
+        logWarning: () => undefined,
+        logInfo: () => undefined,
+      },
+    );
+    expect(installVitePlus).toHaveBeenCalledWith(
+      "1.3.0",
+      expect.objectContaining({
+        projectDir: process.cwd(),
+        nodeVersion: "22",
+      }),
+    );
+    expect(run).toHaveBeenCalledWith("vp", ["env", "use", "22.23.1"], { cwd: process.cwd() });
+  });
   it("runs prepare in install → cache order", async () => {
     const calls: string[] = [];
     await runPrepare(

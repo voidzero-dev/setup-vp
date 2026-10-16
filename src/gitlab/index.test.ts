@@ -95,6 +95,13 @@ describe("GitLab setup parity", () => {
     );
     await main();
     expect(installVitePlus).toHaveBeenCalledWith("0.3.1", expect.any(Object));
+    expect(installVitePlus).toHaveBeenCalledWith(
+      "0.3.1",
+      expect.objectContaining({
+        projectDir: path.join(root, "app"),
+        nodeVersion: "22.15.0",
+      }),
+    );
     expect(run).toHaveBeenCalledWith("vp", ["env", "use", "22.15.0"], {
       cwd: path.join(root, "app"),
     });
@@ -113,6 +120,23 @@ describe("GitLab setup parity", () => {
     expect(readFileSync(path.join(root, "shell.env"), "utf8")).toContain(
       "export SETUP_VP_INSTALLED_VERSION='0.3.1'",
     );
+  });
+
+  it("activates the exact Node version returned by bootstrap", async () => {
+    const root = fixture();
+    vi.stubEnv("SETUP_VP_NODE_VERSION", "22");
+    vi.mocked(installVitePlus).mockResolvedValueOnce("22.23.1");
+    await main();
+    expect(installVitePlus).toHaveBeenCalledWith(
+      "latest",
+      expect.objectContaining({
+        projectDir: path.join(root, "app"),
+        nodeVersion: "22",
+      }),
+    );
+    expect(run).toHaveBeenCalledWith("vp", ["env", "use", "22.23.1"], {
+      cwd: path.join(root, "app"),
+    });
   });
 
   it("reports unknown Node.js and package-manager versions on Vite+ before 0.3.1", async () => {

@@ -50,6 +50,14 @@ Use the shared primitives under [`src/ci/`](src/ci/) for portable runtime behavi
 - GitLab: edit the TypeScript runtime under [`src/gitlab/`](src/gitlab/). The template downloads and runs the `vp pack` bundle at `dist/gitlab/index.mjs`. See the [GitLab integration notes](rfcs/gitlab-integration.md) for design constraints and follow-up work.
 - Azure Pipelines: edit the runtime under [`src/azure/`](src/azure/). Azure cannot execute the GitHub Action bundle; the template runs `dist/azure/index.mjs` in `prepare` and `finalize` phases around `Cache@2`. See the [Azure integration notes](rfcs/azure-pipelines-integration.md) for the design, parity table, and cache semantics.
 
+### Installer Node Selection
+
+All three integrations run the installer from the configured project directory. They pass an explicit Node selector through `VP_SETUP_NODE_VERSION`, with `node-version` taking precedence over `node-version-file`. An empty selector leaves project discovery to the installer. With `node-manager: false`, the selector is `lts` to keep installation independent of project pins.
+
+Installers that support this protocol resolve the selector once and reuse that Node version for installation when it satisfies both the CLI and the pinned pnpm requirements. Otherwise, they use a separate LTS runtime for installation. They write the exact requested version to the temporary path in `VP_SETUP_NODE_VERSION_FILE`; this remains the requested version even when installation needs a fallback. For an explicit input, setup-vp uses that result for `vp env use`. Automatic discovery retains its normal directory scope.
+
+The temporary result is cleared before each installer attempt and removed after installation. Older installers do not write a result, so setup-vp retains the original selector and existing behavior. Updating setup-vp alone does not enable runtime reuse for an older Vite+ release.
+
 ## GitLab End-to-End Tests
 
 Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. GitLab CI has limited capacity, so the [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) runs only for pull requests approved with the `run-e2e` label or manual `workflow_dispatch` requests. The pipeline loads the template, bootstrap script, and compiled runtime from the exact approved PR commit or the manually selected commit or release tag.

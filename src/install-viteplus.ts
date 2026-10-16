@@ -15,8 +15,9 @@ import {
 } from "./ci/vp-dirs.js";
 import type { Inputs } from "./types.js";
 import { DISPLAY_NAME } from "./types.js";
-import { getVitePlusHome } from "./utils.js";
+import { getConfiguredProjectDir, getVitePlusHome } from "./utils.js";
 import { findReusableVitePlus } from "./reuse-viteplus.js";
+import { createInstallerNodeContext } from "./ci/installer-node.js";
 
 // Try each group's URLs in order, for up to N rounds per group (max attempts
 // per group = rounds * URLs). Two rounds × two URLs = 4 attempts, ~1 minute
@@ -24,7 +25,7 @@ import { findReusableVitePlus } from "./reuse-viteplus.js";
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
 
-export async function installVitePlus(inputs: Inputs): Promise<void> {
+export async function installVitePlus(inputs: Inputs): Promise<string | undefined> {
   const { version } = inputs;
 
   const existingDirs = findReusableVitePlus(version);
@@ -40,8 +41,10 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
 
   // TODO: Remove VITE_PLUS_VERSION once vite-plus versions before the VP_* env var
   // rename (see https://github.com/voidzero-dev/vite-plus/pull/1166) are no longer supported.
+  const nodeContext = createInstallerNodeContext(inputs.nodeVersion, inputs.nodeManager);
   const env = {
     ...process.env,
+    ...nodeContext.env,
     VP_VERSION: version,
     VITE_PLUS_VERSION: version,
   } as { [key: string]: string };
@@ -77,7 +80,8 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
       for (const url of urls) {
         attempt++;
         try {
-          const exitCode = await runInstallCommand(url, env);
+          nodeContext.reset();
+          const exitCode = await runInstallCommand(url, env, getConfiguredProjectDir(inputs));
           if (exitCode === 0) return true;
           failureReason = `exit code ${exitCode}`;
         } catch (error) {
@@ -99,7 +103,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     if (pinned.length > 0) {
       if (await tryUrls(pinned)) {
         ensureVitePlusBinInPath(version, dirsFile);
-        return;
+        return nodeContext.resolvedVersion();
       }
       warning(
         `Could not fetch the install script pinned to ${DISPLAY_NAME}@${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
@@ -108,7 +112,7 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
 
     if (await tryUrls(latest)) {
       ensureVitePlusBinInPath(version, dirsFile);
-      return;
+      return nodeContext.resolvedVersion();
     }
 
     throw new Error(
@@ -116,11 +120,16 @@ export async function installVitePlus(inputs: Inputs): Promise<void> {
     );
   } finally {
     if (dirsFile) removeVitePlusDirsFile(dirsFile);
+    nodeContext.dispose();
   }
 }
 
-async function runInstallCommand(url: string, env: { [key: string]: string }): Promise<number> {
-  const options = { env, ignoreReturnCode: true };
+async function runInstallCommand(
+  url: string,
+  env: { [key: string]: string },
+  cwd: string,
+): Promise<number> {
+  const options = { env, cwd, ignoreReturnCode: true };
   const { command, args } = getInstallScriptCommand(
     url,
     process.platform,
