@@ -43,6 +43,18 @@ Commit generated changes under `dist/` with the source changes. Include `dist/in
 
 The [pre-commit hook](.vite-hooks/pre-commit) runs `vp staged`. The staged-file configuration in [vite.config.ts](vite.config.ts) runs `vp check --fix` on staged files. Run the build yourself; the hook does not rebuild the bundles.
 
+### Pull Request Analysis
+
+The [Fallow workflow](.github/workflows/fallow.yml) runs `fallow audit` on pull requests. It checks changed files for unused code, complexity, duplication, and styling issues. Only new findings can fail the check; existing findings do not block adoption.
+
+The action uses the exact `fallow` version in `package.json`. After `vp install`, run the same analysis locally:
+
+```bash
+vp exec fallow audit --base origin/main
+```
+
+[`.fallowrc.json`](.fallowrc.json) declares the three runtime entry points. Fallow excludes generated files under `dist/` by default. Same-repository pull requests receive a result comment. Fork and Dependabot pull requests use annotations and the job summary.
+
 ## Integration Design
 
 Use the shared primitives under [`src/ci/`](src/ci/) for portable runtime behavior.

@@ -1,0 +1,38 @@
+name: Fallow
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fallow-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Vite+ and install dependencies
+        uses: ./
+        with:
+          node-version-file: .node-version
+
+      - name: Audit pull request
+        uses: fallow-rs/fallow@fccff887da0d83db1711379e0a3696dfc2460fdd # v3.33.1
+        with:
+          command: audit
+          # Fork and Dependabot PRs keep annotations and the job summary.
+          comment: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+          branded-token: false
