@@ -19,17 +19,19 @@ function fixture() {
     sha: trustedSha,
     payload: {
       repository: { default_branch: "main" },
-      workflow_run: {
-        id: 42,
-        event: "pull_request",
-        conclusion: "success",
-        path: ".github/workflows/rebuild-bundle.yml",
-        head_repository: { full_name: "upstream/setup-vp" },
-        head_branch: "renovate/vite-plus",
-        head_sha: head,
-        display_title: `Rebuild PR #123 at ${head}`,
-      },
     },
+  };
+  const run = {
+    id: 42,
+    run_attempt: 2,
+    status: "completed",
+    event: "pull_request",
+    conclusion: "success",
+    path: ".github/workflows/rebuild-bundle.yml",
+    head_repository: { full_name: "upstream/setup-vp" },
+    head_branch: "renovate/vite-plus",
+    head_sha: head,
+    display_title: `Rebuild PR #123 at ${head}`,
   };
   const pr = {
     number: 123,
@@ -40,6 +42,7 @@ function fixture() {
   };
   const github = {
     rest: {
+      actions: { getWorkflowRun: vi.fn().mockResolvedValue({ data: run }) },
       repos: {
         getContent: vi.fn().mockResolvedValue({ data: { type: "file", sha: "workflow-blob" } }),
       },
@@ -53,9 +56,15 @@ function fixture() {
       outputs[name] = value;
     },
   };
+  const env = { BUILD_RUN_ID: "42" };
   const execute = (step: { with: { script: string } }): Promise<void> =>
-    runInNewContext(`(async () => {\n${step.with.script}\n})()`, { github, context, core });
-  return { context, pr, github, outputs, execute };
+    runInNewContext(`(async () => {\n${step.with.script}\n})()`, {
+      github,
+      context,
+      core,
+      process: { env },
+    });
+  return { context, run, env, pr, github, outputs, execute };
 }
 
 it("identifies the PR and exact build commit in the run name", () => {
@@ -69,6 +78,7 @@ it("identifies the PR and exact build commit in the run name", () => {
   expect(prepare.env).toEqual({
     PR_NUMBER: "${{ steps.request.outputs.pr-number }}",
     PR_BRANCH: "${{ steps.request.outputs.branch }}",
+    PR_HEAD_SHA: "${{ steps.request.outputs.head-sha }}",
   });
 });
 
@@ -76,7 +86,18 @@ describe("bundle build provenance", () => {
   it("accepts a labeled PR only after checking its workflow and current head", async () => {
     const f = fixture();
     await f.execute(validation);
-    expect(f.outputs).toEqual({ "pr-number": 123, branch: "renovate/vite-plus", ready: "true" });
+    expect(f.outputs).toEqual({
+      "pr-number": 123,
+      branch: "renovate/vite-plus",
+      "head-sha": head,
+      "run-id": 42,
+      "run-attempt": 2,
+      ready: "true",
+    });
+    expect(f.github.rest.actions.getWorkflowRun).toHaveBeenCalledWith({
+      ...f.context.repo,
+      run_id: 42,
+    });
     expect(f.github.rest.repos.getContent).toHaveBeenNthCalledWith(1, {
       ...f.context.repo,
       path: ".github/workflows/rebuild-bundle.yml",
@@ -90,15 +111,27 @@ describe("bundle build provenance", () => {
     expect(f.github.rest.pulls.get).toHaveBeenCalledWith({ ...f.context.repo, pull_number: 123 });
   });
 
+  it.each(["", "0", "-1", "1.5", "1e2", "42\n", "9007199254740992", "$(exit 1)"])(
+    "rejects an invalid run ID %j before using the API",
+    async (runId) => {
+      const f = fixture();
+      f.env.BUILD_RUN_ID = runId;
+      await expect(f.execute(validation)).rejects.toThrow("valid build run ID");
+      expect(f.github.rest.actions.getWorkflowRun).not.toHaveBeenCalled();
+      expect(f.outputs).toEqual({});
+    },
+  );
+
   it.each([
     { event: "push" },
+    { status: "in_progress" },
     { conclusion: "failure" },
     { path: ".github/workflows/impostor.yml" },
     { head_repository: { full_name: "fork/setup-vp" } },
-  ])("ignores an ineligible run: %j", async (changes) => {
+  ])("rejects an ineligible run: %j", async (changes) => {
     const f = fixture();
-    Object.assign(f.context.payload.workflow_run, changes);
-    await f.execute(validation);
+    Object.assign(f.run, changes);
+    await expect(f.execute(validation)).rejects.toThrow("completed same-repository PR rebuild");
     expect(f.outputs).toEqual({});
     expect(f.github.rest.repos.getContent).not.toHaveBeenCalled();
   });
@@ -107,7 +140,7 @@ describe("bundle build provenance", () => {
     "rejects a malformed or mismatched run title: %s",
     async (title) => {
       const f = fixture();
-      f.context.payload.workflow_run.display_title = title;
+      f.run.display_title = title;
       await expect(f.execute(validation)).rejects.toThrow("run head SHA");
       expect(f.outputs).toEqual({});
     },
@@ -123,14 +156,21 @@ describe("bundle build provenance", () => {
     expect(f.github.rest.pulls.get).not.toHaveBeenCalled();
   });
 
-  it.each(["workflow", "pull request"])("fails closed if the %s API fails", async (target) => {
-    const f = fixture();
-    const request =
-      target === "workflow" ? f.github.rest.repos.getContent : f.github.rest.pulls.get;
-    request.mockRejectedValue(new Error("API failure"));
-    await expect(f.execute(validation)).rejects.toThrow("API failure");
-    expect(f.outputs).toEqual({});
-  });
+  it.each(["run", "workflow", "pull request"])(
+    "fails closed if the %s API fails",
+    async (target) => {
+      const f = fixture();
+      const request =
+        target === "run"
+          ? f.github.rest.actions.getWorkflowRun
+          : target === "workflow"
+            ? f.github.rest.repos.getContent
+            : f.github.rest.pulls.get;
+      request.mockRejectedValue(new Error("API failure"));
+      await expect(f.execute(validation)).rejects.toThrow("API failure");
+      expect(f.outputs).toEqual({});
+    },
+  );
 
   it.each(["commit", "fork", "base repository", "branch", "default branch", "closed", "label"])(
     "skips after a change to the PR's %s",
@@ -143,7 +183,7 @@ describe("bundle build provenance", () => {
       if (change === "default branch") {
         f.pr.head.ref = "main";
         f.pr.base.ref = "release";
-        f.context.payload.workflow_run.head_branch = "main";
+        f.run.head_branch = "main";
       }
       if (change === "closed") f.pr.state = "closed";
       if (change === "label") f.pr.labels = [];

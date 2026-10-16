@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: write
+      pull-requests: read
       checks: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Vite+ and install dependencies
-        uses: ./
+        uses: $/.
         with:
           node-version-file: .node-version
 
@@ -33,6 +33,5 @@ jobs:
         uses: fallow-rs/fallow@fccff887da0d83db1711379e0a3696dfc2460fdd # v3.33.1
         with:
           command: audit
-          # Fork and Dependabot PRs keep annotations and the job summary.
-          comment: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+          comment: false
           branded-token: false

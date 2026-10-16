@@ -53,7 +53,7 @@ The action uses the exact `fallow` version in `package.json`. After `vp install`
 vp exec fallow audit --base origin/main
 ```
 
-[`.fallowrc.json`](.fallowrc.json) declares the three runtime entry points. Fallow excludes generated files under `dist/` by default. Same-repository pull requests receive a result comment. Fork and Dependabot pull requests use annotations and the job summary.
+[`.fallowrc.json`](.fallowrc.json) declares the three runtime entry points. Fallow excludes generated files under `dist/` by default. Results appear in annotations, CI logs, and the job summary. The workflow does not write PR comments.
 
 ## Integration Design
 
@@ -64,25 +64,55 @@ Use the shared primitives under [`src/ci/`](src/ci/) for portable runtime behavi
 
 ## GitLab End-to-End Tests
 
-Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. GitLab CI has limited capacity, so the [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) runs only for pull requests approved with the `run-e2e` label or manual `workflow_dispatch` requests. The pipeline loads the template, bootstrap script, and compiled runtime from the exact approved PR commit or the manually selected commit or release tag.
+Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. The [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) accepts `run-e2e` label requests for same-repository PRs and manual `workflow_dispatch` requests on `main`. The job uses the GitLab trigger secret without checking out or executing PR files on the GitHub runner.
 
 ### Request a Run
 
-After reviewing the commit, a maintainer with write access can add `run-e2e` to run the full GitLab suite. This applies to both same-repository and fork PRs. Approve the Actions run if prompted.
+For a same-repository PR, review its current head commit, including workflow changes, then add `run-e2e`:
 
-For each new commit, review the changes and remove and re-add `run-e2e`. Read the PR result comment for the status and GitLab pipeline link after each run.
+```bash
+gh pr edit 123 --add-label run-e2e
+```
 
-Release PRs must pass the full suite on their current head commit before merging. Follow the [release procedure](#releasing) to request and confirm this result.
+The workflow checks that the labeler has repository write access and runs the full suite at the label event's head SHA. After each new commit, review the changes, then remove and re-add `run-e2e`. Keeping the label on a PR does not approve later pushes. The handler rejects stale heads, closed PRs, and requests whose label was removed.
 
-Pushes, merge queue commits, merges, and release tags do not automatically start GitLab pipelines.
+### Manual Runs and Fork PRs
 
-For a manual run, use `workflow_dispatch`. Set `setup_ref` to an exact commit SHA or release tag, or leave it empty to test the selected workflow commit. Select `suite` (`full` by default) and `vite_plus_version` (`latest` by default).
+Fork PRs use manual dispatch because `pull_request` workflows do not receive the GitLab secret from the base repository. For a manual PR run, set the PR number and record its current head SHA. Review that commit before starting the workflow:
+
+```bash
+pr_number=123
+reviewed_sha="$(gh pr view "$pr_number" --json headRefOid --jq .headRefOid)"
+```
+
+After review, start the full suite from the trusted workflow on `main`:
+
+```bash
+gh workflow run gitlab-e2e.yml --ref main \
+  -f pull_request="$pr_number" \
+  -f setup_ref="$reviewed_sha" \
+  -f suite=full
+```
+
+Manual dispatch works for same-repository and fork PRs. The workflow rejects a request if the PR head changes before validation. Each new commit needs another review and request. For both label and manual requests, check the workflow's logs and job summary for the tested commit, suite, pipeline link, and result. The workflow does not write PR comments.
+
+For a standalone run, omit `pull_request`. Set `setup_ref` to an exact commit SHA or release tag, or leave it empty to test the workflow commit. Select `suite` (`full` by default) and `vite_plus_version` (`latest` by default). Manual runs selected on branches other than `main` skip the job.
+
+Pushes, merge queue commits, merges, and release tags do not automatically start GitLab pipelines. Release PRs must pass the full suite on their current head commit before merging; follow the [release procedure](#releasing).
 
 ## Dependency Updates
 
-For same-repository PRs with the `needs-bundle-rebuild` label, [the build workflow](.github/workflows/rebuild-bundle.yml) builds the exact PR commit with read-only access. [The publisher](.github/workflows/publish-bundle.yml) runs separately from the default branch and uses a repository-scoped GitHub App token to update only the three bundles in `dist/`. It validates the bundle files before creating the token and does not execute PR code or downloaded bundles. It skips stale PR heads and unchanged bundles; the commit fails if the branch head changes after validation.
+For same-repository PRs with the `needs-bundle-rebuild` label, [the build workflow](.github/workflows/rebuild-bundle.yml) builds the exact PR commit with read-only access. After a successful build, a maintainer reviews its commit and dispatches [the publisher](.github/workflows/publish-bundle.yml) on `main` with that build's run ID:
 
-The PR's `rebuild-bundle.yml` must match the default branch before the publisher accepts the build. After changes to that workflow reach the default branch, update existing dependency branches and rerun the build. The publisher must be on the default branch to receive build completion events.
+```bash
+gh workflow run publish-bundle.yml --ref main -f run_id=123456789
+```
+
+Replace `123456789` with the completed **Rebuild action bundle** run ID from its Actions URL. Publishing is manual; the label only starts the unprivileged build.
+
+The publisher reads the build record from GitHub and verifies its workflow, repository, and current PR head. It validates the three bundle files before creating a repository-scoped GitHub App token. It never executes PR code or downloaded bundles. It skips stale PR heads and unchanged bundles; the commit fails if the branch head changes after validation.
+
+The PR's `rebuild-bundle.yml` must match the default branch before the publisher accepts the build. After changes to that workflow reach the default branch, update existing dependency branches and rerun the build before dispatching the publisher.
 
 Renovate opens a PR when SocketDev publishes a new `sfw-free` release. The custom manager in [`.github/renovate.json`](.github/renovate.json) updates the shared `SFW_VERSION` pin in `src/ci/install-sfw.ts` for all three integrations.
 
@@ -98,17 +128,11 @@ Publish releases as Git tags, not as an npm package. Keep `package.json.version`
 
    Run the [required checks](#before-committing) and commit the release changes, including any updated bundles. The bootstrap and template tests compare these defaults with `package.json.version`, so an omitted update fails CI. Do not resolve `latest` at runtime or reuse the frozen `v1` tag.
 
-2. Review the release PR's current head commit, then add the `run-e2e` label to request the full GitLab suite. From the release PR branch:
+2. Review the release PR's current head commit, then add `run-e2e` for a same-repository PR or dispatch the full suite from `main` for a fork. Follow the [GitLab E2E procedures](#gitlab-end-to-end-tests). After any new commit, including an update from `main`, review the changes and remove and re-add the label or dispatch another run for the new SHA.
 
-   ```bash
-   gh pr edit --add-label run-e2e
-   ```
+3. Merge the release PR only after GitHub CI and the full GitLab suite pass. Check the GitLab E2E job summary: its result must be `success`, its suite must be `full`, and its tested commit must still match the PR head.
 
-   Follow the [GitLab E2E procedures](#gitlab-end-to-end-tests). After any new commit, including an update from `main`, review the changes and remove and re-add `run-e2e`.
-
-3. Merge the release PR only after GitHub CI and the full GitLab suite pass. Confirm that the latest PR result comment says **GitLab E2E passed**, reports `Suite: full`, and names the current PR head SHA. A successful `GitLab E2E request` workflow only confirms the request; it does not confirm that GitLab tests passed.
-
-   Keep the PR open if verification fails, is cancelled, or has no result for the current head. Fix the failure, including outdated fixtures in the dedicated GitLab test project when needed, then remove and re-add `run-e2e`. Wait for a passing result before merging. Do not defer this check to a manual run after merging or bypass it with an administrator merge.
+   Keep the PR open if verification fails, is cancelled, or has no result for the current head. Fix the failure, including outdated fixtures in the dedicated GitLab test project when needed, then request another run. Wait for a passing result before merging. Do not defer this check until after merging or bypass it with an administrator merge.
 
 4. Update `main` and confirm that `HEAD` is the release PR's merge commit. Confirm that all three bundles in `dist/` are in sync. The working tree must stay clean after building:
 
