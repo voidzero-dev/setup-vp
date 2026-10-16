@@ -1,19 +1,20 @@
 name: Publish rebuilt action bundle
 
-# workflow_run loads this publisher from the default branch. Never check out
-# PR code, restore its caches, or execute anything from the downloaded artifact.
+# Maintainers dispatch this publisher on main after reviewing a completed build.
+# Never check out PR code, restore its caches, or execute downloaded artifacts.
 on:
-  # Default-branch code validates the workflow blob, current PR head, and bundle
-  # allowlist before creating the App token. Downloaded bundles are never run.
-  workflow_run: # zizmor: ignore[dangerous-triggers]
-    workflows: [Rebuild action bundle]
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Successful Rebuild action bundle run ID to publish."
+        required: true
+        type: string
 
 permissions: {}
 
 jobs:
   publish:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -24,15 +25,23 @@ jobs:
       - name: Validate the build request
         id: request
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BUILD_RUN_ID: ${{ inputs.run_id }}
         with:
           script: |
-            const run = context.payload.workflow_run;
+            const runId = process.env.BUILD_RUN_ID;
+            if (!/^[1-9][0-9]*$/.test(runId) || !Number.isSafeInteger(Number(runId)) ||
+                String(Number(runId)) !== runId) {
+              throw new Error('Enter a valid build run ID.');
+            }
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              ...context.repo, run_id: Number(runId),
+            });
             const repository = `${context.repo.owner}/${context.repo.repo}`;
             const path = '.github/workflows/rebuild-bundle.yml';
-            if (run.event !== 'pull_request' || run.conclusion !== 'success' ||
+            if (run.event !== 'pull_request' || run.status !== 'completed' || run.conclusion !== 'success' ||
                 run.path !== path || run.head_repository?.full_name !== repository) {
-              core.info('This run is not a successful same-repository PR rebuild.');
-              return;
+              throw new Error('Select a successful, completed same-repository PR rebuild.');
             }
 
             const match = /^Rebuild PR #([1-9][0-9]*) at ([0-9a-f]{40})$/.exec(run.display_title);
@@ -63,16 +72,19 @@ jobs:
             }
             core.setOutput('pr-number', pr.number);
             core.setOutput('branch', pr.head.ref);
+            core.setOutput('head-sha', run.head_sha);
+            core.setOutput('run-id', run.id);
+            core.setOutput('run-attempt', run.run_attempt);
             core.setOutput('ready', 'true');
 
       - name: Download bundles from this build attempt
         if: steps.request.outputs.ready == 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: rebuilt-bundles-${{ github.event.workflow_run.run_attempt }}
+          name: rebuilt-bundles-${{ steps.request.outputs.run-attempt }}
           path: ${{ runner.temp }}/rebuilt-bundles
           github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.request.outputs.run-id }}
 
       - name: Validate bundles and prepare commit
         id: prepare
@@ -81,6 +93,7 @@ jobs:
         env:
           PR_NUMBER: ${{ steps.request.outputs.pr-number }}
           PR_BRANCH: ${{ steps.request.outputs.branch }}
+          PR_HEAD_SHA: ${{ steps.request.outputs.head-sha }}
         with:
           script: |
             const fs = require('node:fs');
@@ -88,7 +101,7 @@ jobs:
             const { createHash } = require('node:crypto');
             const expected = {
               number: Number(process.env.PR_NUMBER),
-              head: { sha: context.payload.workflow_run.head_sha, ref: process.env.PR_BRANCH },
+              head: { sha: process.env.PR_HEAD_SHA, ref: process.env.PR_BRANCH },
             };
             const repository = `${context.repo.owner}/${context.repo.repo}`;
             const { data: pr } = await github.rest.pulls.get({

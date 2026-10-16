@@ -3,7 +3,7 @@ run-name: "Rebuild PR #${{ github.event.pull_request.number }} at ${{ github.eve
 
 # The `needs-bundle-rebuild` label (Renovate adds it for bumps to deps compiled
 # into dist/, or to the vite-plus bundler) triggers a read-only build.
-# publish-bundle.yml runs on a separate runner and commits the artifact.
+# A maintainer dispatches publish-bundle.yml on main to commit a reviewed build.
 # `synchronize` retries after rebases; publishing stops when dist/ is unchanged.
 # The publisher verifies this workflow's Git blob before trusting its run name.
 on:

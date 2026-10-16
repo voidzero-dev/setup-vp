@@ -69,8 +69,8 @@ function fixture() {
   };
   const context = {
     repo: { owner: "upstream", repo: "setup-vp" },
-    payload: { workflow_run: { head_sha: headSha, head_branch: pr.head.ref } },
   };
+  const request = { headSha, branch: pr.head.ref };
   const tree = {
     truncated: false,
     tree: bundleFiles.map((file) => ({
@@ -101,7 +101,8 @@ function fixture() {
         env: {
           RUNNER_TEMP: dir,
           PR_NUMBER: String(pr.number),
-          PR_BRANCH: context.payload.workflow_run.head_branch,
+          PR_BRANCH: request.branch,
+          PR_HEAD_SHA: request.headSha,
         },
       },
     });
@@ -112,6 +113,7 @@ function fixture() {
     pr,
     tree,
     context,
+    request,
     github,
     core,
     prepare: () => run(prepareStep),
@@ -146,9 +148,13 @@ describe("bundle rebuild credential isolation", () => {
   });
 
   it("creates a contents-only App token after validation in a default-branch workflow", () => {
-    expect(publisher.on).toEqual({
-      workflow_run: { workflows: [workflow.name], types: ["completed"] },
+    expect(Object.keys(publisher.on)).toEqual(["workflow_dispatch"]);
+    expect(publisher.on.workflow_dispatch.inputs.run_id).toEqual({
+      description: "Successful Rebuild action bundle run ID to publish.",
+      required: true,
+      type: "string",
     });
+    expect(publisher.jobs.publish.if).toBe("github.ref == 'refs/heads/main'");
     expect(publisher.permissions).toEqual({});
     expect(publisher.jobs.publish.permissions).toEqual({
       actions: "read",
@@ -164,10 +170,10 @@ describe("bundle rebuild credential isolation", () => {
     ]);
     expect(commitSteps.every((step) => !step.run && /@[a-f0-9]{40}$/.test(step.uses!))).toBe(true);
     expect(commitSteps[1].with).toEqual({
-      name: "rebuilt-bundles-${{ github.event.workflow_run.run_attempt }}",
+      name: "rebuilt-bundles-${{ steps.request.outputs.run-attempt }}",
       path: "${{ runner.temp }}/rebuilt-bundles",
       "github-token": "${{ github.token }}",
-      "run-id": "${{ github.event.workflow_run.id }}",
+      "run-id": "${{ steps.request.outputs.run-id }}",
     });
     expect(buildSteps.at(-1)!.with!.name).toBe("rebuilt-bundles-${{ github.run_attempt }}");
     expect(commitSteps[3].with).toEqual({
@@ -315,7 +321,7 @@ describe("bundle artifact validation and commit", () => {
     const f = fixture();
     const branch = "renovate/$(echo-injected)";
     f.pr.head.ref = branch;
-    f.context.payload.workflow_run.head_branch = branch;
+    f.request.branch = branch;
     const content = "`${process.env.APP_TOKEN}`\n$(echo injected)\n\u0000\u00e9";
     writeFileSync(join(f.root, "index.mjs"), content);
     await f.prepare();
