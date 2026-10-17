@@ -30,7 +30,7 @@ export async function runMain(inputs: Inputs): Promise<void> {
   // Step 2: Resolve the Vite+ version (version > version-file > package.json >
   // lockfile > latest; see resolveVitePlusVersion) and install it.
   const version = resolveVitePlusVersion(inputs, projectDir);
-  await installVitePlus({ ...inputs, version });
+  nodeVersion = (await installVitePlus({ ...inputs, version, nodeVersion })) ?? nodeVersion;
 
   const versionOutput =
     inputs.nodeManager === false || inputs.packageManager !== undefined
@@ -45,7 +45,7 @@ export async function runMain(inputs: Inputs): Promise<void> {
     await exec("vp", nodeManagerOffArgs(versionOutput));
   } else if (nodeVersion) {
     info(`Setting up Node.js ${nodeVersion} via vp env use...`);
-    await exec("vp", ["env", "use", nodeVersion]);
+    await exec("vp", ["env", "use", nodeVersion], { cwd: projectDir });
   }
 
   for (const args of packageManagerCommands) {

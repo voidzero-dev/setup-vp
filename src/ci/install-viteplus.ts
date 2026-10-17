@@ -2,16 +2,15 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { spawnSync } from "node:child_process";
-import { getInstallScriptUrls, pkgPrNewCommitSha } from "./install-script-urls.js";
+import { getInstallScriptUrls } from "./install-script-urls.js";
 import { isWindows } from "./platform.js";
+import { createInstallerNodeContext } from "./installer-node.js";
+import { createInstallerEnvironment } from "./installer-env.js";
 import {
   appendFallbackBinToPath,
-  createVitePlusDirsFile,
   getInstallScriptCommand,
   removeVitePlusDirsFile,
   resolveVitePlusBinDirs,
-  supportsVitePlusDirs,
-  VP_DIRS_FILE_ENV,
 } from "./vp-dirs.js";
 
 const INSTALL_MAX_ROUNDS = 2;
@@ -29,10 +28,12 @@ function runInstallCommand(
   url: string,
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform,
+  cwd?: string,
 ): number {
   const { command, args } = getInstallScriptCommand(url, platform, env.VP_VPDIRS_AWARE === "1");
   const spawnOptions = {
     env: { ...process.env, ...env },
+    cwd,
     stdio: "inherit" as const,
   };
   let result = spawnSync(command, args, spawnOptions);
@@ -53,13 +54,16 @@ export async function installVitePlus(
   options: {
     platform?: NodeJS.Platform;
     env?: NodeJS.ProcessEnv;
+    projectDir?: string;
+    nodeVersion?: string;
+    nodeManager?: boolean;
     prependPath?: (binDir: string) => void;
     exportPath?: (path: string) => void;
     sleep?: (ms: number) => Promise<void>;
     runInstall?: typeof runInstallCommand;
     logWarningFn?: (message: string) => void;
   } = {},
-): Promise<void> {
+): Promise<string | undefined> {
   const platform = options.platform ?? process.platform;
   const targetEnv = options.env ?? process.env;
   const prependPath = options.prependPath;
@@ -67,30 +71,12 @@ export async function installVitePlus(
   const runInstall = options.runInstall ?? runInstallCommand;
   const warn = options.logWarningFn ?? console.warn;
 
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(targetEnv).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VP_VERSION: version,
-    VITE_PLUS_VERSION: version,
-  };
-
-  const detectDirs = supportsVitePlusDirs(version);
-  const dirsFile = detectDirs ? createVitePlusDirsFile() : undefined;
-  if (dirsFile) {
-    env.VP_VPDIRS_AWARE = "1";
-    env[VP_DIRS_FILE_ENV] = dirsFile;
-  } else {
-    delete env.VP_VPDIRS_AWARE;
-    delete env[VP_DIRS_FILE_ENV];
-  }
-
-  const prVersion = pkgPrNewCommitSha(version);
-  if (prVersion) {
-    env.VP_PR_VERSION = prVersion;
-  }
+  const nodeContext = createInstallerNodeContext(
+    options.nodeVersion,
+    options.nodeManager,
+    options.projectDir,
+  );
+  const { env, dirsFile } = createInstallerEnvironment(version, targetEnv, nodeContext.env);
 
   // Prefer the install script pinned to the requested version's git ref. Fall
   // back to the latest script only after all pinned sources fail (see
@@ -106,7 +92,8 @@ export async function installVitePlus(
       for (const url of urls) {
         attempt += 1;
         try {
-          const exitCode = runInstall(url, env, platform);
+          nodeContext.reset();
+          const exitCode = runInstall(url, env, platform, options.projectDir);
           if (exitCode === 0) return true;
           failureReason = `exit code ${exitCode}`;
         } catch (error) {
@@ -145,7 +132,7 @@ export async function installVitePlus(
     if (pinned.length > 0) {
       if (await tryUrls(pinned)) {
         ensureBinInPath();
-        return;
+        return nodeContext.resolvedVersion();
       }
       warn(
         `setup-vp: could not fetch the install script pinned to Vite+ ${version}. Falling back to the latest install script. The latest script may not be compatible with ${version}.`,
@@ -154,7 +141,7 @@ export async function installVitePlus(
 
     if (await tryUrls(latest)) {
       ensureBinInPath();
-      return;
+      return nodeContext.resolvedVersion();
     }
 
     throw new Error(
@@ -162,5 +149,6 @@ export async function installVitePlus(
     );
   } finally {
     if (dirsFile) removeVitePlusDirsFile(dirsFile);
+    nodeContext.dispose();
   }
 }

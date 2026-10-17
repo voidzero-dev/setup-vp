@@ -32,6 +32,20 @@ beforeEach(() => {
 });
 
 describe("portable installer shell selection", () => {
+  it("passes Node selection and project cwd through the PowerShell fallback", async () => {
+    spawnSync.mockImplementation(
+      (command: string, _args: string[], spawnOptions: SpawnSyncOptions) => {
+        expect(spawnOptions.cwd).toBe("C:\\project");
+        expect(spawnOptions.env?.VP_SETUP_NODE_VERSION).toBe("22");
+        if (command === "pwsh") return result(null, missingCommand);
+        writeFileSync(spawnOptions.env!.VP_SETUP_NODE_VERSION_FILE!, "22.23.1");
+        return result(0);
+      },
+    );
+    expect(
+      await installVitePlus("0.2.9", { ...options, projectDir: "C:\\project", nodeVersion: "22" }),
+    ).toBe("22.23.1");
+  });
   it.each(["0.2.9", "0.3.1"])(
     "uses Windows PowerShell when pwsh is missing for Vite+ %s",
     async (version) => {

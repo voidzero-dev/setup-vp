@@ -62,6 +62,14 @@ Use the shared primitives under [`src/ci/`](src/ci/) for portable runtime behavi
 - GitLab: edit the TypeScript runtime under [`src/gitlab/`](src/gitlab/). The template downloads and runs the `vp pack` bundle at `dist/gitlab/index.mjs`. See the [GitLab integration notes](rfcs/gitlab-integration.md) for design constraints and follow-up work.
 - Azure Pipelines: edit the runtime under [`src/azure/`](src/azure/). Azure cannot execute the GitHub Action bundle; the template runs `dist/azure/index.mjs` in `prepare` and `finalize` phases around `Cache@2`. See the [Azure integration notes](rfcs/azure-pipelines-integration.md) for the design, parity table, and cache semantics.
 
+### Installer Node Selection
+
+All three integrations run the installer from the configured project directory. setup-vp selects the Node version: `node-version` takes precedence over `node-version-file`, followed by automatic project discovery. Discovery checks `.node-version`, `package.json#devEngines.runtime`, `package.json#engines.node`, and `.nvmrc` in each directory before checking its parent. It passes the selected value through `VP_SETUP_NODE_VERSION`. With no selection or with `node-manager: false`, it clears the override so the installer keeps its LTS default.
+
+Installers that support this protocol resolve an explicit environment override once and reuse that Node version when it satisfies both the CLI and the pinned pnpm requirements. Otherwise, they use a separate LTS runtime for installation. The installer itself does not discover project pins or apply normal Node session or user defaults. For an override, it writes the exact requested version to the temporary path in `VP_SETUP_NODE_VERSION_FILE`; this remains the requested version even when installation needs a fallback. For an explicit input, setup-vp uses that result for `vp env use`. Automatic discovery retains its normal directory scope.
+
+The temporary result is cleared before each installer attempt and removed after installation. Older installers do not write a result, so setup-vp retains the original selector and existing behavior. Updating setup-vp alone does not enable runtime reuse for an older Vite+ release.
+
 ## GitLab End-to-End Tests
 
 Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. The [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) accepts `run-e2e` label requests for same-repository PRs and manual `workflow_dispatch` requests on `main`. The job uses the GitLab trigger secret without checking out or executing PR files on the GitHub runner.

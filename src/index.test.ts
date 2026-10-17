@@ -45,6 +45,9 @@ import { setupSfw } from "./install-sfw.js";
 import { runViteInstall } from "./run-install.js";
 import { resolveVitePlusVersion } from "./version-file.js";
 import type { Inputs } from "./types.js";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const mockedInfo = vi.mocked(info);
 const mockedSaveCache = vi.mocked(saveCache);
@@ -58,6 +61,28 @@ const inputs = (cache: boolean, cacheSave: boolean): Inputs => ({
 });
 
 describe("runMain sfw", () => {
+  it("passes a Node version file to bootstrap and activates its exact result", async () => {
+    const project = mkdtempSync(join(tmpdir(), "setup-vp-node-file-"));
+    writeFileSync(join(project, ".nvmrc"), "22");
+    vi.mocked(installVitePlus).mockResolvedValueOnce("22.23.1");
+    vi.mocked(resolveVitePlusVersion).mockReturnValue("1.3.0");
+    const requested = {
+      ...inputs(false, true),
+      workingDirectory: project,
+      nodeVersionFile: ".nvmrc",
+    };
+    try {
+      await runMain(requested);
+      expect(installVitePlus).toHaveBeenCalledWith({
+        ...requested,
+        version: "1.3.0",
+        nodeVersion: "22",
+      });
+      expect(exec).toHaveBeenCalledWith("vp", ["env", "use", "22.23.1"], { cwd: project });
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
   it("passes the selected sfw executable to the install runner", async () => {
     vi.mocked(resolveVitePlusVersion).mockReturnValue("latest");
     const command = { executable: "/trusted/sfw", sfw: true };

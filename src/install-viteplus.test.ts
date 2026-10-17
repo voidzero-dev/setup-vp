@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { exec } from "@actions/exec";
 import { addPath, exportVariable, warning } from "@actions/core";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { installVitePlus } from "./install-viteplus.js";
@@ -93,6 +93,47 @@ describe("installVitePlus", () => {
     expect(exec).toHaveBeenCalledTimes(1);
     expect(warning).not.toHaveBeenCalled();
     expect(addPath).toHaveBeenCalledWith("/test/data/bin");
+  });
+
+  it("passes the requested Node version and project directory before installation", async () => {
+    let resultFile = "";
+    vi.mocked(exec).mockImplementationOnce(async (_command, _args, options) => {
+      expect(options?.cwd).toBe(process.cwd());
+      expect(options?.env?.VP_SETUP_NODE_VERSION).toBe("22");
+      resultFile = options!.env!.VP_SETUP_NODE_VERSION_FILE!;
+      writeFileSync(resultFile, "22.23.1");
+      writeDirsFile(options, "/test/data/bin");
+      return 0;
+    });
+    expect(
+      await installVitePlus({ ...baseInputs, nodeVersion: "22", workingDirectory: process.cwd() }),
+    ).toBe("22.23.1");
+    expect(existsSync(resultFile)).toBe(false);
+  });
+
+  it("discards the Node result from a failed attempt", async () => {
+    vi.mocked(exec).mockImplementationOnce(async (_command, _args, options) => {
+      writeFileSync(options!.env!.VP_SETUP_NODE_VERSION_FILE!, "22.23.1");
+      return 1;
+    });
+    mockSuccessfulInstallOnce();
+    expect(await installVitePlus({ ...baseInputs, nodeVersion: "22" })).toBeUndefined();
+  });
+
+  it("discovers the project Node before invoking the GitHub installer without creating a session override", async () => {
+    const root = mkdtempSync(join(tmpdir(), "setup-vp-node-discovery-"));
+    writeFileSync(join(root, ".node-version"), "22.18.0");
+    vi.mocked(exec).mockImplementationOnce(async (_command, _args, options) => {
+      expect(options?.env?.VP_SETUP_NODE_VERSION).toBe("22.18.0");
+      writeFileSync(options!.env!.VP_SETUP_NODE_VERSION_FILE!, "22.18.0");
+      writeDirsFile(options, "/test/data/bin");
+      return 0;
+    });
+    try {
+      expect(await installVitePlus({ ...baseInputs, workingDirectory: root })).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("reuses a validated installation and puts it first on PATH", async () => {
