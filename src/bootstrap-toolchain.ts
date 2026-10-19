@@ -26,6 +26,9 @@ export async function bootstrapToolchain(
     const bootstrapEnv: Record<string, string> = {
       ...env,
       VP_SELF_SETUP_SHELL: windows ? "powershell" : "sh",
+      // The action exports PATH for this process and later workflow steps.
+      // Avoid shell-profile edits and a PowerShell process to change user PATH.
+      VP_SELF_SETUP_NO_MODIFY_PATH: "1",
       ...(windows && !env.VP_SHELL ? { VP_SHELL: "powershell" } : {}),
     };
     delete bootstrapEnv.VP_SELF_SETUP_SUPPORT_CHECK;

@@ -59,6 +59,7 @@ describe("cached native bootstrap", () => {
     const childEnv = vi.mocked(exec).mock.calls[0]![2]!.env!;
     expect(childEnv.VP_SELF_SETUP_SHELL).toBe(process.platform === "win32" ? "powershell" : "sh");
     expect(childEnv.VP_SETUP_NODE_VERSION).toBe("24.22.0");
+    expect(childEnv.VP_SELF_SETUP_NO_MODIFY_PATH).toBe("1");
     expect(childEnv.VP_DUMP_DIRS).toBeUndefined();
     expect(childEnv.VP_SELF_SETUP_SUPPORT_CHECK).toBeUndefined();
     expect(env.VP_DUMP_DIRS).toBe("1");
