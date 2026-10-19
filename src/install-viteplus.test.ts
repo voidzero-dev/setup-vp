@@ -7,6 +7,8 @@ import { delimiter, join } from "node:path";
 import { installVitePlus } from "./install-viteplus.js";
 import { findReusableVitePlus } from "./reuse-viteplus.js";
 import type { Inputs } from "./types.js";
+import { bootstrapToolchain } from "./bootstrap-toolchain.js";
+import type { ToolchainCachePlan } from "./ci/toolchain-cache.js";
 
 const windows = process.platform === "win32";
 const installerExtension = windows ? "ps1" : "sh";
@@ -23,6 +25,7 @@ vi.mock("@actions/exec", () => ({
 }));
 
 vi.mock("./reuse-viteplus.js", () => ({ findReusableVitePlus: vi.fn() }));
+vi.mock("./bootstrap-toolchain.js", () => ({ bootstrapToolchain: vi.fn() }));
 
 vi.mock("node:timers/promises", () => ({
   setTimeout: vi.fn().mockResolvedValue(undefined),
@@ -146,6 +149,27 @@ describe("installVitePlus", () => {
     expect(addPath).toHaveBeenCalledWith("/existing/bin");
     expect(exec).not.toHaveBeenCalled();
   });
+
+  it("activates a validated cache without downloading a shell installer", async () => {
+    const plan = { version: "1.3.0" } as ToolchainCachePlan;
+    vi.mocked(bootstrapToolchain).mockResolvedValue({ bin: "/cached/bin" });
+    await installVitePlus({ ...baseInputs, version: plan.version }, plan);
+    expect(bootstrapToolchain).toHaveBeenCalledWith(plan, expect.any(Object), expect.any(String));
+    expect(exec).not.toHaveBeenCalled();
+    expect(addPath).toHaveBeenCalledWith("/cached/bin");
+  });
+
+  it.each([undefined, new Error("native setup failed")])(
+    "falls back when native setup is unavailable (%s)",
+    async (error) => {
+      const plan = { version: "1.3.0" } as ToolchainCachePlan;
+      if (error) vi.mocked(bootstrapToolchain).mockRejectedValue(error);
+      mockSuccessfulInstallOnce();
+      await installVitePlus({ ...baseInputs, version: plan.version }, plan);
+      expect(exec).toHaveBeenCalledOnce();
+      expect(addPath).toHaveBeenCalledWith("/test/data/bin");
+    },
+  );
 
   it.each(["fresh", "reused"])(
     "exports fallback shims after system tools for a %s installation",

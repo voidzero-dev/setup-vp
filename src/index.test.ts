@@ -27,6 +27,10 @@ vi.mock("./toolchain-cache.js", () => ({
   restoreToolchainCache: vi.fn(),
   saveToolchainCache: vi.fn(),
 }));
+vi.mock("./package-manager-cache.js", () => ({
+  restorePackageManagerCache: vi.fn(),
+  savePackageManagerCache: vi.fn(),
+}));
 vi.mock("@actions/exec", () => ({
   exec: vi.fn(),
   getExecOutput: vi.fn(async () => ({ stdout: "vp v0.3.2" })),
@@ -44,6 +48,8 @@ import { info, setOutput, warning } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
 import { saveCache } from "./cache-save.js";
 import { restoreToolchainCache, saveToolchainCache } from "./toolchain-cache.js";
+import { createToolchainCachePlan } from "./ci/toolchain-cache.js";
+import { restorePackageManagerCache, savePackageManagerCache } from "./package-manager-cache.js";
 import { runMain, runPost } from "./index.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { setupSfw } from "./install-sfw.js";
@@ -69,25 +75,39 @@ const inputs = (cache: boolean, cacheSave: boolean): Inputs => ({
 describe("runMain toolchain cache", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("restores before the installer with the resolved versions", async () => {
-    vi.mocked(resolveVitePlusVersion).mockReturnValue("1.3.0");
-    const requested = {
-      ...inputs(false, true),
-      cacheToolchain: true,
-      nodeVersion: "22.23.1",
-      workingDirectory: tmpdir(),
-    };
-    await runMain(requested);
-    expect(restoreToolchainCache).toHaveBeenCalledWith({
-      version: "1.3.0",
-      nodeVersion: "22.23.1",
-      nodeManager: undefined,
-      projectDir: tmpdir(),
-    });
-    expect(vi.mocked(restoreToolchainCache).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(installVitePlus).mock.invocationCallOrder[0]!,
-    );
-  });
+  it.each([false, true])(
+    "passes only validated cache hits to native setup (hit: %s)",
+    async (hit) => {
+      vi.mocked(resolveVitePlusVersion).mockReturnValue("1.3.0");
+      const plan = createToolchainCachePlan(
+        { version: "1.3.0", nodeVersion: "22.23.1", projectDir: tmpdir() },
+        { VP_HOME: join(tmpdir(), "vp-test") },
+      );
+      vi.mocked(restoreToolchainCache).mockResolvedValueOnce({ plan: plan!, hit });
+      const requested = {
+        ...inputs(false, true),
+        cacheToolchain: true,
+        nodeVersion: "22.23.1",
+        workingDirectory: tmpdir(),
+      };
+      await runMain(requested);
+      expect(restoreToolchainCache).toHaveBeenCalledWith({
+        version: "1.3.0",
+        nodeVersion: "22.23.1",
+        nodeManager: undefined,
+        projectDir: tmpdir(),
+      });
+      expect(vi.mocked(restoreToolchainCache).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(installVitePlus).mock.invocationCallOrder[0]!,
+      );
+      expect(restorePackageManagerCache).toHaveBeenCalledWith(tmpdir(), plan);
+      const call = vi.mocked(installVitePlus).mock.calls[0]!;
+      expect(call[1]).toEqual(hit ? plan : undefined);
+      expect(vi.mocked(installVitePlus).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(restorePackageManagerCache).mock.invocationCallOrder[0]!,
+      );
+    },
+  );
 });
 
 describe("runMain sfw", () => {
@@ -103,11 +123,14 @@ describe("runMain sfw", () => {
     };
     try {
       await runMain(requested);
-      expect(installVitePlus).toHaveBeenCalledWith({
-        ...requested,
-        version: "1.3.0",
-        nodeVersion: "22",
-      });
+      expect(installVitePlus).toHaveBeenCalledWith(
+        {
+          ...requested,
+          version: "1.3.0",
+          nodeVersion: "22",
+        },
+        undefined,
+      );
       expect(exec).toHaveBeenCalledWith("vp", ["env", "use", "22.23.1"], { cwd: project });
     } finally {
       rmSync(project, { recursive: true, force: true });
@@ -132,7 +155,7 @@ describe("runMain sfw", () => {
 
     await runMain(requested);
 
-    expect(installVitePlus).toHaveBeenCalledWith({ ...requested, version });
+    expect(installVitePlus).toHaveBeenCalledWith({ ...requested, version }, undefined);
     expect(setupSfw).toHaveBeenCalledWith({ ...requested, version });
     expect(runViteInstall).toHaveBeenCalledWith(requested, { executable: "vp", sfw: false });
   });
@@ -244,6 +267,7 @@ describe("runPost", () => {
 
     expect(mockedSaveCache).not.toHaveBeenCalled();
     expect(saveToolchainCache).not.toHaveBeenCalled();
+    expect(savePackageManagerCache).not.toHaveBeenCalled();
     expect(mockedInfo).not.toHaveBeenCalled();
   });
 
@@ -253,6 +277,7 @@ describe("runPost", () => {
       await runPost({ ...inputs(true, false), cacheToolchain });
 
       expect(saveToolchainCache).not.toHaveBeenCalled();
+      expect(savePackageManagerCache).not.toHaveBeenCalled();
       expect(mockedSaveCache).not.toHaveBeenCalled();
       expect(mockedInfo).toHaveBeenCalledWith("Cache saving is disabled. Skipping cache save.");
     },
@@ -262,6 +287,7 @@ describe("runPost", () => {
     await runPost({ ...inputs(false, true), cacheToolchain: true });
 
     expect(saveToolchainCache).toHaveBeenCalledOnce();
+    expect(savePackageManagerCache).toHaveBeenCalledOnce();
     expect(mockedSaveCache).not.toHaveBeenCalled();
   });
 
@@ -270,25 +296,21 @@ describe("runPost", () => {
 
     expect(mockedSaveCache).toHaveBeenCalledOnce();
     expect(saveToolchainCache).not.toHaveBeenCalled();
+    expect(savePackageManagerCache).not.toHaveBeenCalled();
     expect(mockedInfo).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["toolchain", saveToolchainCache, saveCache],
-    ["dependency", saveCache, saveToolchainCache],
+    ["toolchain", saveToolchainCache],
+    ["dependency", saveCache],
+    ["package manager", savePackageManagerCache],
   ] as const)(
-    "starts both saves together and waits for both when the %s cache finishes first",
-    async (_name, firstSave, lastSave) => {
-      let finishFirst!: () => void;
-      let finishLast!: () => void;
-      vi.mocked(firstSave).mockReturnValueOnce(
+    "starts all cache saves together and waits for the %s cache",
+    async (_name, pendingSave) => {
+      let finish!: () => void;
+      vi.mocked(pendingSave).mockReturnValueOnce(
         new Promise<void>((resolve) => {
-          finishFirst = resolve;
-        }),
-      );
-      vi.mocked(lastSave).mockReturnValueOnce(
-        new Promise<void>((resolve) => {
-          finishLast = resolve;
+          finish = resolve;
         }),
       );
       const completed = vi.fn();
@@ -296,16 +318,15 @@ describe("runPost", () => {
 
       try {
         expect(saveToolchainCache).toHaveBeenCalledOnce();
+        expect(savePackageManagerCache).toHaveBeenCalledOnce();
         expect(saveCache).toHaveBeenCalledOnce();
-        finishFirst();
         await setImmediate();
         expect(completed).not.toHaveBeenCalled();
-        finishLast();
+        finish();
         await post;
         expect(completed).toHaveBeenCalledOnce();
       } finally {
-        finishFirst();
-        finishLast();
+        finish();
         await post;
       }
     },
