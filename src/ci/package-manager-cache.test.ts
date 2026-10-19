@@ -61,6 +61,21 @@ afterEach(() => {
 });
 
 describe("package manager cache selection", () => {
+  it("accepts equivalent paths without trusting directories outside the selected version", () => {
+    const { manager, create } = fixture();
+    manager.bin_paths.pnpm = manager.bin_paths.pnpm.replace(
+      "pnpm/12.14.0",
+      "pnpm/unused/../12.14.0",
+    );
+    expect(create()).toBeDefined();
+    manager.bin_paths.pnpm = join(root, "outside/pnpm");
+    expect(create()).toBeUndefined();
+  });
+  it.skipIf(process.platform !== "win32")("normalizes mixed Windows path separators", () => {
+    const { manager, create } = fixture("pnpm", "win32");
+    manager.bin_paths.pnpm = manager.bin_paths.pnpm.replaceAll("\\", "/");
+    expect(create()).toBeDefined();
+  });
   it.each(["npm", "pnpm", "yarn", "bun"])(
     "selects only the resolved %s version directory",
     (name) => {

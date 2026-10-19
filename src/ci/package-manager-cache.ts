@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { valid } from "semver";
 import type { ToolchainCachePlan } from "./toolchain-cache.js";
 
@@ -75,7 +75,8 @@ export function createPackageManagerCachePlan(
   // Vite+ reports .cmd until a native Windows manager is installed. Accept both
   // forms, but never cache system managers, bundled npm, or an unknown layout.
   const candidates = platform === "win32" ? [`${expected}.cmd`, `${expected}.exe`] : [expected];
-  if (typeof bin !== "string" || !candidates.includes(bin)) return;
+  if (typeof bin !== "string" || !isAbsolute(bin)) return;
+  if (!candidates.some((candidate) => resolve(candidate) === resolve(bin))) return;
   return {
     key: `${toolchain.key}-pm-${name}-${version}-${configurationHash(projectDir, env)}`,
     name,
