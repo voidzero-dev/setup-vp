@@ -37,7 +37,7 @@ jobs:
 
       - name: Setup Vite+ seed
         id: setup
-        uses: voidzero-dev/setup-vp@f28bb92ea995da2055edc7b12d14a1ac245f1fc6
+        uses: voidzero-dev/setup-vp@bf8eeb4333ae9701e8dac97d0d7588378af7af24
         with:
           version: 1.3.0
           node-version: "24.22.0"
@@ -76,7 +76,7 @@ jobs:
           assert.equal(env.INSTALLED_PM, '12.7.0');
           assert.equal(env.TOOLCHAIN_CACHE_HIT === 'true', env.BENCHMARK_MODE !== 'seed');
           assert.equal(env.DEPENDENCY_CACHE_HIT === 'true', env.BENCHMARK_MODE !== 'seed');
-          assert.equal(env.PM_CACHE_HIT === 'true', env.BENCHMARK_MODE === 'hit');
+          assert.equal(env.PM_CACHE_HIT === 'true', ['before', 'hit'].includes(env.BENCHMARK_MODE));
           const vp = path.join(env.VP_HOME, 'bin', process.platform === 'win32' ? 'vp.exe' : 'vp');
           const store = execFileSync(vp, ['pm', 'cache', 'dir'], { encoding: 'utf8' }).trim();
           assert.equal(path.resolve(store), path.resolve(env.pnpm_config_store_dir, 'v11'));
@@ -128,7 +128,7 @@ jobs:
       matrix:
         sample: [1, 2, 3, 4, 5, 6]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        mode: [before, hit]
+        mode: [base, before, hit]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
@@ -148,10 +148,22 @@ jobs:
           echo "VP_HOME=$RUNNER_TEMP/setup-vp-pr209-pm-cache-$BENCHMARK_ID/toolchain" >> "$GITHUB_ENV"
           echo "pnpm_config_store_dir=$RUNNER_TEMP/setup-vp-pr209-pm-cache-$BENCHMARK_ID/pnpm-store" >> "$GITHUB_ENV"
 
-      - name: Setup Vite+ before
+      - name: Setup Vite+ base
         id: baseline
-        if: matrix.mode == 'before'
+        if: matrix.mode == 'base'
         uses: voidzero-dev/setup-vp@c025a93923d2f9c524652d786386d11065fc3e8f
+        with:
+          version: 1.3.0
+          node-version: "24.22.0"
+          cache: true
+          cache-toolchain: true
+          cache-save: true
+          sfw: false
+
+      - name: Setup Vite+ before
+        id: previous
+        if: matrix.mode == 'before'
+        uses: voidzero-dev/setup-vp@f28bb92ea995da2055edc7b12d14a1ac245f1fc6
         with:
           version: 1.3.0
           node-version: "24.22.0"
@@ -163,7 +175,7 @@ jobs:
       - name: Setup Vite+ after
         id: setup
         if: matrix.mode == 'hit'
-        uses: voidzero-dev/setup-vp@f28bb92ea995da2055edc7b12d14a1ac245f1fc6
+        uses: voidzero-dev/setup-vp@bf8eeb4333ae9701e8dac97d0d7588378af7af24
         with:
           version: 1.3.0
           node-version: "24.22.0"
@@ -177,12 +189,12 @@ jobs:
         env:
           BENCHMARK_MODE: ${{ matrix.mode }}
           BENCHMARK_SAMPLE: ${{ matrix.sample }}
-          TOOLCHAIN_CACHE_HIT: ${{ steps.setup.outputs.toolchain-cache-hit || steps.baseline.outputs.toolchain-cache-hit }}
-          DEPENDENCY_CACHE_HIT: ${{ steps.setup.outputs.cache-hit || steps.baseline.outputs.cache-hit }}
-          PM_CACHE_HIT: ${{ steps.setup.outputs.package-manager-cache-hit || steps.baseline.outputs.package-manager-cache-hit }}
-          INSTALLED_VERSION: ${{ steps.setup.outputs.version || steps.baseline.outputs.version }}
-          INSTALLED_NODE: ${{ steps.setup.outputs.node-version || steps.baseline.outputs.node-version }}
-          INSTALLED_PM: ${{ steps.setup.outputs.package-manager-version || steps.baseline.outputs.package-manager-version }}
+          TOOLCHAIN_CACHE_HIT: ${{ steps.setup.outputs.toolchain-cache-hit || steps.previous.outputs.toolchain-cache-hit || steps.baseline.outputs.toolchain-cache-hit }}
+          DEPENDENCY_CACHE_HIT: ${{ steps.setup.outputs.cache-hit || steps.previous.outputs.cache-hit || steps.baseline.outputs.cache-hit }}
+          PM_CACHE_HIT: ${{ steps.setup.outputs.package-manager-cache-hit || steps.previous.outputs.package-manager-cache-hit || steps.baseline.outputs.package-manager-cache-hit }}
+          INSTALLED_VERSION: ${{ steps.setup.outputs.version || steps.previous.outputs.version || steps.baseline.outputs.version }}
+          INSTALLED_NODE: ${{ steps.setup.outputs.node-version || steps.previous.outputs.node-version || steps.baseline.outputs.node-version }}
+          INSTALLED_PM: ${{ steps.setup.outputs.package-manager-version || steps.previous.outputs.package-manager-version || steps.baseline.outputs.package-manager-version }}
         run: |
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
@@ -202,7 +214,7 @@ jobs:
           assert.equal(env.INSTALLED_PM, '12.7.0');
           assert.equal(env.TOOLCHAIN_CACHE_HIT === 'true', env.BENCHMARK_MODE !== 'seed');
           assert.equal(env.DEPENDENCY_CACHE_HIT === 'true', env.BENCHMARK_MODE !== 'seed');
-          assert.equal(env.PM_CACHE_HIT === 'true', env.BENCHMARK_MODE === 'hit');
+          assert.equal(env.PM_CACHE_HIT === 'true', ['before', 'hit'].includes(env.BENCHMARK_MODE));
           const vp = path.join(env.VP_HOME, 'bin', process.platform === 'win32' ? 'vp.exe' : 'vp');
           const store = execFileSync(vp, ['pm', 'cache', 'dir'], { encoding: 'utf8' }).trim();
           assert.equal(path.resolve(store), path.resolve(env.pnpm_config_store_dir, 'v11'));
