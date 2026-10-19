@@ -420,10 +420,12 @@ declarations described above. Moving versions such as `latest`, `lts`, and `22`,
 disabled Node.js management, and local installer overrides skip this cache.
 
 The cache key includes the OS, architecture, Linux libc, both versions, installation
-path, npm registry, and Node.js mirror. There are no fallback keys. The installer
-still runs after restoration to create the active links and apply the current
-configuration. Configuration, credentials, project dependencies, package stores,
-and other Node.js versions are not in this cache.
+path, npm registry, and Node.js mirror. There are no fallback keys. On a validated
+cache hit with no active installation, the cached CLI runs its native setup to
+create links and apply the current configuration. This avoids downloading and
+running a shell installer. Other cases use the normal installer, including a
+failed native setup. Configuration, credentials, project dependencies, package
+stores, and other Node.js versions are not in this cache.
 
 The action checks restored versions, installation paths, dependencies, and the
 native binding. An invalid or unavailable cache falls back to installation. If
@@ -470,15 +472,15 @@ space on the runner. Sizes vary with the toolchain versions and platform.
 The selected package manager adds one archive per key; its size depends on the
 manager, version, and platform. The figures above exclude that archive.
 
-For `pnpm@12.14.0`, the
-[urllib hosted run](https://github.com/node-modules/urllib/actions/runs/39211669048)
-records these additional compressed archive sizes:
+For `pnpm@12.7.0`, the
+[hosted measurements](https://github.com/voidzero-dev/setup-vp/actions/runs/39227680298)
+show these additional compressed archive sizes:
 
 | Runner            | Package manager archive |
 | ----------------- | ----------------------: |
-| Linux x64 (glibc) |                20.8 MiB |
-| macOS ARM64       |                17.9 MiB |
-| Windows x64       |                20.3 MiB |
+| Linux x64 (glibc) |                20.6 MiB |
+| macOS ARM64       |                17.8 MiB |
+| Windows x64       |                20.1 MiB |
 
 One entry per platform adds about **59 MiB**. Other managers and versions can
 have different sizes. A package-manager key change creates a new manager

@@ -22,17 +22,16 @@ export async function restorePackageManagerCache(
   if (!toolchain) return;
   let restored: PackageManagerCachePlan | undefined;
   try {
-    const dirs = parseVitePlusDirs(
-      (
-        await getExecOutput("vp", [], {
-          cwd: projectDir,
-          silent: true,
-          env: { ...process.env, VP_DUMP_DIRS: "1" },
-        })
-      ).stdout,
-    );
+    const [directoryOutput, current] = await Promise.all([
+      getExecOutput("vp", [], {
+        cwd: projectDir,
+        silent: true,
+        env: { ...process.env, VP_DUMP_DIRS: "1" },
+      }),
+      getExecOutput("vp", ENV_CURRENT_ARGS, { cwd: projectDir, silent: true }),
+    ]);
+    const dirs = parseVitePlusDirs(directoryOutput.stdout);
     if (!dirs || realpathSync(dirs.data) !== realpathSync(toolchain.data)) return;
-    const current = await getExecOutput("vp", ENV_CURRENT_ARGS, { cwd: projectDir, silent: true });
     const plan = createPackageManagerCachePlan(toolchain, current.stdout, projectDir);
     if (!plan) {
       info(

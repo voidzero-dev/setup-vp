@@ -16,6 +16,8 @@ import { getConfiguredProjectDir, getVitePlusHome } from "./utils.js";
 import { findReusableVitePlus } from "./reuse-viteplus.js";
 import { createInstallerNodeContext } from "./ci/installer-node.js";
 import { createInstallerEnvironment } from "./ci/installer-env.js";
+import type { ToolchainCachePlan } from "./ci/toolchain-cache.js";
+import { bootstrapToolchain } from "./bootstrap-toolchain.js";
 
 // Try each group's URLs in order, for up to N rounds per group (max attempts
 // per group = rounds * URLs). Two rounds × two URLs = 4 attempts, ~1 minute
@@ -23,7 +25,10 @@ import { createInstallerEnvironment } from "./ci/installer-env.js";
 const INSTALL_MAX_ROUNDS = 2;
 const INSTALL_RETRY_DELAY_MS = 2000;
 
-export async function installVitePlus(inputs: Inputs): Promise<string | undefined> {
+export async function installVitePlus(
+  inputs: Inputs,
+  cachedToolchain?: ToolchainCachePlan,
+): Promise<string | undefined> {
   const { version } = inputs;
 
   const existingDirs = findReusableVitePlus(version);
@@ -79,6 +84,19 @@ export async function installVitePlus(inputs: Inputs): Promise<string | undefine
   };
 
   try {
+    if (cachedToolchain?.version === version) {
+      try {
+        nodeContext.reset();
+        const dirs = await bootstrapToolchain(cachedToolchain, env, projectDir);
+        if (dirs) {
+          ensureVitePlusBinsInPath(dirs, true);
+          info(`Activated cached ${DISPLAY_NAME}@${version} with native setup.`);
+          return nodeContext.resolvedVersion();
+        }
+      } catch (error) {
+        warning(`Cached native setup failed; using the installer: ${String(error)}`);
+      }
+    }
     if (pinned.length > 0) {
       if (await tryUrls(pinned)) {
         ensureVitePlusBinInPath(version, dirsFile);

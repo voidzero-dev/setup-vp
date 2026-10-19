@@ -61,7 +61,7 @@ describe("toolchain cache adapter", () => {
   it("repairs Windows junctions before validation", async () => {
     vi.mocked(isWindows).mockReturnValue(true);
     vi.mocked(restoreCache).mockResolvedValue(plan.key);
-    await restoreToolchainCache(options);
+    await expect(restoreToolchainCache(options)).resolves.toEqual({ plan, hit: true });
     expect(restoreToolchainLinks).toHaveBeenCalledWith(plan.payload);
     expect(vi.mocked(restoreToolchainLinks).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(validateToolchain).mock.invocationCallOrder[0]!,
@@ -102,7 +102,7 @@ describe("toolchain cache adapter", () => {
     "keeps a miss recoverable (%s)",
     async (matched) => {
       vi.mocked(restoreCache).mockResolvedValue(matched);
-      await restoreToolchainCache(options);
+      await expect(restoreToolchainCache(options)).resolves.toEqual({ plan, hit: false });
       expect(discardRestoredToolchain).toHaveBeenCalledWith(plan);
       expect(setOutput).toHaveBeenLastCalledWith("toolchain-cache-hit", false);
       vi.mocked(saveCache).mockResolvedValue(42);
@@ -112,7 +112,7 @@ describe("toolchain cache adapter", () => {
   );
   it("removes incomplete downloads and keeps the installer available", async () => {
     vi.mocked(restoreCache).mockRejectedValue(new Error("download interrupted"));
-    await expect(restoreToolchainCache(options)).resolves.toBe(plan);
+    await expect(restoreToolchainCache(options)).resolves.toEqual({ plan, hit: false });
     expect(discardRestoredToolchain).toHaveBeenCalledWith(plan);
     expect(warning).toHaveBeenCalled();
   });
@@ -143,8 +143,8 @@ describe("toolchain cache adapter", () => {
       throw new Error("preparation failed");
     });
 
-    await expect(restoreToolchainCache(options)).resolves.toBe(
-      prepare === createToolchainCachePlan ? undefined : plan,
+    await expect(restoreToolchainCache(options)).resolves.toEqual(
+      prepare === createToolchainCachePlan ? undefined : { plan, hit: false },
     );
 
     expect(restoreCache).not.toHaveBeenCalled();

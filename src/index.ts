@@ -10,7 +10,7 @@ import { runViteInstall } from "./run-install.js";
 import { restoreCache } from "./cache-restore.js";
 import { saveCache } from "./cache-save.js";
 import { restoreToolchainCache, saveToolchainCache } from "./toolchain-cache.js";
-import type { ToolchainCachePlan } from "./ci/toolchain-cache.js";
+import type { ToolchainCacheResult } from "./toolchain-cache.js";
 import { restorePackageManagerCache, savePackageManagerCache } from "./package-manager-cache.js";
 import { State, Outputs } from "./types.js";
 import type { Inputs } from "./types.js";
@@ -33,7 +33,7 @@ export async function runMain(inputs: Inputs): Promise<void> {
   // Step 2: Resolve the Vite+ version (version > version-file > package.json >
   // lockfile > latest; see resolveVitePlusVersion) and install it.
   const version = resolveVitePlusVersion(inputs, projectDir);
-  let toolchain: ToolchainCachePlan | undefined;
+  let toolchain: ToolchainCacheResult | undefined;
   if (inputs.cacheToolchain) {
     toolchain = await restoreToolchainCache({
       version,
@@ -42,7 +42,11 @@ export async function runMain(inputs: Inputs): Promise<void> {
       projectDir,
     });
   }
-  nodeVersion = (await installVitePlus({ ...inputs, version, nodeVersion })) ?? nodeVersion;
+  nodeVersion =
+    (await installVitePlus(
+      { ...inputs, version, nodeVersion },
+      toolchain?.hit ? toolchain.plan : undefined,
+    )) ?? nodeVersion;
 
   const versionOutput =
     inputs.nodeManager === false || inputs.packageManager !== undefined
@@ -72,7 +76,7 @@ export async function runMain(inputs: Inputs): Promise<void> {
   }
 
   // Restore the selected manager before cache discovery can download it.
-  if (inputs.cacheToolchain) await restorePackageManagerCache(projectDir, toolchain);
+  if (inputs.cacheToolchain) await restorePackageManagerCache(projectDir, toolchain?.plan);
 
   // Step 5: Restore cache if enabled
   if (inputs.cache) {

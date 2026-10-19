@@ -75,34 +75,39 @@ const inputs = (cache: boolean, cacheSave: boolean): Inputs => ({
 describe("runMain toolchain cache", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("restores before the installer with the resolved versions", async () => {
-    vi.mocked(resolveVitePlusVersion).mockReturnValue("1.3.0");
-    const plan = createToolchainCachePlan(
-      { version: "1.3.0", nodeVersion: "22.23.1", projectDir: tmpdir() },
-      { VP_HOME: join(tmpdir(), "vp-test") },
-    );
-    vi.mocked(restoreToolchainCache).mockResolvedValueOnce(plan);
-    const requested = {
-      ...inputs(false, true),
-      cacheToolchain: true,
-      nodeVersion: "22.23.1",
-      workingDirectory: tmpdir(),
-    };
-    await runMain(requested);
-    expect(restoreToolchainCache).toHaveBeenCalledWith({
-      version: "1.3.0",
-      nodeVersion: "22.23.1",
-      nodeManager: undefined,
-      projectDir: tmpdir(),
-    });
-    expect(vi.mocked(restoreToolchainCache).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(installVitePlus).mock.invocationCallOrder[0]!,
-    );
-    expect(restorePackageManagerCache).toHaveBeenCalledWith(tmpdir(), plan);
-    expect(vi.mocked(installVitePlus).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(restorePackageManagerCache).mock.invocationCallOrder[0]!,
-    );
-  });
+  it.each([false, true])(
+    "passes only validated cache hits to native setup (hit: %s)",
+    async (hit) => {
+      vi.mocked(resolveVitePlusVersion).mockReturnValue("1.3.0");
+      const plan = createToolchainCachePlan(
+        { version: "1.3.0", nodeVersion: "22.23.1", projectDir: tmpdir() },
+        { VP_HOME: join(tmpdir(), "vp-test") },
+      );
+      vi.mocked(restoreToolchainCache).mockResolvedValueOnce({ plan: plan!, hit });
+      const requested = {
+        ...inputs(false, true),
+        cacheToolchain: true,
+        nodeVersion: "22.23.1",
+        workingDirectory: tmpdir(),
+      };
+      await runMain(requested);
+      expect(restoreToolchainCache).toHaveBeenCalledWith({
+        version: "1.3.0",
+        nodeVersion: "22.23.1",
+        nodeManager: undefined,
+        projectDir: tmpdir(),
+      });
+      expect(vi.mocked(restoreToolchainCache).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(installVitePlus).mock.invocationCallOrder[0]!,
+      );
+      expect(restorePackageManagerCache).toHaveBeenCalledWith(tmpdir(), plan);
+      const call = vi.mocked(installVitePlus).mock.calls[0]!;
+      expect(call[1]).toEqual(hit ? plan : undefined);
+      expect(vi.mocked(installVitePlus).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(restorePackageManagerCache).mock.invocationCallOrder[0]!,
+      );
+    },
+  );
 });
 
 describe("runMain sfw", () => {
@@ -118,11 +123,14 @@ describe("runMain sfw", () => {
     };
     try {
       await runMain(requested);
-      expect(installVitePlus).toHaveBeenCalledWith({
-        ...requested,
-        version: "1.3.0",
-        nodeVersion: "22",
-      });
+      expect(installVitePlus).toHaveBeenCalledWith(
+        {
+          ...requested,
+          version: "1.3.0",
+          nodeVersion: "22",
+        },
+        undefined,
+      );
       expect(exec).toHaveBeenCalledWith("vp", ["env", "use", "22.23.1"], { cwd: project });
     } finally {
       rmSync(project, { recursive: true, force: true });
@@ -147,7 +155,7 @@ describe("runMain sfw", () => {
 
     await runMain(requested);
 
-    expect(installVitePlus).toHaveBeenCalledWith({ ...requested, version });
+    expect(installVitePlus).toHaveBeenCalledWith({ ...requested, version }, undefined);
     expect(setupSfw).toHaveBeenCalledWith({ ...requested, version });
     expect(runViteInstall).toHaveBeenCalledWith(requested, { executable: "vp", sfw: false });
   });
