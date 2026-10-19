@@ -344,7 +344,7 @@ jobs:
 | `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                                     | No       | `true`                |
 | `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)           | No       | `false`               |
 | `cache`                 | Enable caching of project dependencies                                                                             | No       | `false`               |
-| `cache-toolchain`       | Cache the Vite+ payload and managed Node.js runtime in GitHub Actions. Requires exact versions                     | No       | `false`               |
+| `cache-toolchain`       | Cache Vite+, managed Node.js, and the selected package manager in GitHub Actions. Requires exact versions          | No       | `false`               |
 | `cache-save`            | Save enabled dependency and toolchain caches in the post action                                                    | No       | `true`                |
 | `cache-dependency-path` | Path to lock file for cache key generation                                                                         | No       | Auto-detected         |
 | `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`          | No       |                       |
@@ -377,14 +377,15 @@ Separate package-manager modes require Vite+ 0.3.1+. Any explicit configuration,
 
 ## Outputs
 
-| Output                    | Description                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------------ |
-| `version`                 | The installed version of Vite+                                                       |
-| `cache-hit`               | Boolean indicating if cache was restored                                             |
-| `toolchain-cache-hit`     | Whether an exact toolchain cache passed validation (`true` or `false`, when enabled) |
-| `node-version`            | The Node.js version Vite+ resolved, such as `24.20.0`                                |
-| `package-manager`         | The package manager Vite+ resolved, such as `pnpm` or `bun`                          |
-| `package-manager-version` | The version of that package manager, such as `10.33.0`                               |
+| Output                      | Description                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `version`                   | The installed version of Vite+                                                       |
+| `cache-hit`                 | Boolean indicating if cache was restored                                             |
+| `toolchain-cache-hit`       | Whether an exact toolchain cache passed validation (`true` or `false`, when enabled) |
+| `package-manager-cache-hit` | Whether the selected package manager passed cache validation (when enabled)          |
+| `node-version`              | The Node.js version Vite+ resolved, such as `24.20.0`                                |
+| `package-manager`           | The package manager Vite+ resolved, such as `pnpm` or `bun`                          |
+| `package-manager-version`   | The version of that package manager, such as `10.33.0`                               |
 
 The last three come from `vp env current --json` in `working-directory` at the end of setup. They require Vite+ 0.3.1+ and are `unknown` on older versions or when Vite+ reports no value. With `node-manager: false`, `node-version` is the version of the Node.js found on `PATH`.
 
@@ -406,7 +407,8 @@ does not restore an installation onto a fresh runner.
 ### Toolchain cache (GitHub Actions)
 
 Set `cache-toolchain: true` to cache the versioned Vite+ payload and the selected
-Node.js runtime. This cache is independent of the project dependency cache. It
+Node.js runtime. It also caches the package manager selected for `working-directory`.
+This cache is independent of the project dependency cache. It
 can restore these files onto a fresh runner before the installer runs.
 
 Use an exact Vite+ version with native self-setup support, or a preview version
@@ -432,6 +434,24 @@ time for short jobs; measure both setup and the post action for your workload.
 This input is available only in the GitHub Action. GitLab and Azure retain their
 existing dependency cache behavior.
 
+The selected managed `pnpm`, `yarn`, `npm`, or `bun` installation uses a separate
+archive under the same `cache-toolchain` input. The action asks
+`vp env current --json` for the exact version and installation path after setup,
+then restores the archive before dependency cache discovery or `vp install`.
+A package-manager version change can reuse the Vite+/Node.js archive.
+
+The package-manager key includes the toolchain identity, manager name, resolved
+version, and a hash of npm configuration. Configuration files and credentials
+are not in the archive. System managers, Node.js bundled npm, unresolved versions,
+and unsupported layouts skip this archive. Bundled npm is already in the Node.js
+runtime archive. An existing installation is preserved. Invalid archives fall
+back to normal installation. The post action saves only complete installations;
+`run-install: false` does not install a manager just to fill its cache.
+
+`toolchain-cache-hit` continues to report the Vite+/Node.js archive.
+`package-manager-cache-hit` reports the separate manager archive. Both archives
+follow `cache-save`, and uploads run in parallel with dependency cache uploads.
+
 #### Toolchain cache storage
 
 For Vite+ `1.3.0` and Node.js `22.23.1`, the
@@ -447,6 +467,8 @@ show these compressed archive sizes per cache entry:
 One entry for each platform totals about **244 MiB (0.24 GiB)**. These figures
 describe storage in GitHub's cache service. Extracted files require more disk
 space on the runner. Sizes vary with the toolchain versions and platform.
+The selected package manager adds one archive per key; its size depends on the
+manager, version, and platform. The figures above exclude that archive.
 
 A cache hit reuses an existing entry without uploading another copy. Each new
 cache key stores a complete archive of both Vite+ and Node.js, even when only one

@@ -10,6 +10,7 @@ import { runViteInstall } from "./run-install.js";
 import { restoreCache } from "./cache-restore.js";
 import { saveCache } from "./cache-save.js";
 import { restoreToolchainCache, saveToolchainCache } from "./toolchain-cache.js";
+import { restorePackageManagerCache, savePackageManagerCache } from "./package-manager-cache.js";
 import { State, Outputs } from "./types.js";
 import type { Inputs } from "./types.js";
 import { resolveNodeVersionFile } from "./node-version-file.js";
@@ -68,6 +69,9 @@ export async function runMain(inputs: Inputs): Promise<void> {
     propagateProjectNpmrcAuth(projectDir);
   }
 
+  // Restore the selected manager before cache discovery can download it.
+  if (inputs.cacheToolchain) await restorePackageManagerCache(projectDir);
+
   // Step 5: Restore cache if enabled
   if (inputs.cache) {
     await restoreCache(inputs);
@@ -125,6 +129,7 @@ export async function runPost(inputs: Inputs): Promise<void> {
 
   await Promise.all([
     inputs.cacheToolchain ? saveToolchainCache() : undefined,
+    inputs.cacheToolchain ? savePackageManagerCache() : undefined,
     inputs.cache ? saveCache() : undefined,
   ]);
 }

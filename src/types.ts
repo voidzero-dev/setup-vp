@@ -48,6 +48,8 @@ export enum State {
   InstalledVersion = "INSTALLED_VERSION",
   ToolchainCachePlan = "TOOLCHAIN_CACHE_PLAN",
   ToolchainCacheHit = "TOOLCHAIN_CACHE_HIT",
+  PackageManagerCachePlan = "PACKAGE_MANAGER_CACHE_PLAN",
+  PackageManagerCacheHit = "PACKAGE_MANAGER_CACHE_HIT",
 }
 
 // Output keys
@@ -55,6 +57,7 @@ export enum Outputs {
   Version = "version",
   CacheHit = "cache-hit",
   ToolchainCacheHit = "toolchain-cache-hit",
+  PackageManagerCacheHit = "package-manager-cache-hit",
   NodeVersion = "node-version",
   PackageManager = "package-manager",
   PackageManagerVersion = "package-manager-version",
