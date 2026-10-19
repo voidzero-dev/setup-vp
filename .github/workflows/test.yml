@@ -11,6 +11,10 @@ on:
         description: "pkg.pr.new PR number or commit SHA to test an unreleased Vite+ build (e.g. 1569). Leave empty to test the latest published release."
         required: false
         default: ""
+      benchmark_toolchain:
+        description: "Measure six uncached, cache-miss, and cache-hit samples per OS. Use a full commit SHA for preview builds."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,6 +29,29 @@ env:
   VP_PR_VERSION: ${{ github.event.inputs.pr_version }}
 
 jobs:
+  test-toolchain-cache:
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        sample: ${{ fromJSON(inputs.benchmark_toolchain && '[0,1,2,3,4,5]' || '[0]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      BENCHMARK_SAMPLE: ${{ matrix.sample }}
+      BENCHMARK_PREVIEW_SHA: ${{ inputs.benchmark_toolchain && inputs.pr_version || '' }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - name: Check toolchain cache misses and hits
+        uses: $/test/toolchain-benchmark
+      - name: Upload timings and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: toolchain-${{ matrix.os }}-${{ matrix.sample }}
+          path: benchmark-results/toolchain-*
+
   zizmor:
     name: Audit GitHub Actions
     runs-on: ubuntu-latest

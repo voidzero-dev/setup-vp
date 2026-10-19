@@ -23,6 +23,10 @@ vi.mock("./inputs.js", () => ({
 vi.mock("./cache-save.js", () => ({
   saveCache: vi.fn(),
 }));
+vi.mock("./toolchain-cache.js", () => ({
+  restoreToolchainCache: vi.fn(),
+  saveToolchainCache: vi.fn(),
+}));
 vi.mock("@actions/exec", () => ({
   exec: vi.fn(),
   getExecOutput: vi.fn(async () => ({ stdout: "vp v0.3.2" })),
@@ -39,6 +43,7 @@ vi.mock("./version-file.js", () => ({ resolveVitePlusVersion: vi.fn() }));
 import { info, setOutput, warning } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
 import { saveCache } from "./cache-save.js";
+import { restoreToolchainCache, saveToolchainCache } from "./toolchain-cache.js";
 import { runMain, runPost } from "./index.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { setupSfw } from "./install-sfw.js";
@@ -58,6 +63,39 @@ const inputs = (cache: boolean, cacheSave: boolean): Inputs => ({
   sfw: false,
   cache,
   cacheSave,
+});
+
+describe("toolchain cache integration", () => {
+  beforeEach(() => vi.clearAllMocks());
+  it("restores before the installer with the resolved versions", async () => {
+    vi.mocked(resolveVitePlusVersion).mockReturnValue("1.3.0");
+    const requested = {
+      ...inputs(false, true),
+      cacheToolchain: true,
+      nodeVersion: "22.23.1",
+      workingDirectory: tmpdir(),
+    };
+    await runMain(requested);
+    expect(restoreToolchainCache).toHaveBeenCalledWith({
+      version: "1.3.0",
+      nodeVersion: "22.23.1",
+      nodeManager: undefined,
+      projectDir: tmpdir(),
+    });
+    expect(vi.mocked(restoreToolchainCache).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(installVitePlus).mock.invocationCallOrder[0]!,
+    );
+  });
+  it("saves toolchains with dependency caching disabled", async () => {
+    await runPost({ ...inputs(false, true), cacheToolchain: true });
+    expect(saveToolchainCache).toHaveBeenCalledOnce();
+    expect(saveCache).not.toHaveBeenCalled();
+  });
+  it("honors cache-save for both caches", async () => {
+    await runPost({ ...inputs(true, false), cacheToolchain: true });
+    expect(saveToolchainCache).not.toHaveBeenCalled();
+    expect(saveCache).not.toHaveBeenCalled();
+  });
 });
 
 describe("runMain sfw", () => {

@@ -29,6 +29,7 @@ export interface Inputs {
   readonly runInstall: RunInstall[];
   readonly sfw: boolean;
   readonly cache: boolean;
+  readonly cacheToolchain?: boolean;
   readonly cacheSave: boolean;
   readonly cacheDependencyPath?: string;
   readonly registryUrl?: string;
@@ -45,12 +46,15 @@ export enum State {
   CacheMatchedKey = "CACHE_MATCHED_KEY",
   CachePaths = "CACHE_PATHS",
   InstalledVersion = "INSTALLED_VERSION",
+  ToolchainCachePlan = "TOOLCHAIN_CACHE_PLAN",
+  ToolchainCacheHit = "TOOLCHAIN_CACHE_HIT",
 }
 
 // Output keys
 export enum Outputs {
   Version = "version",
   CacheHit = "cache-hit",
+  ToolchainCacheHit = "toolchain-cache-hit",
   NodeVersion = "node-version",
   PackageManager = "package-manager",
   PackageManagerVersion = "package-manager-version",

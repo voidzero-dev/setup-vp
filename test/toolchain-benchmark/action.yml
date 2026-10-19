@@ -1,0 +1,5 @@
+name: Measure toolchain caching
+description: Compare uncached setup, a remote cache miss, and a remote cache hit on a fresh installation.
+runs:
+  using: node24
+  main: index.js

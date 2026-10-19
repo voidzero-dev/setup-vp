@@ -59,6 +59,7 @@ describe("getInputs", () => {
       runInstall: [],
       sfw: false,
       cache: false,
+      cacheToolchain: false,
       cacheSave: false,
       cacheDependencyPath: undefined,
     });
@@ -146,6 +147,12 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs.cache).toBe(true);
+  });
+
+  it("parses toolchain caching independently of dependency caching", () => {
+    vi.mocked(getInput).mockReturnValue("");
+    vi.mocked(getBooleanInput).mockImplementation((name) => name === "cache-toolchain");
+    expect(getInputs()).toMatchObject({ cache: false, cacheToolchain: true });
   });
 
   it("should parse cache-save input", () => {
