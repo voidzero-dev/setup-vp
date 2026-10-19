@@ -19,7 +19,11 @@ const nodeVersion = "22.23.1";
 // the same paths; all installation and package caches are removed between them.
 const id = `${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}-${sample}`;
 const root = path.join(homedir(), ".setup-vp-benchmark", id);
-const output = path.join(repository, "benchmark-results", `toolchain-${sample}`);
+const output = path.join(
+  process.env.GITHUB_WORKSPACE || repository,
+  "benchmark-results",
+  `toolchain-${sample}`,
+);
 await mkdir(output, { recursive: true });
 const results = [];
 
@@ -178,7 +182,10 @@ async function run(label) {
   const postMs = await execute(env, project, `${label}-post`);
   if (label === "miss") {
     const postLog = await readFile(path.join(output, `${label}-post.jsonl`), "utf8");
-    assert.ok(postLog.includes("Toolchain cache saved:"), "The miss must save a real remote cache");
+    assert.ok(
+      postLog.includes("Toolchain cache saved:"),
+      `The miss must save a real remote cache:\n${postLog}`,
+    );
   }
   const runtimes = (await readdir(path.join(home, "js_runtime/node"), { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
