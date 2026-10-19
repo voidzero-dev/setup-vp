@@ -48,6 +48,7 @@ import { info, setOutput, warning } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
 import { saveCache } from "./cache-save.js";
 import { restoreToolchainCache, saveToolchainCache } from "./toolchain-cache.js";
+import { createToolchainCachePlan } from "./ci/toolchain-cache.js";
 import { restorePackageManagerCache, savePackageManagerCache } from "./package-manager-cache.js";
 import { runMain, runPost } from "./index.js";
 import { installVitePlus } from "./install-viteplus.js";
@@ -76,6 +77,11 @@ describe("runMain toolchain cache", () => {
 
   it("restores before the installer with the resolved versions", async () => {
     vi.mocked(resolveVitePlusVersion).mockReturnValue("1.3.0");
+    const plan = createToolchainCachePlan(
+      { version: "1.3.0", nodeVersion: "22.23.1", projectDir: tmpdir() },
+      { VP_HOME: join(tmpdir(), "vp-test") },
+    );
+    vi.mocked(restoreToolchainCache).mockResolvedValueOnce(plan);
     const requested = {
       ...inputs(false, true),
       cacheToolchain: true,
@@ -92,7 +98,7 @@ describe("runMain toolchain cache", () => {
     expect(vi.mocked(restoreToolchainCache).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(installVitePlus).mock.invocationCallOrder[0]!,
     );
-    expect(restorePackageManagerCache).toHaveBeenCalledWith(tmpdir());
+    expect(restorePackageManagerCache).toHaveBeenCalledWith(tmpdir(), plan);
     expect(vi.mocked(installVitePlus).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(restorePackageManagerCache).mock.invocationCallOrder[0]!,
     );

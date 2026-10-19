@@ -13,13 +13,14 @@ import { Outputs, State } from "./types.js";
 
 export async function restoreToolchainCache(
   options: Parameters<typeof createToolchainCachePlan>[0],
-): Promise<void> {
+): Promise<ToolchainCachePlan | undefined> {
   setOutput(Outputs.ToolchainCacheHit, false);
   saveState(State.ToolchainCachePlan, "");
   saveState(State.ToolchainCacheHit, "");
   let restorePlan: ToolchainCachePlan | undefined;
+  let plan: ToolchainCachePlan | undefined;
   try {
-    const plan = createToolchainCachePlan(options);
+    plan = createToolchainCachePlan(options);
     if (!plan) {
       info(
         "Toolchain cache skipped: use an exact Vite+ version and an exact managed Node.js version without local installer overrides.",
@@ -29,7 +30,7 @@ export async function restoreToolchainCache(
     saveState(State.ToolchainCachePlan, JSON.stringify(plan));
     if (!canRestoreToolchain(plan)) {
       info("Toolchain files already exist; skipping cache restore.");
-      return;
+      return plan;
     }
     restorePlan = plan;
     const matchedKey = await restoreCache(plan.paths, plan.key, [], {
@@ -41,7 +42,7 @@ export async function restoreToolchainCache(
       saveState(State.ToolchainCacheHit, "true");
       setOutput(Outputs.ToolchainCacheHit, true);
       info(`Toolchain cache restored: ${plan.key}`);
-      return;
+      return plan;
     }
     discardRestoredToolchain(plan);
     info(
@@ -53,6 +54,7 @@ export async function restoreToolchainCache(
     if (restorePlan) discardRestoredToolchain(restorePlan);
     warning(`Toolchain cache restore failed; using the installer: ${String(error)}`);
   }
+  return plan;
 }
 
 export async function saveToolchainCache(): Promise<void> {

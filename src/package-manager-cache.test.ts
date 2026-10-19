@@ -10,6 +10,8 @@ import {
   validatePackageManager,
 } from "./ci/package-manager-cache.js";
 import { restorePackageManagerCache, savePackageManagerCache } from "./package-manager-cache.js";
+import { createToolchainCachePlan } from "./ci/toolchain-cache.js";
+import type { ToolchainCachePlan } from "./ci/toolchain-cache.js";
 import { State } from "./types.js";
 import type { PackageManagerCachePlan } from "./ci/package-manager-cache.js";
 
@@ -28,6 +30,7 @@ vi.mock("./ci/package-manager-cache.js", () => ({
 }));
 
 let root: string;
+let toolchain: ToolchainCachePlan | undefined;
 let state: Map<string, string>;
 let plan: PackageManagerCachePlan;
 beforeEach(() => {
@@ -40,7 +43,11 @@ beforeEach(() => {
     path: join(root, "package_manager/pnpm/12.14.0"),
     node: join(root, "node"),
   };
-  state = new Map([[State.ToolchainCachePlan, JSON.stringify({ data: root })]]);
+  toolchain = createToolchainCachePlan(
+    { version: "1.3.0", nodeVersion: "24.22.0", projectDir: root },
+    { VP_HOME: root },
+  );
+  state = new Map();
   vi.mocked(getState).mockImplementation((key) => state.get(key) || "");
   vi.mocked(saveState).mockImplementation((key, value) => {
     state.set(key, String(value));
@@ -60,7 +67,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 describe("package manager cache adapter", () => {
   it("reports validated exact hits and does not upload them again", async () => {
     vi.mocked(restoreCache).mockResolvedValue(plan.key);
-    await restorePackageManagerCache(root);
+    await restorePackageManagerCache(root, toolchain);
     expect(setOutput).toHaveBeenLastCalledWith("package-manager-cache-hit", true);
     expect(state.get(State.PackageManagerCacheHit)).toBe("true");
     await savePackageManagerCache();
@@ -78,7 +85,7 @@ describe("package manager cache adapter", () => {
         return result === "invalid" ? plan.key : result;
       });
       if (result === "invalid") vi.mocked(validatePackageManager).mockReturnValue(false);
-      await restorePackageManagerCache(root);
+      await restorePackageManagerCache(root, toolchain);
       expect(existsSync(plan.path)).toBe(false);
       expect(existsSync(other)).toBe(true);
       expect(state.get(State.PackageManagerCacheHit)).not.toBe("true");
@@ -89,29 +96,29 @@ describe("package manager cache adapter", () => {
   );
   it("preserves installations that already exist", async () => {
     mkdirSync(plan.path, { recursive: true });
-    await restorePackageManagerCache(root);
+    await restorePackageManagerCache(root, toolchain);
     expect(restoreCache).not.toHaveBeenCalled();
     expect(existsSync(plan.path)).toBe(true);
   });
   it("skips package managers when toolchain caching is unavailable", async () => {
-    state.clear();
-    await restorePackageManagerCache(root);
+    toolchain = undefined;
+    await restorePackageManagerCache(root, toolchain);
     expect(getExecOutput).not.toHaveBeenCalled();
   });
   it("does not restore into an unconfirmed data directory", async () => {
-    state.set(State.ToolchainCachePlan, JSON.stringify({ data: tmpdir() }));
-    await restorePackageManagerCache(root);
+    toolchain!.data = tmpdir();
+    await restorePackageManagerCache(root, toolchain);
     expect(restoreCache).not.toHaveBeenCalled();
   });
   it("skips unsupported manager selections", async () => {
     vi.mocked(createPackageManagerCachePlan).mockReturnValue(undefined);
-    await restorePackageManagerCache(root);
+    await restorePackageManagerCache(root, toolchain);
     await savePackageManagerCache();
     expect(restoreCache).not.toHaveBeenCalled();
     expect(saveCache).not.toHaveBeenCalled();
   });
   it("keeps failures nonfatal and does not save an incomplete installation", async () => {
-    await restorePackageManagerCache(root);
+    await restorePackageManagerCache(root, toolchain);
     vi.mocked(validatePackageManager).mockReturnValue(false);
     await savePackageManagerCache();
     expect(saveCache).not.toHaveBeenCalled();

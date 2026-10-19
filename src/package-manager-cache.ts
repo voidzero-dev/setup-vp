@@ -12,15 +12,16 @@ import { ENV_CURRENT_ARGS } from "./ci/env-current.js";
 import { parseVitePlusDirs } from "./ci/vp-dirs.js";
 import { Outputs, State } from "./types.js";
 
-export async function restorePackageManagerCache(projectDir: string): Promise<void> {
+export async function restorePackageManagerCache(
+  projectDir: string,
+  toolchain: ToolchainCachePlan | undefined,
+): Promise<void> {
   setOutput(Outputs.PackageManagerCacheHit, false);
   saveState(State.PackageManagerCachePlan, "");
   saveState(State.PackageManagerCacheHit, "");
-  const state = getState(State.ToolchainCachePlan);
-  if (!state) return;
+  if (!toolchain) return;
   let restored: PackageManagerCachePlan | undefined;
   try {
-    const toolchain = JSON.parse(state) as ToolchainCachePlan;
     const dirs = parseVitePlusDirs(
       (
         await getExecOutput("vp", [], {

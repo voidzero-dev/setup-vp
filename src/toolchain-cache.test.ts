@@ -112,7 +112,7 @@ describe("toolchain cache adapter", () => {
   );
   it("removes incomplete downloads and keeps the installer available", async () => {
     vi.mocked(restoreCache).mockRejectedValue(new Error("download interrupted"));
-    await expect(restoreToolchainCache(options)).resolves.toBeUndefined();
+    await expect(restoreToolchainCache(options)).resolves.toBe(plan);
     expect(discardRestoredToolchain).toHaveBeenCalledWith(plan);
     expect(warning).toHaveBeenCalled();
   });
@@ -143,7 +143,9 @@ describe("toolchain cache adapter", () => {
       throw new Error("preparation failed");
     });
 
-    await expect(restoreToolchainCache(options)).resolves.toBeUndefined();
+    await expect(restoreToolchainCache(options)).resolves.toBe(
+      prepare === createToolchainCachePlan ? undefined : plan,
+    );
 
     expect(restoreCache).not.toHaveBeenCalled();
     expect(discardRestoredToolchain).not.toHaveBeenCalled();
