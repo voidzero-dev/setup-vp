@@ -1,13 +1,13 @@
 import { debug } from "@actions/core";
 import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
 import { accessSync, constants, existsSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { pkgPrNewCommitSha } from "./ci/install-script-urls.js";
 import { supportsScopedEnv } from "./ci/node-manager.js";
 import { isWindows } from "./ci/platform.js";
 import { parseInstalledVpVersion } from "./ci/version.js";
+import { hasVitePlusDependencies, hasVitePlusNativeBinding } from "./ci/viteplus-payload.js";
 import { getVitePlusBinDirs, parseVitePlusDirs, supportsVitePlusDirs } from "./ci/vp-dirs.js";
 import type { VitePlusBinDirs, VitePlusDirs } from "./ci/vp-dirs.js";
 
@@ -24,12 +24,6 @@ const MANAGER_OVERRIDES = [
   "VP_YARN_MANAGER",
   "VP_BUN_MANAGER",
 ];
-
-interface PackageJson {
-  name?: string;
-  version?: string;
-  dependencies?: Record<string, string>;
-}
 
 interface ManagementConfig {
   shimMode?: string;
@@ -69,7 +63,7 @@ export function findReusableVitePlus(
       // active payload's metadata instead of assuming its directory name.
       const versionDir = realpathSync(join(dataDir, "current"));
       if (dirname(versionDir) !== realpathSync(dataDir)) continue;
-      if (!hasDependencies(versionDir, version)) continue;
+      if (!hasVitePlusDependencies(versionDir, version)) continue;
 
       // Query the payload, not a PATH command or a Windows trampoline that
       // could select a different installation through its sidecar file.
@@ -91,7 +85,7 @@ export function findReusableVitePlus(
       if (parseInstalledVpVersion(versionOutput) !== version) continue;
       if (!hasManagedEnvironment(dirs.config, platform)) continue;
       if (!hasValidShims(dirs, binary, platform, layout, versionOutput)) continue;
-      if (!hasNativeBinding(versionDir, options)) continue;
+      if (!hasVitePlusNativeBinding(versionDir, options)) continue;
 
       return getVitePlusBinDirs(dirs);
     } catch (error) {
@@ -126,69 +120,6 @@ function candidateDataDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): s
     );
   }
   return [...new Set(candidates.filter((dir): dir is string => !!dir && isAbsolute(dir)))];
-}
-
-function hasDependencies(versionDir: string, version: string): boolean {
-  const wrapper = JSON.parse(readFileSync(join(versionDir, "package.json"), "utf8")) as PackageJson;
-  if (
-    wrapper.name !== "vp-global" ||
-    wrapper.version !== version ||
-    wrapper.dependencies?.["vite-plus"] !== version
-  ) {
-    return false;
-  }
-  const packageFile = realpathSync(join(versionDir, "node_modules", "vite-plus", "package.json"));
-  if (!isInside(versionDir, packageFile)) return false;
-  const pkg = JSON.parse(readFileSync(packageFile, "utf8")) as PackageJson;
-  if (pkg.name !== "vite-plus" || pkg.version !== version || !pkg.dependencies) return false;
-  const packageRequire = createRequire(packageFile);
-  if (!statSync(join(dirname(packageFile), "dist", "bin.js")).isFile()) return false;
-
-  // Follow pnpm's dependency links without executing JS or relying on packages
-  // exporting package.json. Do not accept dependencies from outside this install.
-  return Object.keys(pkg.dependencies).every((name) =>
-    packageRequire.resolve.paths(name)?.some((modulesDir) => {
-      const dependencyFile = join(modulesDir, name, "package.json");
-      return existsSync(dependencyFile) && isInside(versionDir, realpathSync(dependencyFile));
-    }),
-  );
-}
-
-function isInside(parent: string, child: string): boolean {
-  const path = relative(parent, child);
-  return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
-}
-
-function hasNativeBinding(
-  versionDir: string,
-  options: ExecFileSyncOptionsWithStringEncoding,
-): boolean {
-  const loader = realpathSync(
-    join(versionDir, "node_modules", "vite-plus", "binding", "index.cjs"),
-  );
-  if (!isInside(versionDir, loader) || !statSync(loader).isFile()) return false;
-
-  // Let the installed loader select the platform, architecture, and libc.
-  // A child process isolates native load failures from the action runtime.
-  const script = `
-require(process.argv[1]);
-process.stdout.write(JSON.stringify(Object.keys(require.cache).filter(file => file.endsWith('.node'))));
-`;
-  const files: unknown = JSON.parse(
-    execFileSync(process.execPath, ["--input-type=commonjs", "--eval", script, loader], {
-      ...options,
-      env: { ...options.env, NAPI_RS_ENFORCE_VERSION_CHECK: "1" },
-    }),
-  );
-  // A binding from another installation must not hide a damaged active one.
-  return (
-    Array.isArray(files) &&
-    files.length > 0 &&
-    files.every(
-      (file) =>
-        typeof file === "string" && isAbsolute(file) && isInside(versionDir, realpathSync(file)),
-    )
-  );
 }
 
 function hasManagedEnvironment(configDir: string, platform: NodeJS.Platform): boolean {

@@ -9,6 +9,7 @@ import { setupSfw } from "./install-sfw.js";
 import { runViteInstall } from "./run-install.js";
 import { restoreCache } from "./cache-restore.js";
 import { saveCache } from "./cache-save.js";
+import { restoreToolchainCache, saveToolchainCache } from "./toolchain-cache.js";
 import { State, Outputs } from "./types.js";
 import type { Inputs } from "./types.js";
 import { resolveNodeVersionFile } from "./node-version-file.js";
@@ -30,6 +31,14 @@ export async function runMain(inputs: Inputs): Promise<void> {
   // Step 2: Resolve the Vite+ version (version > version-file > package.json >
   // lockfile > latest; see resolveVitePlusVersion) and install it.
   const version = resolveVitePlusVersion(inputs, projectDir);
+  if (inputs.cacheToolchain) {
+    await restoreToolchainCache({
+      version,
+      nodeVersion,
+      nodeManager: inputs.nodeManager,
+      projectDir,
+    });
+  }
   nodeVersion = (await installVitePlus({ ...inputs, version, nodeVersion })) ?? nodeVersion;
 
   const versionOutput =
@@ -107,14 +116,17 @@ async function setEnvironmentOutputs(cwd: string, versionOutput: string): Promis
 }
 
 export async function runPost(inputs: Inputs): Promise<void> {
-  if (!inputs.cache) return;
+  if (!inputs.cache && !inputs.cacheToolchain) return;
 
   if (!inputs.cacheSave) {
     info("Cache saving is disabled. Skipping cache save.");
     return;
   }
 
-  await saveCache();
+  await Promise.all([
+    inputs.cacheToolchain ? saveToolchainCache() : undefined,
+    inputs.cache ? saveCache() : undefined,
+  ]);
 }
 
 async function main(): Promise<void> {

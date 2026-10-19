@@ -42,9 +42,13 @@ inputs:
     required: false
     default: "false"
   cache-save:
-    description: "Whether to save the dependency cache in the post action. Has no effect when cache is false."
+    description: "Whether to save enabled dependency and toolchain caches in the post action."
     required: false
     default: "true"
+  cache-toolchain:
+    description: "Cache the Vite+ installation and managed Node.js runtime before setup. Requires exact Vite+ and Node.js versions. Independent of the project dependency cache."
+    required: false
+    default: "false"
   cache-dependency-path:
     description: "Path to lock file for cache key generation. Auto-detected if not specified."
     required: false
@@ -60,6 +64,8 @@ outputs:
     description: "The installed version of Vite+"
   cache-hit:
     description: "Boolean indicating if cache was restored"
+  toolchain-cache-hit:
+    description: "Whether an exact toolchain cache passed validation before installation"
   node-version:
     description: "The Node.js version Vite+ resolved for working-directory, from `vp env current` (0.3.1+). `unknown` on older versions or when Vite+ reports none."
   package-manager:

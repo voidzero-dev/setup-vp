@@ -344,7 +344,8 @@ jobs:
 | `run-install`           | Run `vp install` after setup. Accepts boolean or YAML object with `cwd`/`args`                                     | No       | `true`                |
 | `sfw`                   | Wrap `vp install` with [Socket Firewall Free](https://docs.socket.dev/docs/socket-firewall-free) (`sfw`)           | No       | `false`               |
 | `cache`                 | Enable caching of project dependencies                                                                             | No       | `false`               |
-| `cache-save`            | Save the dependency cache in the post action. Has no effect when `cache` is `false`                                | No       | `true`                |
+| `cache-toolchain`       | Cache the Vite+ payload and managed Node.js runtime in GitHub Actions. Requires exact versions                     | No       | `false`               |
+| `cache-save`            | Save enabled dependency and toolchain caches in the post action                                                    | No       | `true`                |
 | `cache-dependency-path` | Path to lock file for cache key generation                                                                         | No       | Auto-detected         |
 | `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`          | No       |                       |
 | `scope`                 | Optional scope for scoped registries. Falls back to repo owner for GitHub Packages                                 | No       |                       |
@@ -376,13 +377,14 @@ Separate package-manager modes require Vite+ 0.3.1+. Any explicit configuration,
 
 ## Outputs
 
-| Output                    | Description                                                 |
-| ------------------------- | ----------------------------------------------------------- |
-| `version`                 | The installed version of Vite+                              |
-| `cache-hit`               | Boolean indicating if cache was restored                    |
-| `node-version`            | The Node.js version Vite+ resolved, such as `24.20.0`       |
-| `package-manager`         | The package manager Vite+ resolved, such as `pnpm` or `bun` |
-| `package-manager-version` | The version of that package manager, such as `10.33.0`      |
+| Output                    | Description                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `version`                 | The installed version of Vite+                                                       |
+| `cache-hit`               | Boolean indicating if cache was restored                                             |
+| `toolchain-cache-hit`     | Whether an exact toolchain cache passed validation (`true` or `false`, when enabled) |
+| `node-version`            | The Node.js version Vite+ resolved, such as `24.20.0`                                |
+| `package-manager`         | The package manager Vite+ resolved, such as `pnpm` or `bun`                          |
+| `package-manager-version` | The version of that package manager, such as `10.33.0`                               |
 
 The last three come from `vp env current --json` in `working-directory` at the end of setup. They require Vite+ 0.3.1+ and are `unknown` on older versions or when Vite+ reports no value. With `node-manager: false`, `node-version` is the version of the Node.js found on `PATH`.
 
@@ -400,6 +402,63 @@ The action runs the installer when it needs to change versions or repair the
 installation. It also runs the installer for dist-tags such as `latest`, version
 ranges, preview builds, and older releases. Reuse works with `cache: false` and
 does not restore an installation onto a fresh runner.
+
+### Toolchain cache (GitHub Actions)
+
+Set `cache-toolchain: true` to cache the versioned Vite+ payload and the selected
+Node.js runtime. This cache is independent of the project dependency cache. It
+can restore these files onto a fresh runner before the installer runs.
+
+Use an exact Vite+ version with native self-setup support, or a preview version
+with a full commit SHA. Releases without native self-setup support use the normal
+installer and are not saved. The selected Node.js version must also be exact,
+such as `22.23.1`.
+The action reads Node.js from `node-version`, `node-version-file`, or the project
+declarations described above. Moving versions such as `latest`, `lts`, and `22`,
+disabled Node.js management, and local installer overrides skip this cache.
+
+The cache key includes the OS, architecture, Linux libc, both versions, installation
+path, npm registry, and Node.js mirror. There are no fallback keys. The installer
+still runs after restoration to create the active links and apply the current
+configuration. Configuration, credentials, project dependencies, package stores,
+and other Node.js versions are not in this cache.
+
+The action checks restored versions, installation paths, dependencies, and the
+native binding. An invalid or unavailable cache falls back to installation. If
+either version directory already exists, the action skips restoration to preserve
+the files on persistent runners. Cache upload time can exceed the saved setup
+time for short jobs; measure both setup and the post action for your workload.
+
+This input is available only in the GitHub Action. GitLab and Azure retain their
+existing dependency cache behavior.
+
+#### Toolchain cache storage
+
+For Vite+ `1.3.0` and Node.js `22.23.1`, the
+[hosted measurements](https://github.com/voidzero-dev/setup-vp/actions/runs/39186095114)
+show these compressed archive sizes per cache entry:
+
+| Runner            | Compressed toolchain cache |
+| ----------------- | -------------------------: |
+| Linux x64 (glibc) |               About 88 MiB |
+| macOS ARM64       |               About 82 MiB |
+| Windows x64       |               About 74 MiB |
+
+One entry for each platform totals about **244 MiB (0.24 GiB)**. These figures
+describe storage in GitHub's cache service. Extracted files require more disk
+space on the runner. Sizes vary with the toolchain versions and platform.
+
+A cache hit reuses an existing entry without uploading another copy. Each new
+cache key stores a complete archive of both Vite+ and Node.js, even when only one
+version changes. Different keys and GitHub branch or pull request scopes can
+retain separate entries. See [GitHub's cache scope rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache).
+
+The project dependency cache (`cache: true`) uses additional storage that depends
+on the project's packages. Both caches count toward the repository's
+[GitHub Actions cache limit](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#usage-limits-and-eviction-policy),
+which defaults to 10 GB. To limit new entries, [save caches only from the default
+branch](#control-cache-saving), or use `cache-save: false` to restore without
+uploading.
 
 ### Dependency Cache
 
@@ -421,13 +480,16 @@ When `cache-dependency-path` points to a lock file in a subdirectory, the action
 
 ### Control cache saving
 
-Set `cache-save: false` to restore an existing dependency cache without writing a new cache. The `cache` input remains the main switch for both operations:
+Set `cache-save: false` to restore existing caches without writing new caches.
+The `cache` and `cache-toolchain` inputs independently enable their respective
+caches. When both caches need uploads, the post action saves them concurrently
+and waits for both operations. The following table applies to either switch:
 
-| `cache` | `cache-save`      | Restore | Save |
-| ------- | ----------------- | ------- | ---- |
-| `false` | Any value         | No      | No   |
-| `true`  | Omitted or `true` | Yes     | Yes  |
-| `true`  | `false`           | Yes     | No   |
+| Cache switch | `cache-save`      | Restore | Save |
+| ------------ | ----------------- | ------- | ---- |
+| `false`      | Any value         | No      | No   |
+| `true`       | Omitted or `true` | Yes     | Yes  |
+| `true`       | `false`           | Yes     | No   |
 
 For example, this workflow restores caches on every run but saves them only from the `main` branch:
 
@@ -438,7 +500,8 @@ For example, this workflow restores caches on every run but saves them only from
     cache-save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 ```
 
-Disabling cache saving doesn't change the `cache-hit` output, which continues to report whether the action restored a matching cache.
+Disabling cache saving does not change `cache-hit` or `toolchain-cache-hit`.
+Each output reports whether the action restored its corresponding cache.
 
 ## GitLab CI/CD
 

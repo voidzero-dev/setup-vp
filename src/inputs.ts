@@ -29,6 +29,7 @@ export function getInputs(): Inputs {
     runInstall: parseRunInstall(getInput("run-install")),
     sfw: getBooleanInput("sfw"),
     cache: getBooleanInput("cache"),
+    cacheToolchain: getBooleanInput("cache-toolchain"),
     cacheSave: getBooleanInput("cache-save"),
     cacheDependencyPath: getInput("cache-dependency-path") || undefined,
     registryUrl: getInput("registry-url") || undefined,
