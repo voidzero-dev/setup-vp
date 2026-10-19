@@ -432,6 +432,34 @@ time for short jobs; measure both setup and the post action for your workload.
 This input is available only in the GitHub Action. GitLab and Azure retain their
 existing dependency cache behavior.
 
+#### Toolchain cache storage
+
+For Vite+ `1.3.0` and Node.js `22.23.1`, the
+[hosted measurements](https://github.com/voidzero-dev/setup-vp/actions/runs/39186095114)
+show these compressed archive sizes per cache entry:
+
+| Runner            | Compressed toolchain cache |
+| ----------------- | -------------------------: |
+| Linux x64 (glibc) |               About 88 MiB |
+| macOS ARM64       |               About 82 MiB |
+| Windows x64       |               About 74 MiB |
+
+One entry for each platform totals about **244 MiB (0.24 GiB)**. These figures
+describe storage in GitHub's cache service. Extracted files require more disk
+space on the runner. Sizes vary with the toolchain versions and platform.
+
+A cache hit reuses an existing entry without uploading another copy. Each new
+cache key stores a complete archive of both Vite+ and Node.js, even when only one
+version changes. Different keys and GitHub branch or pull request scopes can
+retain separate entries. See [GitHub's cache scope rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache).
+
+The project dependency cache (`cache: true`) uses additional storage that depends
+on the project's packages. Both caches count toward the repository's
+[GitHub Actions cache limit](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#usage-limits-and-eviction-policy),
+which defaults to 10 GB. To limit new entries, [save caches only from the default
+branch](#control-cache-saving), or use `cache-save: false` to restore without
+uploading.
+
 ### Dependency Cache
 
 When `cache: true` is set, the action additionally caches project dependencies by auto-detecting your lock file:
@@ -454,7 +482,8 @@ When `cache-dependency-path` points to a lock file in a subdirectory, the action
 
 Set `cache-save: false` to restore existing caches without writing new caches.
 The `cache` and `cache-toolchain` inputs independently enable their respective
-caches. The following table applies to either switch:
+caches. When both caches need uploads, the post action saves them concurrently
+and waits for both operations. The following table applies to either switch:
 
 | Cache switch | `cache-save`      | Restore | Save |
 | ------------ | ----------------- | ------- | ---- |

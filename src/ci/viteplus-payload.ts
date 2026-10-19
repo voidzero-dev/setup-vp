@@ -66,17 +66,13 @@ process.stdout.write(JSON.stringify(Object.keys(require.cache).filter(file => fi
     }),
   );
   // A binding from another installation must not hide a damaged active one.
-  return (
-    Array.isArray(files) &&
-    files.length > 0 &&
-    files.every(
-      (file) =>
-        typeof file === "string" &&
-        isAbsolute(file) &&
-        isInside(versionDir, realpathSync(file)) &&
-        (!previewVersion || bindingVersionMatches(versionDir, realpathSync(file), previewVersion)),
-    )
-  );
+  if (!Array.isArray(files) || files.length === 0) return false;
+  return files.every((file) => {
+    if (typeof file !== "string" || !isAbsolute(file)) return false;
+    const binding = realpathSync(file);
+    if (!isInside(versionDir, binding)) return false;
+    return !previewVersion || bindingVersionMatches(versionDir, binding, previewVersion);
+  });
 }
 
 function bindingVersionMatches(root: string, file: string, version: string): boolean {

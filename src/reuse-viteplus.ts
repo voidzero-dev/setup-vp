@@ -7,10 +7,9 @@ import { pkgPrNewCommitSha } from "./ci/install-script-urls.js";
 import { supportsScopedEnv } from "./ci/node-manager.js";
 import { isWindows } from "./ci/platform.js";
 import { parseInstalledVpVersion } from "./ci/version.js";
+import { hasVitePlusDependencies, hasVitePlusNativeBinding } from "./ci/viteplus-payload.js";
 import { getVitePlusBinDirs, parseVitePlusDirs, supportsVitePlusDirs } from "./ci/vp-dirs.js";
 import type { VitePlusBinDirs, VitePlusDirs } from "./ci/vp-dirs.js";
-
-import { hasVitePlusDependencies, hasVitePlusNativeBinding } from "./ci/viteplus-payload.js";
 
 const EXACT_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const LAYOUT_RE = /^layout\t(single-root|split)\r?$/m;

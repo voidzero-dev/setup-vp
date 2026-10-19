@@ -58,7 +58,7 @@ beforeEach(() => {
 });
 
 describe("toolchain cache adapter", () => {
-  it("repairs Windows junctions before validation and cleans up save metadata", async () => {
+  it("repairs Windows junctions before validation", async () => {
     vi.mocked(isWindows).mockReturnValue(true);
     vi.mocked(restoreCache).mockResolvedValue(plan.key);
     await restoreToolchainCache(options);
@@ -66,13 +66,29 @@ describe("toolchain cache adapter", () => {
     expect(vi.mocked(restoreToolchainLinks).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(validateToolchain).mock.invocationCallOrder[0]!,
     );
-    state.set(State.ToolchainCacheHit, "");
-    const cleanup = vi.fn();
-    vi.mocked(recordToolchainLinks).mockReturnValue(cleanup);
-    vi.mocked(saveCache).mockRejectedValue(new Error("upload failed"));
-    await saveToolchainCache();
-    expect(cleanup).toHaveBeenCalledOnce();
   });
+
+  it.each([undefined, new Error("upload failed")])(
+    "cleans up Windows save metadata after an upload (%s)",
+    async (error) => {
+      vi.mocked(isWindows).mockReturnValue(true);
+      state.set(State.ToolchainCachePlan, JSON.stringify(plan));
+      const cleanup = vi.fn();
+      vi.mocked(recordToolchainLinks).mockReturnValue(cleanup);
+      if (error) {
+        vi.mocked(saveCache).mockRejectedValue(error);
+      } else {
+        vi.mocked(saveCache).mockResolvedValue(42);
+      }
+
+      await saveToolchainCache();
+
+      expect(recordToolchainLinks).toHaveBeenCalledWith(plan.payload);
+      expect(saveCache).toHaveBeenCalledWith(plan.paths, plan.key);
+      expect(cleanup).toHaveBeenCalledOnce();
+    },
+  );
+
   it("reports a hit only after an exact match passes validation", async () => {
     vi.mocked(restoreCache).mockResolvedValue(plan.key);
     await restoreToolchainCache(options);
@@ -118,6 +134,20 @@ describe("toolchain cache adapter", () => {
     await restoreToolchainCache(options);
     expect(restoreCache).not.toHaveBeenCalled();
     expect(discardRestoredToolchain).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["selecting the cache", createToolchainCachePlan],
+    ["checking existing files", canRestoreToolchain],
+  ] as const)("preserves files when %s throws before restoration", async (_name, prepare) => {
+    vi.mocked(prepare).mockImplementationOnce(() => {
+      throw new Error("preparation failed");
+    });
+
+    await expect(restoreToolchainCache(options)).resolves.toBeUndefined();
+
+    expect(restoreCache).not.toHaveBeenCalled();
+    expect(discardRestoredToolchain).not.toHaveBeenCalled();
+    expect(warning).toHaveBeenCalled();
   });
   it("skips unsupported selections without a service request", async () => {
     vi.mocked(createToolchainCachePlan).mockReturnValue(undefined);

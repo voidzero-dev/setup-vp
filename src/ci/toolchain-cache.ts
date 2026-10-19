@@ -1,5 +1,5 @@
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { lstatSync, realpathSync, rmSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
@@ -8,9 +8,9 @@ import { isMuslLinux } from "./install-sfw.js";
 import { pkgPrNewCommitSha } from "./install-script-urls.js";
 import { isWindows } from "./platform.js";
 import { resolveProjectNodeVersion } from "./project-node-version.js";
+import { parseInstalledVpVersion } from "./version.js";
 import { hasVitePlusDependencies, hasVitePlusNativeBinding } from "./viteplus-payload.js";
 import { parseVitePlusDirs, supportsVitePlusDirs } from "./vp-dirs.js";
-import { parseInstalledVpVersion } from "./version.js";
 
 const EXACT_NODE = /^v?\d+\.\d+\.\d+$/;
 const PREVIEW = /^0\.0\.0-commit\.[a-f0-9]{40}$/;
@@ -48,12 +48,16 @@ function defaultDataDirectory(env: NodeJS.ProcessEnv, platform: NodeJS.Platform)
   if (lstatSync(join(legacy, "current"), { throwIfNoEntry: false })) return legacy;
   if (isWindows(platform))
     return join(env.LOCALAPPDATA || join(home, "AppData", "Local"), "vite-plus", "data");
-  return join(
+  const dataHome =
     env.XDG_DATA_HOME && isAbsolute(env.XDG_DATA_HOME)
       ? env.XDG_DATA_HOME
-      : join(home, ".local", "share"),
-    "vite-plus",
-  );
+      : join(home, ".local", "share");
+  return join(dataHome, "vite-plus");
+}
+
+function defaultLibc(platform: NodeJS.Platform): string {
+  if (platform !== "linux") return "native";
+  return isMuslLinux() ? "musl" : "glibc";
 }
 
 export function createToolchainCachePlan(
@@ -61,7 +65,7 @@ export function createToolchainCachePlan(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
   arch = process.arch,
-  libc = platform === "linux" ? (isMuslLinux() ? "musl" : "glibc") : "native",
+  libc = defaultLibc(platform),
 ): ToolchainCachePlan | undefined {
   const { version } = options;
   if (!cacheableVersion(version, env) || options.nodeManager === false) return;
@@ -119,13 +123,13 @@ export function validateToolchain(
   const node = isWindows(platform)
     ? join(plan.runtime, "node.exe")
     : join(plan.runtime, "bin", "node");
-  const options = {
+  const options: ExecFileSyncOptionsWithStringEncoding = {
     cwd: tmpdir(),
     env,
-    encoding: "utf8" as const,
+    encoding: "utf8",
     timeout: 5000,
     maxBuffer: 1024 * 1024,
-    stdio: ["ignore", "pipe", "ignore"] as ["ignore", "pipe", "ignore"],
+    stdio: ["ignore", "pipe", "ignore"],
   };
   if (!lstatSync(plan.payload).isDirectory() || !lstatSync(plan.runtime).isDirectory())
     return false;

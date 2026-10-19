@@ -1,5 +1,6 @@
 import { restoreCache, saveCache } from "@actions/cache";
 import { getState, info, saveState, setOutput, warning } from "@actions/core";
+import { isWindows } from "./ci/platform.js";
 import {
   canRestoreToolchain,
   createToolchainCachePlan,
@@ -8,7 +9,6 @@ import {
 } from "./ci/toolchain-cache.js";
 import type { ToolchainCachePlan } from "./ci/toolchain-cache.js";
 import { recordToolchainLinks, restoreToolchainLinks } from "./ci/toolchain-links.js";
-import { isWindows } from "./ci/platform.js";
 import { Outputs, State } from "./types.js";
 
 export async function restoreToolchainCache(
@@ -17,10 +17,9 @@ export async function restoreToolchainCache(
   setOutput(Outputs.ToolchainCacheHit, false);
   saveState(State.ToolchainCachePlan, "");
   saveState(State.ToolchainCacheHit, "");
-  let plan: ToolchainCachePlan | undefined;
-  let restoring = false;
+  let restorePlan: ToolchainCachePlan | undefined;
   try {
-    plan = createToolchainCachePlan(options);
+    const plan = createToolchainCachePlan(options);
     if (!plan) {
       info(
         "Toolchain cache skipped: use an exact Vite+ version and an exact managed Node.js version without local installer overrides.",
@@ -32,7 +31,7 @@ export async function restoreToolchainCache(
       info("Toolchain files already exist; skipping cache restore.");
       return;
     }
-    restoring = true;
+    restorePlan = plan;
     const matchedKey = await restoreCache(plan.paths, plan.key, [], {
       timeoutInMs: 30_000,
       segmentTimeoutInMs: 30_000,
@@ -51,7 +50,7 @@ export async function restoreToolchainCache(
         : `Toolchain cache not found: ${plan.key}`,
     );
   } catch (error) {
-    if (plan && restoring) discardRestoredToolchain(plan);
+    if (restorePlan) discardRestoredToolchain(restorePlan);
     warning(`Toolchain cache restore failed; using the installer: ${String(error)}`);
   }
 }

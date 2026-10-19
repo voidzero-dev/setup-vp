@@ -53,6 +53,7 @@ import type { Inputs } from "./types.js";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { setImmediate } from "node:timers/promises";
 
 const mockedInfo = vi.mocked(info);
 const mockedSaveCache = vi.mocked(saveCache);
@@ -65,8 +66,9 @@ const inputs = (cache: boolean, cacheSave: boolean): Inputs => ({
   cacheSave,
 });
 
-describe("toolchain cache integration", () => {
+describe("runMain toolchain cache", () => {
   beforeEach(() => vi.clearAllMocks());
+
   it("restores before the installer with the resolved versions", async () => {
     vi.mocked(resolveVitePlusVersion).mockReturnValue("1.3.0");
     const requested = {
@@ -85,16 +87,6 @@ describe("toolchain cache integration", () => {
     expect(vi.mocked(restoreToolchainCache).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(installVitePlus).mock.invocationCallOrder[0]!,
     );
-  });
-  it("saves toolchains with dependency caching disabled", async () => {
-    await runPost({ ...inputs(false, true), cacheToolchain: true });
-    expect(saveToolchainCache).toHaveBeenCalledOnce();
-    expect(saveCache).not.toHaveBeenCalled();
-  });
-  it("honors cache-save for both caches", async () => {
-    await runPost({ ...inputs(true, false), cacheToolchain: true });
-    expect(saveToolchainCache).not.toHaveBeenCalled();
-    expect(saveCache).not.toHaveBeenCalled();
   });
 });
 
@@ -251,20 +243,71 @@ describe("runPost", () => {
     await runPost(inputs(false, true));
 
     expect(mockedSaveCache).not.toHaveBeenCalled();
+    expect(saveToolchainCache).not.toHaveBeenCalled();
     expect(mockedInfo).not.toHaveBeenCalled();
   });
 
-  it("logs and skips when cache saving is disabled", async () => {
-    await runPost(inputs(true, false));
+  it.each([false, true])(
+    "logs and skips when cache saving is disabled (cache-toolchain: %s)",
+    async (cacheToolchain) => {
+      await runPost({ ...inputs(true, false), cacheToolchain });
 
+      expect(saveToolchainCache).not.toHaveBeenCalled();
+      expect(mockedSaveCache).not.toHaveBeenCalled();
+      expect(mockedInfo).toHaveBeenCalledWith("Cache saving is disabled. Skipping cache save.");
+    },
+  );
+
+  it("saves toolchains with dependency caching disabled", async () => {
+    await runPost({ ...inputs(false, true), cacheToolchain: true });
+
+    expect(saveToolchainCache).toHaveBeenCalledOnce();
     expect(mockedSaveCache).not.toHaveBeenCalled();
-    expect(mockedInfo).toHaveBeenCalledWith("Cache saving is disabled. Skipping cache save.");
   });
 
   it("saves the cache when caching and cache saving are enabled", async () => {
     await runPost(inputs(true, true));
 
     expect(mockedSaveCache).toHaveBeenCalledOnce();
+    expect(saveToolchainCache).not.toHaveBeenCalled();
     expect(mockedInfo).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["toolchain", saveToolchainCache, saveCache],
+    ["dependency", saveCache, saveToolchainCache],
+  ] as const)(
+    "starts both saves together and waits for both when the %s cache finishes first",
+    async (_name, firstSave, lastSave) => {
+      let finishFirst!: () => void;
+      let finishLast!: () => void;
+      vi.mocked(firstSave).mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          finishFirst = resolve;
+        }),
+      );
+      vi.mocked(lastSave).mockReturnValueOnce(
+        new Promise<void>((resolve) => {
+          finishLast = resolve;
+        }),
+      );
+      const completed = vi.fn();
+      const post = runPost({ ...inputs(true, true), cacheToolchain: true }).then(completed);
+
+      try {
+        expect(saveToolchainCache).toHaveBeenCalledOnce();
+        expect(saveCache).toHaveBeenCalledOnce();
+        finishFirst();
+        await setImmediate();
+        expect(completed).not.toHaveBeenCalled();
+        finishLast();
+        await post;
+        expect(completed).toHaveBeenCalledOnce();
+      } finally {
+        finishFirst();
+        finishLast();
+        await post;
+      }
+    },
+  );
 });

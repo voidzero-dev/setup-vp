@@ -123,8 +123,10 @@ export async function runPost(inputs: Inputs): Promise<void> {
     return;
   }
 
-  if (inputs.cacheToolchain) await saveToolchainCache();
-  if (inputs.cache) await saveCache();
+  await Promise.all([
+    inputs.cacheToolchain ? saveToolchainCache() : undefined,
+    inputs.cache ? saveCache() : undefined,
+  ]);
 }
 
 async function main(): Promise<void> {
