@@ -409,8 +409,10 @@ Set `cache-toolchain: true` to cache the versioned Vite+ payload and the selecte
 Node.js runtime. This cache is independent of the project dependency cache. It
 can restore these files onto a fresh runner before the installer runs.
 
-Use an exact Vite+ version (`0.3.0` or later) or a preview version with a full
-commit SHA. The selected Node.js version must also be exact, such as `22.23.1`.
+Use an exact Vite+ version with native self-setup support, or a preview version
+with a full commit SHA. Releases without native self-setup support use the normal
+installer and are not saved. The selected Node.js version must also be exact,
+such as `22.23.1`.
 The action reads Node.js from `node-version`, `node-version-file`, or the project
 declarations described above. Moving versions such as `latest`, `lts`, and `22`,
 disabled Node.js management, and local installer overrides skip this cache.

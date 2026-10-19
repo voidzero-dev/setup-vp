@@ -67,6 +67,7 @@ switch (process.argv[2]) {
         INPUT_VERSION: "0.3.3",
         "INPUT_RUN-INSTALL": "false",
         INPUT_CACHE: "false",
+        "INPUT_CACHE-TOOLCHAIN": "false",
         "INPUT_CACHE-SAVE": "false",
         INPUT_SFW: "false",
       };
