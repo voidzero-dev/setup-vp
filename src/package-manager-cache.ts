@@ -20,9 +20,9 @@ export async function restorePackageManagerCache(
   saveState(State.PackageManagerCachePlan, "");
   saveState(State.PackageManagerCacheHit, "");
   if (!toolchain) return;
-  let restored: PackageManagerCachePlan | undefined;
+  let restorePlan: PackageManagerCachePlan | undefined;
   try {
-    const [directoryOutput, current] = await Promise.all([
+    const [dirsOutput, envOutput] = await Promise.all([
       getExecOutput("vp", [], {
         cwd: projectDir,
         silent: true,
@@ -30,9 +30,9 @@ export async function restorePackageManagerCache(
       }),
       getExecOutput("vp", ENV_CURRENT_ARGS, { cwd: projectDir, silent: true }),
     ]);
-    const dirs = parseVitePlusDirs(directoryOutput.stdout);
+    const dirs = parseVitePlusDirs(dirsOutput.stdout);
     if (!dirs || realpathSync(dirs.data) !== realpathSync(toolchain.data)) return;
-    const plan = createPackageManagerCachePlan(toolchain, current.stdout, projectDir);
+    const plan = createPackageManagerCachePlan(toolchain, envOutput.stdout, projectDir);
     if (!plan) {
       info(
         "Package manager cache skipped: no exact managed package manager in a supported layout.",
@@ -44,7 +44,7 @@ export async function restorePackageManagerCache(
       info("Package manager files already exist; skipping cache restore.");
       return;
     }
-    restored = plan;
+    restorePlan = plan;
     const key = await restoreCache([plan.path], plan.key, [], {
       timeoutInMs: 30_000,
       segmentTimeoutInMs: 30_000,
@@ -60,7 +60,7 @@ export async function restorePackageManagerCache(
       `Package manager cache ${key ? "did not pass validation" : "not found"}: ${plan.name}@${plan.version}`,
     );
   } catch (error) {
-    if (restored) rmSync(restored.path, { recursive: true, force: true });
+    if (restorePlan) rmSync(restorePlan.path, { recursive: true, force: true });
     warning(`Package manager cache restore failed; using normal installation: ${String(error)}`);
   }
 }

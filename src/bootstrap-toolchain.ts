@@ -17,11 +17,11 @@ export async function bootstrapToolchain(
   if (lstatSync(current, { throwIfNoEntry: false })) return;
   const windows = process.platform === "win32";
   const binaryName = windows ? "vp.exe" : "vp";
-  const directory = mkdtempSync(join(tmpdir(), "setup-vp-bootstrap-"));
+  const bootstrapDir = mkdtempSync(join(tmpdir(), "setup-vp-bootstrap-"));
   try {
     // A marked payload skips self-setup. A temporary copy follows the official
     // installer's standalone-binary handoff without changing the cached marker.
-    const binary = join(directory, binaryName);
+    const binary = join(bootstrapDir, binaryName);
     copyFileSync(join(plan.payload, "bin", binaryName), binary);
     const bootstrapEnv: Record<string, string> = {
       ...env,
@@ -29,8 +29,8 @@ export async function bootstrapToolchain(
       // The action exports PATH for this process and later workflow steps.
       // Avoid shell-profile edits and a PowerShell process to change user PATH.
       VP_SELF_SETUP_NO_MODIFY_PATH: "1",
-      ...(windows && !env.VP_SHELL ? { VP_SHELL: "powershell" } : {}),
     };
+    if (windows && !bootstrapEnv.VP_SHELL) bootstrapEnv.VP_SHELL = "powershell";
     delete bootstrapEnv.VP_SELF_SETUP_SUPPORT_CHECK;
     delete bootstrapEnv.VP_DUMP_DIRS;
     await exec(binary, [], { cwd, env: bootstrapEnv });
@@ -52,6 +52,6 @@ export async function bootstrapToolchain(
     }
     return getVitePlusBinDirs(dirs);
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(bootstrapDir, { recursive: true, force: true });
   }
 }

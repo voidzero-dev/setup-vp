@@ -6,19 +6,13 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { valid } from "semver";
 import type { ToolchainCachePlan } from "./toolchain-cache.js";
 
-const BIN_NAMES = {
-  npm: ["npm", "npx"],
-  pnpm: ["pnpm", "pnpx"],
-  yarn: ["yarn", "yarnpkg"],
-  bun: ["bun", "bunx"],
+const PACKAGE_MANAGERS = {
+  npm: { binaries: ["npm", "npx"], script: "npm-cli.js" },
+  pnpm: { binaries: ["pnpm", "pnpx"], script: "pnpm.cjs" },
+  yarn: { binaries: ["yarn", "yarnpkg"], script: "yarn.js" },
+  bun: { binaries: ["bun", "bunx"], script: undefined },
 } as const;
-type PackageManagerName = keyof typeof BIN_NAMES;
-const JS_ENTRY: Record<PackageManagerName, string | undefined> = {
-  npm: "npm-cli.js",
-  pnpm: "pnpm.cjs",
-  yarn: "yarn.js",
-  bun: undefined,
-};
+type PackageManagerName = keyof typeof PACKAGE_MANAGERS;
 
 export interface PackageManagerCachePlan {
   key: string;
@@ -62,13 +56,13 @@ export function createPackageManagerCachePlan(
   if (
     !manager ||
     manager.mode !== "managed" ||
-    !Object.hasOwn(BIN_NAMES, manager.name) ||
+    !Object.hasOwn(PACKAGE_MANAGERS, manager.name) ||
     typeof manager.version !== "string" ||
     valid(manager.version) !== manager.version
   )
     return;
   const name = manager.name as PackageManagerName;
-  const version = manager.version as string;
+  const version = manager.version;
   const path = join(toolchain.data, "package_manager", name, version);
   const bin = manager.bin_paths?.[name];
   const expected = join(path, name, "bin", name);
@@ -99,16 +93,16 @@ function packageManagerCommand(
 ): [string, string[]] | undefined {
   const bin = join(plan.path, plan.name, "bin");
   const windows = platform === "win32";
-  for (const name of BIN_NAMES[plan.name]) {
+  const { binaries, script } = PACKAGE_MANAGERS[plan.name];
+  for (const name of binaries) {
     const candidates = windows ? [`${name}.exe`, `${name}.cmd`] : [name];
     if (!candidates.some((file) => containedFile(root, join(bin, file)))) return;
   }
   const native = join(bin, `${plan.name}.native${windows ? ".exe" : ""}`);
   if (containedFile(root, native)) return [native, ["--version"]];
-  const entry = JS_ENTRY[plan.name];
-  if (!entry) return;
-  const script = join(bin, entry);
-  if (containedFile(root, script)) return [plan.node, [script, "--version"]];
+  if (!script) return;
+  const entry = join(bin, script);
+  if (containedFile(root, entry)) return [plan.node, [entry, "--version"]];
   return;
 }
 
@@ -119,9 +113,10 @@ export function validatePackageManager(
   if (!lstatSync(plan.path, { throwIfNoEntry: false })?.isDirectory()) return false;
   const command = packageManagerCommand(plan, realpathSync(plan.path), platform);
   if (!command) return false;
+  const [executable, args] = command;
   // Probe the actual cached executable or JS entry point, never a global shim
   // that could download a replacement and turn a corrupt archive into a hit.
-  const output = execFileSync(command[0], command[1], {
+  const output = execFileSync(executable, args, {
     cwd: tmpdir(),
     encoding: "utf8",
     timeout: 5000,

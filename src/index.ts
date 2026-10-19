@@ -42,11 +42,12 @@ export async function runMain(inputs: Inputs): Promise<void> {
       projectDir,
     });
   }
-  nodeVersion =
-    (await installVitePlus(
-      { ...inputs, version, nodeVersion },
-      toolchain?.hit ? toolchain.plan : undefined,
-    )) ?? nodeVersion;
+  const cachedToolchain = toolchain?.hit ? toolchain.plan : undefined;
+  const installedNodeVersion = await installVitePlus(
+    { ...inputs, version, nodeVersion },
+    cachedToolchain,
+  );
+  nodeVersion = installedNodeVersion ?? nodeVersion;
 
   const versionOutput =
     inputs.nodeManager === false || inputs.packageManager !== undefined

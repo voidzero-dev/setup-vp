@@ -301,22 +301,16 @@ describe("runPost", () => {
   });
 
   it.each([
-    ["toolchain", saveToolchainCache, saveCache],
-    ["dependency", saveCache, saveToolchainCache],
-    ["package manager", saveCache, savePackageManagerCache],
+    ["toolchain", saveToolchainCache],
+    ["dependency", saveCache],
+    ["package manager", savePackageManagerCache],
   ] as const)(
-    "starts both saves together and waits for both when the %s cache finishes first",
-    async (_name, firstSave, lastSave) => {
-      let finishFirst!: () => void;
-      let finishLast!: () => void;
-      vi.mocked(firstSave).mockReturnValueOnce(
+    "starts all cache saves together and waits for the %s cache",
+    async (_name, pendingSave) => {
+      let finish!: () => void;
+      vi.mocked(pendingSave).mockReturnValueOnce(
         new Promise<void>((resolve) => {
-          finishFirst = resolve;
-        }),
-      );
-      vi.mocked(lastSave).mockReturnValueOnce(
-        new Promise<void>((resolve) => {
-          finishLast = resolve;
+          finish = resolve;
         }),
       );
       const completed = vi.fn();
@@ -326,15 +320,13 @@ describe("runPost", () => {
         expect(saveToolchainCache).toHaveBeenCalledOnce();
         expect(savePackageManagerCache).toHaveBeenCalledOnce();
         expect(saveCache).toHaveBeenCalledOnce();
-        finishFirst();
         await setImmediate();
         expect(completed).not.toHaveBeenCalled();
-        finishLast();
+        finish();
         await post;
         expect(completed).toHaveBeenCalledOnce();
       } finally {
-        finishFirst();
-        finishLast();
+        finish();
         await post;
       }
     },
