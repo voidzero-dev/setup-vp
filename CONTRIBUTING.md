@@ -53,31 +53,7 @@ The action uses the exact `fallow` version in `package.json`. After `vp install`
 vp exec fallow audit --base origin/main
 ```
 
-[`.fallowrc.json`](.fallowrc.json) declares the runtime and benchmark entry points. Fallow excludes generated files under `dist/` by default. Results appear in annotations, CI logs, and the job summary. The workflow does not write PR comments.
-
-### Toolchain Cache Benchmarks
-
-The `test-toolchain-cache` job in `.github/workflows/test.yml` checks a real cache
-miss and hit on Linux, macOS, and Windows. It also measures an uncached baseline.
-Each case starts with an empty installation and package caches. The miss and hit
-use the same absolute paths because Windows dependency junctions retain them.
-
-Run six samples per OS on a pushed branch:
-
-```bash
-gh workflow run test.yml --ref <branch> -f benchmark_toolchain=true
-```
-
-Add `-f pr_version=<full-commit-sha>` to measure a preview build. A benchmark-only
-dispatch skips the other jobs. Normal workflow runs use one sample per OS with
-the pinned release in `test/toolchain-benchmark/index.js`.
-
-Download the `toolchain-*` artifacts for `results.json` and timestamped logs.
-Compare setup time and setup plus post-action time; a miss includes compression
-and remote upload in the post action. Hits include remote download, extraction,
-validation, and the installer. Each case checks the exact Node.js and Vite+
-versions, native binding, and formatter. Benchmark caches use unique keys; remove
-only the cache keys recorded in that run's results after collecting the artifacts.
+[`.fallowrc.json`](.fallowrc.json) declares the three runtime entry points. Fallow excludes generated files under `dist/` by default. Results appear in annotations, CI logs, and the job summary. The workflow does not write PR comments.
 
 ## Integration Design
 

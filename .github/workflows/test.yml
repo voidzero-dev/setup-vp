@@ -11,10 +11,6 @@ on:
         description: "pkg.pr.new PR number or commit SHA to test an unreleased Vite+ build (e.g. 1569). Leave empty to test the latest published release."
         required: false
         default: ""
-      benchmark_toolchain:
-        description: "Measure six uncached, cache-miss, and cache-hit samples per OS. Use a full commit SHA for preview builds."
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -29,31 +25,101 @@ env:
   VP_PR_VERSION: ${{ github.event.inputs.pr_version }}
 
 jobs:
-  test-toolchain-cache:
+  test-toolchain-cache-miss:
     strategy:
       fail-fast: false
-      max-parallel: 6
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        sample: ${{ fromJSON(inputs.benchmark_toolchain && '[0,1,2,3,4,5]' || '[0]') }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
-      BENCHMARK_SAMPLE: ${{ matrix.sample }}
-      BENCHMARK_PREVIEW_SHA: ${{ inputs.benchmark_toolchain && inputs.pr_version || '' }}
+      VP_PR_VERSION: ""
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - name: Check toolchain cache misses and hits
-        uses: $/test/toolchain-benchmark
-      - name: Upload timings and logs
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Select a fresh installation directory
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, existsSync } from "node:fs";
+          import { join } from "node:path";
+          // Both jobs use the same absolute paths, but separate fresh runners.
+          const home = join(process.env.RUNNER_TEMP, `setup-vp-toolchain-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`);
+          if (existsSync(home)) throw new Error("Expected a fresh installation");
+          appendFileSync(process.env.GITHUB_ENV, `VP_HOME=${home}\n`);
+          NODE
+      - name: Setup Vite+ with a cache miss
+        id: setup
+        uses: $/.
         with:
-          name: toolchain-${{ matrix.os }}-${{ matrix.sample }}
-          path: benchmark-results/toolchain-*
+          version: "1.3.0"
+          node-version: "22.23.1"
+          working-directory: ${{ runner.temp }}
+          run-install: false
+          cache: false
+          cache-toolchain: true
+      - name: Check the cache result and installed tools
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          CACHE_HIT: ${{ steps.setup.outputs.toolchain-cache-hit }}
+          VP_VERSION: ${{ steps.setup.outputs.version }}
+        run: |
+          test "$CACHE_HIT" = "false"
+          test "$VP_VERSION" = "1.3.0"
+          test "$(node --version)" = "v22.23.1"
+          vp_binary=vp
+          if [ "$RUNNER_OS" = "Windows" ]; then vp_binary=vp.exe; fi
+          "$vp_binary" fmt --version
+
+  test-toolchain-cache-hit:
+    needs: test-toolchain-cache-miss
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      VP_PR_VERSION: ""
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - name: Select a fresh installation directory
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, existsSync } from "node:fs";
+          import { join } from "node:path";
+          // Both jobs use the same absolute paths, but separate fresh runners.
+          const home = join(process.env.RUNNER_TEMP, `setup-vp-toolchain-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`);
+          if (existsSync(home)) throw new Error("Expected a fresh installation");
+          appendFileSync(process.env.GITHUB_ENV, `VP_HOME=${home}\n`);
+          NODE
+      - name: Setup Vite+ with a cache hit
+        id: setup
+        uses: $/.
+        with:
+          version: "1.3.0"
+          node-version: "22.23.1"
+          working-directory: ${{ runner.temp }}
+          run-install: false
+          cache: false
+          cache-toolchain: true
+          cache-save: false
+      - name: Check the cache result and installed tools
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env:
+          CACHE_HIT: ${{ steps.setup.outputs.toolchain-cache-hit }}
+          VP_VERSION: ${{ steps.setup.outputs.version }}
+        run: |
+          test "$CACHE_HIT" = "true"
+          test "$VP_VERSION" = "1.3.0"
+          test "$(node --version)" = "v22.23.1"
+          vp_binary=vp
+          if [ "$RUNNER_OS" = "Windows" ]; then vp_binary=vp.exe; fi
+          "$vp_binary" fmt --version
 
   zizmor:
-    if: ${{ !inputs.benchmark_toolchain }}
     name: Audit GitHub Actions
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -67,7 +133,6 @@ jobs:
           annotations: true
 
   test:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -86,7 +151,6 @@ jobs:
         run: vp --version
 
   test-reuse-installed-version:
-    if: ${{ !inputs.benchmark_toolchain }}
     # Reproduces https://github.com/voidzero-dev/setup-vp/issues/145. Two setup
     # steps share an installation, as jobs on a persistent runner would.
     strategy:
@@ -202,7 +266,6 @@ jobs:
           exit "$failed"
 
   test-reuse-installation-integrity:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -242,7 +305,6 @@ jobs:
         run: node test/reuse-installation-integrity.mjs manager-overrides
 
   test-reuse-restored-prepare:
-    if: ${{ !inputs.benchmark_toolchain }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -278,7 +340,6 @@ jobs:
           retention-days: 1
 
   test-reuse-restored-version:
-    if: ${{ !inputs.benchmark_toolchain }}
     needs: test-reuse-restored-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -324,7 +385,6 @@ jobs:
           diff -u "$RUNNER_TEMP/reuse-before.json" "$RUNNER_TEMP/reuse-after.json"
 
   test-preview-build:
-    if: ${{ !inputs.benchmark_toolchain }}
     # End-to-end coverage for the commit-pinned install path: resolve the
     # newest pkg.pr.new preview build (0.0.0-commit.<sha>) from the registry
     # bridge and install it through the version input, so the install script
@@ -381,7 +441,6 @@ jobs:
           vp --version | grep -F -- "$PREVIEW_VERSION"
 
   test-node-version:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -443,7 +502,6 @@ jobs:
   # explicit Node.js input, the managed `node` shim should use Vite+'s normal
   # project resolution and honor package.json#devEngines.runtime.
   test-auto-node-version:
-    if: ${{ !inputs.benchmark_toolchain }}
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -482,7 +540,6 @@ jobs:
   # remain on PATH, so compare process.execPath to verify that both `node`
   # and `vp exec node` execute the runner's original Node.js after installation.
   test-node-manager-off:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -558,7 +615,6 @@ jobs:
           fi
 
   test-package-manager:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -608,7 +664,6 @@ jobs:
           NODE
 
   test-default-version:
-    if: ${{ !inputs.benchmark_toolchain }}
     # End-to-end check of the default version-resolution logic: with no `version`
     # or `version-file` input, the action auto-detects the vite-plus version from
     # the project's package.json (direct pin or catalog), and falls back to
@@ -702,7 +757,6 @@ jobs:
           echo "OK: ${{ matrix.scenario }} resolved to $ACTUAL"
 
   test-cache-pnpm:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -738,7 +792,6 @@ jobs:
           echo "Cache hit: $CACHE_HIT"
 
   test-cache-npm:
-    if: ${{ !inputs.benchmark_toolchain }}
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -769,7 +822,6 @@ jobs:
           echo "Cache hit: $CACHE_HIT"
 
   test-cache-yarn:
-    if: ${{ !inputs.benchmark_toolchain }}
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -800,7 +852,6 @@ jobs:
           echo "Cache hit: $CACHE_HIT"
 
   test-cache-bun:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -835,7 +886,6 @@ jobs:
           echo "Cache hit: $CACHE_HIT"
 
   test-vp-exec:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -854,7 +904,6 @@ jobs:
         run: vp exec node -e "console.log('vp exec works')"
 
   test-vp-install-and-exec:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -888,7 +937,6 @@ jobs:
         run: vp run hello
 
   test-registry-url:
-    if: ${{ !inputs.benchmark_toolchain }}
     runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -913,7 +961,6 @@ jobs:
           echo "NODE_AUTH_TOKEN is set: ${NODE_AUTH_TOKEN:+yes}"
 
   test-alpine-container:
-    if: ${{ !inputs.benchmark_toolchain }}
     runs-on: ubuntu-latest
     container:
       image: alpine:3.24
@@ -936,7 +983,6 @@ jobs:
         run: vp exec node -e "console.log('vp exec works in Alpine')"
 
   test-sfw:
-    if: ${{ !inputs.benchmark_toolchain }}
     # sfw wraps vp install end-to-end on all OSes (macOS / Windows supported
     # since vite-plus v0.1.23). On Linux we verify across every package
     # manager vp auto-detects via lockfile (pnpm/npm/yarn/bun); macOS / Windows
@@ -1012,7 +1058,6 @@ jobs:
         run: vp exec node -e "console.log(require('is-odd')(3))"
 
   test-sfw-alpine:
-    if: ${{ !inputs.benchmark_toolchain }}
     # vp version follows the workflow default (`latest`, or a pr_version
     # pkg.pr.new build on manual dispatch) — sfw's musl asset selection is
     # decoupled from vp's release channel.
@@ -1128,7 +1173,6 @@ jobs:
           echo "OK: sfw blocked lodahs on ${{ matrix.os }} (exit $CODE, block-line found)"
 
   test-sfw-with-socketdev-action:
-    if: ${{ !inputs.benchmark_toolchain }}
     # Exercises the composition path: install sfw via the upstream
     # `socketdev/action@<sha>` step first, then call setup-vp with `sfw:
     # true`. setup-vp should DETECT the pre-installed sfw on PATH (via
@@ -1212,7 +1256,6 @@ jobs:
           echo "OK: composed sfw blocked lodahs (exit $CODE, block-line found)"
 
   test-gitlab-cache-snapshot:
-    if: ${{ !inputs.benchmark_toolchain }}
     name: GitLab cache snapshot regression (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -1231,7 +1274,6 @@ jobs:
         run: node --test test/cache-snapshot.test.mjs
 
   test-azure-runtime:
-    if: ${{ !inputs.benchmark_toolchain }}
     strategy:
       fail-fast: false
       matrix:
@@ -1269,7 +1311,6 @@ jobs:
           [scriptblock]::Create((Get-Content -Raw gitlab/bootstrap.ps1)) > $null
 
   test-unit:
-    if: ${{ !inputs.benchmark_toolchain }}
     name: Unit tests (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -1292,7 +1333,6 @@ jobs:
         run: vp run test
 
   build:
-    if: ${{ !inputs.benchmark_toolchain }}
     runs-on: ubuntu-latest
     # This job verifies the action's own artifacts (dist/ committed and up to
     # date, types, lint). Pin it to the latest published Vite+ even on a
