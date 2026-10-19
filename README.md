@@ -470,9 +470,23 @@ space on the runner. Sizes vary with the toolchain versions and platform.
 The selected package manager adds one archive per key; its size depends on the
 manager, version, and platform. The figures above exclude that archive.
 
+For `pnpm@12.14.0`, the
+[urllib hosted run](https://github.com/node-modules/urllib/actions/runs/39211669048)
+records these additional compressed archive sizes:
+
+| Runner            | Package manager archive |
+| ----------------- | ----------------------: |
+| Linux x64 (glibc) |                20.8 MiB |
+| macOS ARM64       |                17.9 MiB |
+| Windows x64       |                20.3 MiB |
+
+One entry per platform adds about **59 MiB**. Other managers and versions can
+have different sizes. A package-manager key change creates a new manager
+archive and can reuse the existing Vite+/Node.js archive.
+
 A cache hit reuses an existing entry without uploading another copy. Each new
-cache key stores a complete archive of both Vite+ and Node.js, even when only one
-version changes. Different keys and GitHub branch or pull request scopes can
+Vite+/Node.js cache key stores a complete archive of both tools, even when only
+one version changes. Different keys and GitHub branch or pull request scopes can
 retain separate entries. See [GitHub's cache scope rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache).
 
 The project dependency cache (`cache: true`) uses additional storage that depends
