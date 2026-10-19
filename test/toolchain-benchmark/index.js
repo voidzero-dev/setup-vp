@@ -74,12 +74,14 @@ async function execute(env, project, label) {
     child.on("close", resolve);
   });
   const elapsedMs = performance.now() - started;
+  // Cache service debug lines contain short-lived signed transfer URLs.
+  const publicEvents = events.filter((event) => !event.text.startsWith("::debug::"));
   await writeFile(
     path.join(output, `${label}.jsonl`),
-    events.map((event) => JSON.stringify(event)).join("\n"),
+    publicEvents.map((event) => JSON.stringify(event)).join("\n"),
   );
   if (code !== 0) {
-    process.stdout.write(events.map((event) => event.text).join("\n"));
+    process.stdout.write(publicEvents.map((event) => event.text).join("\n"));
     throw new Error(`${label} exited ${code}`);
   }
   return elapsedMs;

@@ -9,6 +9,14 @@ import {
 } from "./ci/toolchain-cache.js";
 import { restoreToolchainCache, saveToolchainCache } from "./toolchain-cache.js";
 import { State } from "./types.js";
+import { isWindows } from "./ci/platform.js";
+import { recordToolchainLinks, restoreToolchainLinks } from "./ci/toolchain-links.js";
+
+vi.mock("./ci/platform.js", () => ({ isWindows: vi.fn() }));
+vi.mock("./ci/toolchain-links.js", () => ({
+  recordToolchainLinks: vi.fn(),
+  restoreToolchainLinks: vi.fn(),
+}));
 
 vi.mock("@actions/cache", () => ({ restoreCache: vi.fn(), saveCache: vi.fn() }));
 vi.mock("@actions/core", () => ({
@@ -38,6 +46,7 @@ const options = { version: plan.version, nodeVersion: plan.nodeVersion, projectD
 let state: Map<string, string>;
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(isWindows).mockReturnValue(false);
   state = new Map();
   vi.mocked(getState).mockImplementation((key) => state.get(key) || "");
   vi.mocked(saveState).mockImplementation((key, value) => {
@@ -49,6 +58,21 @@ beforeEach(() => {
 });
 
 describe("toolchain cache adapter", () => {
+  it("repairs Windows junctions before validation and cleans up save metadata", async () => {
+    vi.mocked(isWindows).mockReturnValue(true);
+    vi.mocked(restoreCache).mockResolvedValue(plan.key);
+    await restoreToolchainCache(options);
+    expect(restoreToolchainLinks).toHaveBeenCalledWith(plan.payload);
+    expect(vi.mocked(restoreToolchainLinks).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(validateToolchain).mock.invocationCallOrder[0]!,
+    );
+    state.set(State.ToolchainCacheHit, "");
+    const cleanup = vi.fn();
+    vi.mocked(recordToolchainLinks).mockReturnValue(cleanup);
+    vi.mocked(saveCache).mockRejectedValue(new Error("upload failed"));
+    await saveToolchainCache();
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
   it("reports a hit only after an exact match passes validation", async () => {
     vi.mocked(restoreCache).mockResolvedValue(plan.key);
     await restoreToolchainCache(options);

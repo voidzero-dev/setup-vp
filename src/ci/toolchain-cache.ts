@@ -80,7 +80,7 @@ export function createToolchainCachePlan(
   const payload = join(data, version);
   const runtime = join(data, "js_runtime", "node", nodeVersion);
   return {
-    key: `setup-vp-toolchain-v1-${platform}-${arch}-${libc}-${version}-node-${nodeVersion}-${suffix}`,
+    key: `setup-vp-toolchain-v2-${platform}-${arch}-${libc}-${version}-node-${nodeVersion}-${suffix}`,
     version,
     nodeVersion,
     data,

@@ -7,6 +7,8 @@ import {
   validateToolchain,
 } from "./ci/toolchain-cache.js";
 import type { ToolchainCachePlan } from "./ci/toolchain-cache.js";
+import { recordToolchainLinks, restoreToolchainLinks } from "./ci/toolchain-links.js";
+import { isWindows } from "./ci/platform.js";
 import { Outputs, State } from "./types.js";
 
 export async function restoreToolchainCache(
@@ -35,6 +37,7 @@ export async function restoreToolchainCache(
       timeoutInMs: 30_000,
       segmentTimeoutInMs: 30_000,
     });
+    if (matchedKey === plan.key && isWindows()) restoreToolchainLinks(plan.payload);
     if (matchedKey === plan.key && validateToolchain(plan)) {
       saveState(State.ToolchainCacheHit, "true");
       setOutput(Outputs.ToolchainCacheHit, true);
@@ -63,7 +66,13 @@ export async function saveToolchainCache(): Promise<void> {
       info("Toolchain cache save skipped: the installation did not pass validation.");
       return;
     }
-    const id = await saveCache(plan.paths, plan.key);
+    const cleanup = isWindows() ? recordToolchainLinks(plan.payload) : undefined;
+    let id: number;
+    try {
+      id = await saveCache(plan.paths, plan.key);
+    } finally {
+      cleanup?.();
+    }
     info(
       id === -1
         ? "Toolchain cache save skipped (another job can own this key)."
