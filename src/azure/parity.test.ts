@@ -40,8 +40,9 @@ function fixture() {
 }
 
 describe("Azure parity", () => {
-  it("exports the full installer PATH for subsequent Azure tasks", async () => {
-    const { root, env, ports } = fixture();
+  it("exports the installer PATH and passes project Node discovery without a session override", async () => {
+    const { root, project, env, ports } = fixture();
+    writeFileSync(path.join(project, ".node-version"), "22.18.0");
     const bin = path.join(root, "bin");
     const data = path.join(root, "data");
     const fallbackBin = path.join(data, "fallback-bin");
@@ -50,6 +51,8 @@ describe("Azure parity", () => {
       installVitePlus(version, {
         ...options,
         runInstall: (_url, installEnv) => {
+          expect(installEnv.VP_SETUP_NODE_VERSION).toBe("22.18.0");
+          writeFileSync(installEnv.VP_SETUP_NODE_VERSION_FILE!, "22.18.0");
           writeFileSync(
             installEnv.SETUP_VP_DIRS_FILE!,
             `data\t${data}\nbin\t${bin}\ncache\t/cache\nconfig\t/config\nstate\t/state\n`,
@@ -62,6 +65,7 @@ describe("Azure parity", () => {
     await runPrepare({ ...env, PATH: "/system/bin", SETUP_VP_VERSION: "latest" }, ports);
 
     expect(ports.prependPath).toHaveBeenCalledWith(bin);
+    expect(ports.run).not.toHaveBeenCalledWith("vp", ["env", "use", "22.18.0"], expect.anything());
     expect(ports.setVariable).toHaveBeenCalledWith(
       "PATH",
       [bin, "/system/bin", fallbackBin].join(path.delimiter),
