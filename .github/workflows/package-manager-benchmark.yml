@@ -37,7 +37,7 @@ jobs:
 
       - name: Setup Vite+ seed
         id: setup
-        uses: voidzero-dev/setup-vp@bf8eeb4333ae9701e8dac97d0d7588378af7af24
+        uses: voidzero-dev/setup-vp@06fe7ecfda756e5871867245052c17baa9b4e974
         with:
           version: 1.3.0
           node-version: "24.22.0"
@@ -175,7 +175,7 @@ jobs:
       - name: Setup Vite+ after
         id: setup
         if: matrix.mode == 'hit'
-        uses: voidzero-dev/setup-vp@bf8eeb4333ae9701e8dac97d0d7588378af7af24
+        uses: voidzero-dev/setup-vp@06fe7ecfda756e5871867245052c17baa9b4e974
         with:
           version: 1.3.0
           node-version: "24.22.0"
