@@ -152,7 +152,11 @@ export function validateToolchain(
   if (isWindows(platform) && !statSync(join(plan.payload, "bin", "vp-shim.exe")).isFile())
     return false;
   if (execFileSync(node, ["--version"], options).trim() !== `v${plan.nodeVersion}`) return false;
-  return hasVitePlusNativeBinding(payload, options);
+  return hasVitePlusNativeBinding(
+    payload,
+    options,
+    pkgPrNewCommitSha(plan.version) ? plan.version : undefined,
+  );
 }
 
 export function discardRestoredToolchain(plan: ToolchainCachePlan): void {

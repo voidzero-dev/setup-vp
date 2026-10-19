@@ -43,6 +43,7 @@ function isInside(parent: string, child: string): boolean {
 export function hasVitePlusNativeBinding(
   versionDir: string,
   options: ExecFileSyncOptionsWithStringEncoding,
+  previewVersion?: string,
 ): boolean {
   const loader = realpathSync(
     join(versionDir, "node_modules", "vite-plus", "binding", "index.cjs"),
@@ -58,7 +59,10 @@ process.stdout.write(JSON.stringify(Object.keys(require.cache).filter(file => fi
   const files: unknown = JSON.parse(
     execFileSync(process.execPath, ["--input-type=commonjs", "--eval", script, loader], {
       ...options,
-      env: { ...options.env, NAPI_RS_ENFORCE_VERSION_CHECK: "1" },
+      // Preview publishing updates package versions, but the generated loader
+      // still compares against its original release version. Check the loaded
+      // binding's package metadata below instead.
+      env: { ...options.env, NAPI_RS_ENFORCE_VERSION_CHECK: previewVersion ? "0" : "1" },
     }),
   );
   // A binding from another installation must not hide a damaged active one.
@@ -67,7 +71,22 @@ process.stdout.write(JSON.stringify(Object.keys(require.cache).filter(file => fi
     files.length > 0 &&
     files.every(
       (file) =>
-        typeof file === "string" && isAbsolute(file) && isInside(versionDir, realpathSync(file)),
+        typeof file === "string" &&
+        isAbsolute(file) &&
+        isInside(versionDir, realpathSync(file)) &&
+        (!previewVersion || bindingVersionMatches(versionDir, realpathSync(file), previewVersion)),
     )
   );
+}
+
+function bindingVersionMatches(root: string, file: string, version: string): boolean {
+  for (let dir = dirname(file); isInside(root, dir); dir = dirname(dir)) {
+    const manifest = join(dir, "package.json");
+    if (existsSync(manifest)) {
+      const pkg = JSON.parse(readFileSync(manifest, "utf8")) as PackageJson;
+      return pkg.version === version;
+    }
+    if (dir === root) break;
+  }
+  return false;
 }

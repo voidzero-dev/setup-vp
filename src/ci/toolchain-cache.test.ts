@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { hasVitePlusNativeBinding } from "./viteplus-payload.js";
 import {
   canRestoreToolchain,
   createToolchainCachePlan,
@@ -178,6 +179,24 @@ describe.each(["linux", "win32"] as const)("%s payload validation", (platform) =
   });
   it("checks native artifacts without requiring restored configuration or shims", () => {
     expect(validateToolchain(plan(platform), env, platform)).toBe(true);
+  });
+  it("checks preview binding metadata instead of the loader's original release version", () => {
+    const p = plan(platform);
+    const version = `0.0.0-commit.${"a".repeat(40)}`;
+    expect(
+      hasVitePlusNativeBinding(realpathSync(p.payload), { env, encoding: "utf8" }, version),
+    ).toBe(false);
+    write(join(p.payload, "node_modules/vite-plus/package.json"), JSON.stringify({ version }));
+    expect(
+      hasVitePlusNativeBinding(realpathSync(p.payload), { env, encoding: "utf8" }, version),
+    ).toBe(true);
+    expect(execFileSync).toHaveBeenLastCalledWith(
+      process.execPath,
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({ NAPI_RS_ENFORCE_VERSION_CHECK: "0" }),
+      }),
+    );
   });
   it("rejects a missing setup marker without running the cached binary", () => {
     rmSync(join(plan(platform).payload, "bin/.vp-setup-complete"));
