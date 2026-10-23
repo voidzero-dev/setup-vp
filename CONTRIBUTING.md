@@ -126,7 +126,7 @@ Renovate opens a PR when SocketDev publishes a new `sfw-free` release. The custo
 
 ## Releasing
 
-Publish releases as Git tags, not as an npm package. Keep `package.json.version` aligned with the release tag. Consumers pin an exact tag such as `voidzero-dev/setup-vp@v1.21.2` or a commit SHA. Do not move the `v1` major tag, which is frozen at `v1.15.0`.
+Publish releases as Git tags, not as an npm package. Keep `package.json.version` aligned with the release tag. Consumers pin an exact tag such as `voidzero-dev/setup-vp@v1.22.0` or a commit SHA. Do not move the `v1` major tag, which is frozen at `v1.15.0`.
 
 1. Open a release PR. Set the upcoming version in `package.json`; use it as the source of truth for the release version. Update the release examples in `README.md` and this guide. Set these defaults to `v` followed by that version:
 
@@ -154,6 +154,6 @@ Publish releases as Git tags, not as an npm package. Keep `package.json.version`
 5. Create the new annotated version tag on the release PR's merge commit and push it. For example:
 
    ```bash
-   git tag -a v1.21.2 -m "v1.21.2"
-   git push origin v1.21.2
+   git tag -a v1.22.0 -m "v1.22.0"
+   git push origin v1.22.0
    ```
