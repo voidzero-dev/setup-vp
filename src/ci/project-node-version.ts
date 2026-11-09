@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { validRange } from "semver";
+import { normalizeRange } from "verkit";
 
 const VERSION_PREFIX_RE = /^v/;
 const NODE_VERSION_ALIAS_RE = /^(?:lts|latest|lts\/(?:\*|[a-z]+|-\d+))$/i;
@@ -65,6 +65,6 @@ function parseNvmrc(content?: string): string | undefined {
 function normalize(value?: string): string | undefined {
   const version = value?.trim().replace(VERSION_PREFIX_RE, "");
   if (!version) return undefined;
-  if (NODE_VERSION_ALIAS_RE.test(version) || validRange(version)) return version;
+  if (NODE_VERSION_ALIAS_RE.test(version) || normalizeRange(version)) return version;
   return undefined;
 }

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { valid } from "semver";
+import { normalize } from "verkit";
 import type { ToolchainCachePlan } from "./toolchain-cache.js";
 
 const PACKAGE_MANAGERS = {
@@ -58,7 +58,7 @@ export function createPackageManagerCachePlan(
     manager.mode !== "managed" ||
     !Object.hasOwn(PACKAGE_MANAGERS, manager.name) ||
     typeof manager.version !== "string" ||
-    valid(manager.version) !== manager.version
+    normalize(manager.version) !== manager.version
   )
     return;
   const name = manager.name as PackageManagerName;
