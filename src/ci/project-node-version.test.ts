@@ -69,6 +69,27 @@ describe("project Node selection for the installer", () => {
   });
 
   it.each([
+    "22.x",
+    "~22.18.0",
+    "^22.18.0 || >=24.11.0",
+    "22.18.0 - 24.11.0",
+    ">=22.18.0 <23",
+    "26.0.0-rc.1",
+    "*",
+  ])("preserves the project Node selector %s", (version) => {
+    const root = fixture({ "package.json": JSON.stringify({ engines: { node: version } }) });
+    expect(resolveProjectNodeVersion(root)).toBe(version);
+  });
+
+  it.each(["22.018.0", "22.18.0-rc.01", ">=not-a-version", "9007199254740992.0.0"])(
+    "does not inherit a parent pin after invalid Node selector %s",
+    (version) => {
+      const root = fixture({ ".node-version": "24.11.0", "app/.node-version": version });
+      expect(resolveProjectNodeVersion(join(root, "app"))).toBeUndefined();
+    },
+  );
+
+  it.each([
     ["# comment\nnode\n", "latest"],
     ["stable # comment\n", "latest"],
     ["key=value\nlts/-1\n", "lts/-1"],

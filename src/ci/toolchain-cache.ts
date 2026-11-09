@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, realpathSync, rmSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { valid } from "semver";
+import { normalize } from "verkit";
 import { isMuslLinux } from "./install-sfw.js";
 import { pkgPrNewCommitSha } from "./install-script-urls.js";
 import { isWindows } from "./platform.js";
@@ -96,7 +96,7 @@ export function createToolchainCachePlan(
 
 function cacheableVersion(version: string, env: NodeJS.ProcessEnv): boolean {
   const preview = pkgPrNewCommitSha(version);
-  if (valid(version) !== version || !supportsVitePlusDirs(version)) return false;
+  if (normalize(version) !== version || !supportsVitePlusDirs(version)) return false;
   if (preview && !PREVIEW.test(version)) return false;
   if (env.VP_PR_VERSION && env.VP_PR_VERSION !== preview) return false;
   return !LOCAL_OVERRIDES.some((name) => env[name]);
@@ -106,7 +106,7 @@ function exactNodeVersion(selector?: string): string | undefined {
   // Do not freeze mutable selectors (including the default LTS) in an immutable cache.
   if (!selector || !EXACT_NODE.test(selector)) return;
   const version = selector.startsWith("v") ? selector.slice(1) : selector;
-  return valid(version) || undefined;
+  return normalize(version) || undefined;
 }
 
 export function canRestoreToolchain(plan: ToolchainCachePlan): boolean {

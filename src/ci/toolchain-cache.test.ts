@@ -38,20 +38,33 @@ afterEach(() => {
 });
 
 describe("toolchain cache selection", () => {
-  it.each(["latest", "^1.3.0", "0.2.9", "0.0.0-commit.1234567"])(
-    "skips unsupported Vite+ selector %s",
-    (version) => {
-      expect(createToolchainCachePlan({ ...options, version }, env)).toBeUndefined();
-    },
-  );
-  it.each([undefined, "lts", "22", "^22.18.0"])(
-    "does not freeze Node selector %s",
-    (nodeVersion) => {
-      expect(
-        createToolchainCachePlan({ ...options, nodeVersion, projectDir: root }, env),
-      ).toBeUndefined();
-    },
-  );
+  it.each([
+    "latest",
+    "^1.3.0",
+    "0.2.9",
+    "0.0.0-commit.1234567",
+    "v1.3.0",
+    "1.3.0+build.1",
+    "01.3.0",
+    "1.3.0-rc.01",
+    "9007199254740992.0.0",
+  ])("skips unsupported Vite+ selector %s", (version) => {
+    expect(createToolchainCachePlan({ ...options, version }, env)).toBeUndefined();
+  });
+  it.each([
+    undefined,
+    "lts",
+    "22",
+    "^22.18.0",
+    "22.018.0",
+    "22.18.0+build.1",
+    "22.18.0-rc.1",
+    "9007199254740992.0.0",
+  ])("does not freeze Node selector %s", (nodeVersion) => {
+    expect(
+      createToolchainCachePlan({ ...options, nodeVersion, projectDir: root }, env),
+    ).toBeUndefined();
+  });
   it("discovers exact project pins but gives explicit inputs priority", () => {
     writeFixture(join(root, ".node-version"), "24.15.0\n");
     expect(createToolchainCachePlan({ version: "1.3.0", projectDir: root }, env)?.nodeVersion).toBe(
@@ -63,8 +76,12 @@ describe("toolchain cache selection", () => {
   it("accepts immutable preview builds and normalizes a Node v prefix", () => {
     const version = `0.0.0-commit.${"a".repeat(40)}`;
     expect(
-      createToolchainCachePlan({ ...options, version, nodeVersion: "v22.23.1" }, env)?.version,
-    ).toBe(version);
+      createToolchainCachePlan({ ...options, version, nodeVersion: "v22.23.1" }, env),
+    ).toMatchObject({ version, nodeVersion: "22.23.1" });
+  });
+  it("accepts an exact prerelease version", () => {
+    const version = "1.3.0-rc.1";
+    expect(createToolchainCachePlan({ ...options, version }, env)?.version).toBe(version);
   });
   it.each(["VP_LOCAL_TGZ", "VP_LOCAL_BINARY", "VP_SKIP_DEPS_INSTALL", "VP_PR_VERSION"])(
     "bypasses %s",

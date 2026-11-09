@@ -17,7 +17,7 @@ function write(path: string, text = "fixture"): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text);
 }
-function fixture(name = "pnpm", platform: NodeJS.Platform = process.platform) {
+function fixture(name = "pnpm", platform: NodeJS.Platform = process.platform, version = "12.14.0") {
   const toolchain = createToolchainCachePlan(
     { version: "1.3.0", nodeVersion: "24.22.0", projectDir: root },
     env,
@@ -25,14 +25,14 @@ function fixture(name = "pnpm", platform: NodeJS.Platform = process.platform) {
   )!;
   const manager = {
     name,
-    version: "12.14.0",
+    version,
     mode: "managed",
     bin_paths: {
       [name]: join(
         toolchain.data,
         "package_manager",
         name,
-        "12.14.0",
+        version,
         name,
         "bin",
         `${name}${platform === "win32" ? ".cmd" : ""}`,
@@ -83,14 +83,29 @@ describe("package manager cache selection", () => {
       expect(create()?.path).toBe(join(toolchain.data, "package_manager", name, "12.14.0"));
     },
   );
-  it.each(["latest", "default", "^12.0.0", "../outside", "unknown"])(
-    "skips unresolved version %s",
-    (version) => {
-      const { manager, create } = fixture();
-      manager.version = version;
-      expect(create()).toBeUndefined();
-    },
-  );
+  it.each([
+    "latest",
+    "default",
+    "^12.0.0",
+    "../outside",
+    "unknown",
+    "v12.14.0",
+    "12.14.0+build.1",
+    "012.14.0",
+    "12.14.0-rc.01",
+    "9007199254740992.0.0",
+  ])("skips unresolved or noncanonical version %s", (version) => {
+    const { create } = fixture("pnpm", process.platform, version);
+    expect(create()).toBeUndefined();
+  });
+  it("accepts an exact prerelease package manager version", () => {
+    const version = "12.14.0-rc.1";
+    const { create, toolchain } = fixture("pnpm", process.platform, version);
+    expect(create()).toMatchObject({
+      version,
+      path: join(toolchain.data, "package_manager", "pnpm", version),
+    });
+  });
   it("skips system managers, bundled npm, and unsupported layouts", () => {
     const { manager, create } = fixture();
     manager.mode = "system_first";
