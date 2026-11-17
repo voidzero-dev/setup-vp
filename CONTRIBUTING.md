@@ -139,7 +139,19 @@ npx wrangler@4.163.0 workflows instances list setup-vp-ci
 npx wrangler@4.163.0 workflows instances describe setup-vp-ci <INSTANCE_ID>
 ```
 
-Each `mr` run posts a new PR comment. To run a PR again without another comment, start the run with the PR head SHA. A failed check shows the last 6,000 characters of its log in the check summary.
+Each `mr` run posts a new PR comment. To run a PR again without another comment, start the run with the PR head SHA.
+
+### Read Logs
+
+- Each check summary shows the runner log, up to its last 16 KiB. The runner keeps no more than that.
+- The **Details** link of each check and the link in the PR comment open the run in the Cloudflare dashboard. Only members of the `VoidZero-docs` account can open it.
+- `describe` and `describe --json` cut each step output to about 1 KiB. Use them for the step status and the run error, not for logs.
+- Each job runs in `timeout 14m`. A job that hangs stops with exit code 124 and keeps its log. The 15-minute step timeout would lose the log.
+- To run a failed job again without the other steps before it, restart the run from that job's step. The restart also runs every later step, which includes the PR comment of an `mr` run:
+
+  ```bash
+  npx wrangler@4.163.0 workflows instances restart setup-vp-ci <INSTANCE_ID> --from-step-name "unit-tests"
+  ```
 
 ### Change the Pipeline
 

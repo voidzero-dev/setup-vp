@@ -8,6 +8,8 @@
     "GITHUB_REPO": "voidzero-dev/setup-vp",
     // The Worker's workers.dev URL. Runners download the source from it.
     "SOURCE_ORIGIN": "https://setup-vp-ci.voidzero-docs.workers.dev",
+    // The dashboard URL of a run, without the instance ID. Checks link to it.
+    "RUN_URL_BASE": "https://dash.cloudflare.com/f8b59a295069bd81a0f256b7012f2c53/workers/workflows/setup-vp-ci/instance/",
   },
   "unsafe": {
     "bindings": [
