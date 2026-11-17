@@ -1,0 +1,30 @@
+{
+  // Cloudflare CI pipeline for this repository. See CONTRIBUTING.md#cloudflare-ci.
+  "name": "setup-vp-ci",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workflows": [{ "name": "setup-vp-ci", "binding": "CI_WORKFLOW", "class_name": "CI" }],
+  "vars": {
+    "GITHUB_REPO": "voidzero-dev/setup-vp",
+    // The Worker's workers.dev URL. Runners download the source from it.
+    "SOURCE_ORIGIN": "https://setup-vp-ci.voidzero-docs.workers.dev",
+  },
+  "unsafe": {
+    "bindings": [
+      {
+        "type": "scm",
+        "name": "REPO",
+        "provider": "github",
+        "repo": "voidzero-dev/setup-vp",
+        "scopes": [
+          "contents:read",
+          "checks:write",
+          "comments:write",
+          "merge_requests:read",
+          "outbound:read",
+        ],
+      },
+    ],
+  },
+  "observability": { "enabled": true },
+}

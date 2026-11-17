@@ -8,6 +8,7 @@ setup-vp installs [Vite+](https://viteplus.dev) (`vp`) through GitHub Actions, G
 - For GitHub Actions behavior, start with `action.yml` and `src/index.ts`; input parsing and schemas live in `src/inputs.ts` and `src/types.ts`.
 - For GitLab or Azure behavior, start with `src/gitlab/index.ts` or `src/azure/index.ts` and the corresponding templates and bootstrap scripts in `gitlab/` or `azure/`. See [Integration Design](CONTRIBUTING.md#integration-design) for the design references.
 - For behavior shared across integrations, start with `src/ci/` and the corresponding adapters under `src/`, `src/gitlab/`, and `src/azure/`.
+- For the Cloudflare CI pipeline, start with `.cloudflare/ci/src/index.ts` and follow [Cloudflare CI](CONTRIBUTING.md#cloudflare-ci). Its jobs mirror the `build` and Linux unit test jobs in `.github/workflows/test.yml`.
 
 ## Implementation Constraints
 

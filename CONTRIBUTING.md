@@ -53,7 +53,7 @@ The action uses the exact `fallow` version in `package.json`. After `vp install`
 vp exec fallow audit --base origin/main
 ```
 
-[`.fallowrc.json`](.fallowrc.json) declares the three runtime entry points. Fallow excludes generated files under `dist/` by default. Results appear in annotations, CI logs, and the job summary. The workflow does not write PR comments.
+[`.fallowrc.json`](.fallowrc.json) declares the three runtime entry points and the [Cloudflare CI](#cloudflare-ci) pipeline entry point. Fallow skips hidden directories by default, so the configuration includes `.cloudflare/` explicitly. Fallow excludes generated files under `dist/` by default. Results appear in annotations, CI logs, and the job summary. The workflow does not write PR comments.
 
 ## Integration Design
 
@@ -107,6 +107,64 @@ Manual dispatch works for same-repository and fork PRs. The workflow rejects a r
 For a standalone run, omit `pull_request`. Set `setup_ref` to an exact commit SHA or release tag, or leave it empty to test the workflow commit. Select `suite` (`full` by default) and `vite_plus_version` (`latest` by default). Manual runs selected on branches other than `main` skip the job.
 
 Pushes, merge queue commits, merges, and release tags do not automatically start GitLab pipelines. Release PRs must pass the full suite on their current head commit before merging; follow the [release procedure](#releasing).
+
+## Cloudflare CI
+
+[`.cloudflare/ci/`](.cloudflare/ci/) contains a Cloudflare CI pipeline. Cloudflare CI is in preview. The pipeline runs two jobs from [`test.yml`](.github/workflows/test.yml) in Cloudflare runners and reports them as GitHub checks:
+
+- `cloudflare-ci/build`: `typecheck`, `check`, `build`, and a check that `dist/` is up to date.
+- `cloudflare-ci/unit-tests`: `build`, then `test`.
+
+The other jobs in `test.yml` run the action through `uses: ./`, so they stay on GitHub Actions. The Cloudflare CI checks are not required checks.
+
+The pipeline is a Workflow in the `setup-vp-ci` Worker of the `VoidZero-docs` Cloudflare account. The deployed version runs for every branch. A change under `.cloudflare/ci/` takes effect only after a deploy, so a PR that changes the pipeline still runs the deployed version.
+
+To use Wrangler, you need access to the `VoidZero-docs` account. Run `npx wrangler@4.163.0 login` first.
+
+### Start a Run
+
+GitHub triggers are not available yet, so start each run with Wrangler:
+
+```bash
+cd .cloudflare/ci
+
+# A pull request: posts the checks and a new PR comment.
+npx wrangler@4.163.0 workflows trigger setup-vp-ci '{"mr":123}'
+
+# A commit (full SHA): posts or updates the checks, with no comment.
+npx wrangler@4.163.0 workflows trigger setup-vp-ci "{\"sha\":\"$(git rev-parse HEAD)\"}"
+
+# Follow runs.
+npx wrangler@4.163.0 workflows instances list setup-vp-ci
+npx wrangler@4.163.0 workflows instances describe setup-vp-ci <INSTANCE_ID>
+```
+
+Each `mr` run posts a new PR comment. To run a PR again without another comment, start the run with the PR head SHA. A failed check shows the last 6,000 characters of its log in the check summary.
+
+### Change the Pipeline
+
+1. Edit the files in `.cloudflare/ci/src/`, and increase `PIPELINE_VERSION` in `index.ts`.
+2. Run `vp check`. It formats, lints, and type-checks the pipeline with [`.cloudflare/ci/tsconfig.json`](.cloudflare/ci/tsconfig.json) and `@cloudflare/workers-types`.
+3. After the change merges, deploy from `main`:
+
+   ```bash
+   cd .cloudflare/ci
+   npx wrangler@4.163.0 deploy
+   ```
+
+4. Read `output.version` in the result of the next run. A run that starts in the first minutes after a deploy can still use the previous version. The plain `describe` output does not include the return value, so use `--json`:
+
+   ```bash
+   npx wrangler@4.163.0 workflows instances describe setup-vp-ci <INSTANCE_ID> --json --step-output=false
+   ```
+
+### Runner Environment
+
+- The default runner image has Node.js 24, npm, and Corepack, but no `git`, `jq`, or `pnpm`. GitHub CI uses `lts/*` from `.node-version`.
+- The install uses `pnpm install --ignore-scripts`, because the root `prepare` script (`vp config`) fails without `git`. The repository allows no dependency build scripts, so the flag skips nothing else.
+- The `unit-tests` runner installs `jq` with `apt-get`, because `src/gitlab/workflow.test.ts` runs the GitLab E2E workflow script, which uses `jq`.
+- Runners cannot check out code from GitHub yet. The Worker serves each commit as a tarball through a signed URL, so runners have no Git history. `SOURCE_SECRET` signs the URLs. To replace it, run `openssl rand -hex 32 | npx wrangler@4.163.0 secret put SOURCE_SECRET` in `.cloudflare/ci/`.
+- `@cloudflare/workers-types` does not include `step.runner()`. [`runner.d.ts`](.cloudflare/ci/src/runner.d.ts) declares the result that the runtime returns, `logs: { data, truncated }`. The Cloudflare CI docs show `logs.stdout` and `logs.stderr` instead.
 
 ## Dependency Updates
 
