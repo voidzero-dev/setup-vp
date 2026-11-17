@@ -22,7 +22,7 @@ type RunResult = {
   error?: string;
 };
 
-type JobResult = { check: string; passed: boolean; exitCode: number | null };
+type JobResult = { check: string; passed: boolean; exitCode: number | null; checkRunId: number };
 
 // The default image has Node.js 24, npm, and Corepack, but no pnpm or git.
 // Corepack installs the pnpm version from package.json "packageManager".
@@ -86,7 +86,7 @@ const RUNNER_ENV = {
 };
 
 // Bumped on each change, because `instances list` does not show which code ran.
-const PIPELINE_VERSION = "2026-11-17.5";
+const PIPELINE_VERSION = "2026-11-17.6";
 
 export class CI extends WorkflowEntrypoint<Env, Params> {
   async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
@@ -110,7 +110,7 @@ export class CI extends WorkflowEntrypoint<Env, Params> {
 
     if (mr) {
       await step.do("comment on pull request", () =>
-        commentOnPullRequest(env, mr, formatComment(context, results)),
+        commentOnPullRequest(env, mr, formatComment(context, mr, results)),
       );
     }
 
@@ -129,7 +129,7 @@ async function runJob(context: RunContext, { name, command }: Job): Promise<JobR
 
   const result = await runCommand(step, name, command, context.source);
 
-  await step.do(`complete ${name}`, () =>
+  const { checkRunId } = await step.do(`complete ${name}`, () =>
     writeCheck(env, sha, check, {
       status: "completed",
       conclusion: result.passed ? "success" : "failure",
@@ -138,7 +138,7 @@ async function runJob(context: RunContext, { name, command }: Job): Promise<JobR
       detailsUrl: runUrl,
     }),
   );
-  return { check, passed: result.passed, exitCode: result.exitCode };
+  return { check, passed: result.passed, exitCode: result.exitCode, checkRunId };
 }
 
 // Step timeouts and container errors throw, even with allowFailure. Catch them,
@@ -184,10 +184,13 @@ function formatSummary({ log, truncated, error }: RunResult) {
   return `${heading}\n\n\`\`\`\`text\n${log ?? ""}\n\`\`\`\``;
 }
 
-function formatComment({ sha, runUrl }: RunContext, results: JobResult[]) {
+// Each check name links to its check page on the PR, which shows the runner log.
+function formatComment({ env, sha, runUrl }: RunContext, mr: number, results: JobResult[]) {
+  const checksUrl = `https://github.com/${env.GITHUB_REPO}/pull/${mr}/checks`;
   const lines = results.map(
-    ({ check, passed, exitCode }) =>
-      `- ${passed ? "✅" : "❌"} \`${check}\`` + (passed ? "" : ` (${failureReason(exitCode)})`),
+    ({ check, passed, exitCode, checkRunId }) =>
+      `- ${passed ? "✅" : "❌"} [\`${check}\`](${checksUrl}?check_run_id=${checkRunId})` +
+      (passed ? "" : ` (${failureReason(exitCode)})`),
   );
   return [
     `Cloudflare CI on \`${sha.slice(0, 7)}\`:`,
