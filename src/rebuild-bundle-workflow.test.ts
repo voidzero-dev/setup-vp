@@ -155,6 +155,7 @@ describe("bundle rebuild credential isolation", () => {
       type: "string",
     });
     expect(publisher.jobs.publish.if).toBe("github.ref == 'refs/heads/main'");
+    expect(publisher.jobs.publish.environment).toBe("bundle-publish");
     expect(publisher.permissions).toEqual({});
     expect(publisher.jobs.publish.permissions).toEqual({
       actions: "read",
@@ -177,8 +178,8 @@ describe("bundle rebuild credential isolation", () => {
     });
     expect(buildSteps.at(-1)!.with!.name).toBe("rebuilt-bundles-${{ github.run_attempt }}");
     expect(commitSteps[3].with).toEqual({
-      "client-id": "${{ secrets.APP_ID }}",
-      "private-key": "${{ secrets.APP_PRIVATE_KEY }}",
+      "client-id": "${{ vars.SETUP_VP_BUNDLE_APP_CLIENT_ID }}",
+      "private-key": "${{ secrets.SETUP_VP_BUNDLE_APP_PRIVATE_KEY }}",
       repositories: "${{ github.event.repository.name }}",
       "permission-contents": "write",
     });

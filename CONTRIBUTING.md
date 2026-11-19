@@ -70,23 +70,24 @@ Installers that support this protocol resolve an explicit environment override o
 
 The temporary result is cleared before each installer attempt and removed after installation. Older installers do not write a result, so setup-vp retains the original selector and existing behavior. Updating setup-vp alone does not enable runtime reuse for an older Vite+ release.
 
+## Protected Workflow Credentials
+
+Create two [GitHub Actions environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments) before enabling the credentialed workflows below. In each environment, allow deployments only from the `main` branch. Use required reviewers and prevent self-review to require a separate approval for credential access.
+
+| Environment      | Configuration                                                                                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab-e2e`     | Set the environment secret `SETUP_VP_GITLAB_TRIGGER_TOKEN` to a dedicated GitLab test project trigger token.                                                                                        |
+| `bundle-publish` | Set the environment variable `SETUP_VP_BUNDLE_APP_CLIENT_ID` and the environment secret `SETUP_VP_BUNDLE_APP_PRIVATE_KEY`. Use a dedicated App with `contents: write` installed only on `setup-vp`. |
+
+Keep these credentials at environment scope. During migration, remove the old repository secret `GITLAB_TRIGGER_TOKEN` and remove this repository's access to the old organization secret `APP_PRIVATE_KEY`. Rotate credentials that previously had broader access.
+
 ## GitLab End-to-End Tests
 
-Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. The [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) accepts `run-e2e` label requests for same-repository PRs and manual `workflow_dispatch` requests on `main`. The job uses the GitLab trigger secret without checking out or executing PR files on the GitHub runner.
+Use the dedicated [GitLab test project](https://gitlab.com/fengmk2/setup-vp-gitlab-test) to test the remote integration. Start the [GitLab E2E workflow](.github/workflows/gitlab-e2e.yml) with `workflow_dispatch` on `main`. The protected `gitlab-e2e` environment supplies the trigger credential. The GitHub job does not check out or execute PR files.
 
 ### Request a Run
 
-For a same-repository PR, review its current head commit, including workflow changes, then add `run-e2e`:
-
-```bash
-gh pr edit 123 --add-label run-e2e
-```
-
-The workflow checks that the labeler has repository write access and runs the full suite at the label event's head SHA. After each new commit, review the changes, then remove and re-add `run-e2e`. Keeping the label on a PR does not approve later pushes. The handler rejects stale heads, closed PRs, and requests whose label was removed.
-
-### Manual Runs and Fork PRs
-
-Fork PRs use manual dispatch because `pull_request` workflows do not receive the GitLab secret from the base repository. For a manual PR run, set the PR number and record its current head SHA. Review that commit before starting the workflow:
+For a manual PR run, set the PR number and record its current head SHA. Review that commit before starting the workflow:
 
 ```bash
 pr_number=123
@@ -102,7 +103,7 @@ gh workflow run gitlab-e2e.yml --ref main \
   -f suite=full
 ```
 
-Manual dispatch works for same-repository and fork PRs. The workflow rejects a request if the PR head changes before validation. Each new commit needs another review and request. For both label and manual requests, check the workflow's logs and job summary for the tested commit, suite, pipeline link, and result. The workflow does not write PR comments.
+Manual dispatch works for same-repository and fork PRs. The workflow rejects a request if the PR head changes before validation. Each new commit needs another review and request. Check the workflow's logs and job summary for the tested commit, suite, pipeline link, and result. The workflow does not write PR comments.
 
 For a standalone run, omit `pull_request`. Set `setup_ref` to an exact commit SHA or release tag, or leave it empty to test the workflow commit. Select `suite` (`full` by default) and `vite_plus_version` (`latest` by default). Manual runs selected on branches other than `main` skip the job.
 
@@ -136,7 +137,7 @@ Publish releases as Git tags, not as an npm package. Keep `package.json.version`
 
    Run the [required checks](#before-committing) and commit the release changes, including any updated bundles. The bootstrap and template tests compare these defaults with `package.json.version`, so an omitted update fails CI. Do not resolve `latest` at runtime or reuse the frozen `v1` tag.
 
-2. Review the release PR's current head commit, then add `run-e2e` for a same-repository PR or dispatch the full suite from `main` for a fork. Follow the [GitLab E2E procedures](#gitlab-end-to-end-tests). After any new commit, including an update from `main`, review the changes and remove and re-add the label or dispatch another run for the new SHA.
+2. Review the release PR's current head commit, then dispatch the full suite from `main`. Follow the [GitLab E2E procedures](#gitlab-end-to-end-tests). After any new commit, review the changes and dispatch another run for the new SHA.
 
 3. Merge the release PR only after GitHub CI and the full GitLab suite pass. Check the GitLab E2E job summary: its result must be `success`, its suite must be `full`, and its tested commit must still match the PR head.
 
