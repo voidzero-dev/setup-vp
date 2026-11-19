@@ -137,7 +137,7 @@ export async function runPost(inputs: Inputs): Promise<void> {
   await Promise.all([
     inputs.cacheToolchain ? saveToolchainCache() : undefined,
     inputs.cacheToolchain ? savePackageManagerCache() : undefined,
-    inputs.cache ? saveCache() : undefined,
+    inputs.cache ? saveCache({ prune: inputs.cachePrune === true }) : undefined,
   ]);
 }
 

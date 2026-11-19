@@ -1,8 +1,57 @@
 import { saveCache as saveCacheAction } from "@actions/cache";
 import { getState, info, warning } from "@actions/core";
-import { State } from "./types.js";
+import { exec, getExecOutput } from "@actions/exec";
+import { satisfiesComparator } from "verkit";
+import { LockFileType, State } from "./types.js";
 
-export async function saveCache(): Promise<void> {
+async function getPnpmVersion(cwd: string | undefined): Promise<string | undefined> {
+  const result = await getExecOutput("vp", ["env", "current", "--json"], {
+    cwd,
+    silent: true,
+    ignoreReturnCode: true,
+  });
+  if (result.exitCode !== 0) return undefined;
+  const current = JSON.parse(result.stdout) as {
+    package_manager?: { name?: unknown; version?: unknown };
+  } | null;
+  const packageManager = current?.package_manager;
+  return packageManager?.name === "pnpm" && typeof packageManager.version === "string"
+    ? packageManager.version
+    : undefined;
+}
+
+// `vp pm cache clean` runs `pnpm store prune`, which removes packages that no project
+// on this machine references.
+async function prunePnpmStore(cwd: string | undefined): Promise<void> {
+  try {
+    const version = await getPnpmVersion(cwd);
+    // Before 12.16.0, `pnpm store prune` also removed packages that pnpm copied or cloned
+    // into node_modules. https://pnpm.io/blog/releases/12.16.0#store
+    if (!version || !satisfiesComparator(version, ">=12.16.0")) {
+      info(
+        `Skipping pnpm store prune: pnpm ${version ?? "(unknown)"} can remove copied or cloned packages that are still in use (fixed in pnpm 12.16.0).`,
+      );
+      return;
+    }
+
+    info("Cache was restored from a previous lock file. Pruning the pnpm store before saving.");
+    const exitCode = await exec("vp", ["pm", "cache", "clean"], { cwd, ignoreReturnCode: true });
+    if (exitCode !== 0) {
+      warning(`Failed to prune the pnpm store (exit code ${exitCode}). Saving it unpruned.`);
+    }
+  } catch (error) {
+    warning(`Failed to prune the pnpm store: ${String(error)}. Saving it unpruned.`);
+  }
+}
+
+export interface SaveCacheOptions {
+  // Opt-in: after a partial install (no install, `--prod`, `--filter`), pruning drops
+  // packages the lock file still needs, and later jobs restore that store under the
+  // exact lock file key without saving again.
+  prune?: boolean;
+}
+
+export async function saveCache({ prune = false }: SaveCacheOptions = {}): Promise<void> {
   const primaryKey = getState(State.CachePrimaryKey);
   const matchedKey = getState(State.CacheMatchedKey);
   const cachePathsJson = getState(State.CachePaths);
@@ -28,6 +77,12 @@ export async function saveCache(): Promise<void> {
   if (!cachePaths.length) {
     info("Empty cache paths. Skipping cache save.");
     return;
+  }
+
+  // A restore-key match brings back the store of an older lock file. Without pruning,
+  // each lock file change saves that store plus the new packages, so it grows forever.
+  if (prune && matchedKey && getState(State.CacheLockFileType) === LockFileType.Pnpm) {
+    await prunePnpmStore(getState(State.CacheCwd) || undefined);
   }
 
   try {

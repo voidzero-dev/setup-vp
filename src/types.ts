@@ -31,6 +31,7 @@ export interface Inputs {
   readonly cache: boolean;
   readonly cacheToolchain?: boolean;
   readonly cacheSave: boolean;
+  readonly cachePrune?: boolean;
   readonly cacheDependencyPath?: string;
   readonly registryUrl?: string;
   readonly scope?: string;
@@ -45,6 +46,8 @@ export enum State {
   CachePrimaryKey = "CACHE_PRIMARY_KEY",
   CacheMatchedKey = "CACHE_MATCHED_KEY",
   CachePaths = "CACHE_PATHS",
+  CacheLockFileType = "CACHE_LOCK_FILE_TYPE",
+  CacheCwd = "CACHE_CWD",
   InstalledVersion = "INSTALLED_VERSION",
   ToolchainCachePlan = "TOOLCHAIN_CACHE_PLAN",
   ToolchainCacheHit = "TOOLCHAIN_CACHE_HIT",

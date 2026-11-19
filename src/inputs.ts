@@ -31,6 +31,7 @@ export function getInputs(): Inputs {
     cache: getBooleanInput("cache"),
     cacheToolchain: getBooleanInput("cache-toolchain"),
     cacheSave: getBooleanInput("cache-save"),
+    cachePrune: getBooleanInput("cache-prune"),
     cacheDependencyPath: getInput("cache-dependency-path") || undefined,
     registryUrl: getInput("registry-url") || undefined,
     scope: getInput("scope") || undefined,

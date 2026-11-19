@@ -45,6 +45,10 @@ inputs:
     description: "Whether to save enabled dependency and toolchain caches in the post action."
     required: false
     default: "true"
+  cache-prune:
+    description: "Prune the pnpm store before saving a dependency cache restored from an older lock file. Enable it only in jobs that install every package in the lock file."
+    required: false
+    default: "false"
   cache-toolchain:
     description: "Cache Vite+, the managed Node.js runtime, and the selected managed package manager. Requires exact Vite+ and Node.js versions. Independent of the project dependency cache."
     required: false

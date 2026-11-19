@@ -346,6 +346,7 @@ jobs:
 | `cache`                 | Enable caching of project dependencies                                                                             | No       | `false`               |
 | `cache-toolchain`       | Cache Vite+, managed Node.js, and the selected package manager in GitHub Actions. Requires exact versions          | No       | `false`               |
 | `cache-save`            | Save enabled dependency and toolchain caches in the post action                                                    | No       | `true`                |
+| `cache-prune`           | Prune the pnpm store before saving a dependency cache restored from an older lock file                             | No       | `false`               |
 | `cache-dependency-path` | Path to lock file for cache key generation                                                                         | No       | Auto-detected         |
 | `registry-url`          | Optional registry to set up for auth. Sets the registry in `.npmrc` and reads auth from `NODE_AUTH_TOKEN`          | No       |                       |
 | `scope`                 | Optional scope for scoped registries. Falls back to repo owner for GitHub Packages                                 | No       |                       |
@@ -512,9 +513,24 @@ When `cache: true` is set, the action additionally caches project dependencies b
 
 The dependency cache key format is: `vite-plus-{OS}-{arch}-{pm}-{lockfile-hash}`
 
+On a lockfile hash miss, the action restores the newest cache for the same OS and architecture, and saves it with the packages the new lock file added. Packages the lock file no longer uses stay in the store, so with long cache retention the cache keeps growing.
+
 When `working-directory` is set, lockfile auto-detection runs in that directory.
 
 When `cache-dependency-path` points to a lock file in a subdirectory, the action resolves the package-manager cache directory from that lock file's directory.
+
+### Prune the pnpm store
+
+Set `cache-prune: true` to run `pnpm store prune` on a store restored from an older lock file before saving it. The new cache then keeps only the packages that installs on the runner use. The action prunes only with pnpm 12.16.0 or later, because earlier versions can prune packages that were copied or cloned into `node_modules`.
+
+Enable it only in jobs that install every package in the lock file. After `run-install: false`, a `--prod` install, or a filtered install, pruning removes packages that the lock file still needs. Later jobs restore that store by its exact key and do not save it again, so they download the missing packages on every run.
+
+```yaml
+- uses: voidzero-dev/setup-vp@v1.22.0
+  with:
+    cache: true
+    cache-prune: true
+```
 
 ### Control cache saving
 
