@@ -9,6 +9,9 @@ vi.mock("@actions/exec", () => ({
   exec: vi.fn(),
   getExecOutput: vi.fn(),
 }));
+vi.mock("./pnpm-install-check.js", () => ({
+  findIncompletePnpmInstall: vi.fn(),
+}));
 vi.mock("@actions/core", () => ({
   getState: vi.fn(),
   info: vi.fn(),
@@ -19,6 +22,7 @@ import { saveCache as saveCacheAction } from "@actions/cache";
 import { getState, info, warning } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
 import { saveCache } from "./cache-save.js";
+import { findIncompletePnpmInstall } from "./pnpm-install-check.js";
 import { State } from "./types.js";
 
 const mockedSaveCacheAction = vi.mocked(saveCacheAction);
@@ -27,6 +31,7 @@ const mockedInfo = vi.mocked(info);
 const mockedWarning = vi.mocked(warning);
 const mockedExec = vi.mocked(exec);
 const mockedGetExecOutput = vi.mocked(getExecOutput);
+const mockedFindIncompletePnpmInstall = vi.mocked(findIncompletePnpmInstall);
 
 // Drive getState to return values for the save path:
 // a primary key, distinct matched key (so we don't short-circuit on a hit),
@@ -40,6 +45,8 @@ function stubSaveState({ matchedKey = "", lockFileType = "pnpm" } = {}): void {
         return matchedKey;
       case State.CacheLockFileType:
         return lockFileType;
+      case State.CacheLockFilePath:
+        return "/home/runner/work/app/pnpm-lock.yaml";
       case State.CacheCwd:
         return "/home/runner/work/app";
       case State.CachePaths:
@@ -111,6 +118,7 @@ describe("saveCache", () => {
     beforeEach(() => {
       stubSaveState({ matchedKey: previousKey });
       mockedSaveCacheAction.mockResolvedValue(42);
+      mockedFindIncompletePnpmInstall.mockReturnValue(undefined);
     });
 
     it("prunes the restored pnpm store before saving", async () => {
@@ -132,6 +140,23 @@ describe("saveCache", () => {
         mockedSaveCacheAction.mock.invocationCallOrder[0]!,
       );
       expect(mockedWarning).not.toHaveBeenCalled();
+    });
+
+    it("does not prune after an incomplete install", async () => {
+      stubProbes();
+      mockedFindIncompletePnpmInstall.mockReturnValue("the install skipped devDependencies");
+
+      await saveCache();
+
+      expect(mockedFindIncompletePnpmInstall).toHaveBeenCalledWith(
+        "/home/runner/work/app/pnpm-lock.yaml",
+        storePath,
+      );
+      expect(mockedInfo).toHaveBeenCalledWith(
+        expect.stringContaining("the install skipped devDependencies"),
+      );
+      expect(mockedExec).not.toHaveBeenCalled();
+      expect(mockedSaveCacheAction).toHaveBeenCalled();
     });
 
     it("does not prune when packageManager selects another package manager", async () => {
