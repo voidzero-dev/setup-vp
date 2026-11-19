@@ -53,12 +53,7 @@ function getInstalledStoreDir(cwd: string | undefined): string | undefined {
   }
 }
 
-// Returns why the restored store must not be pruned, or undefined when pruning is safe.
-async function getPruneSkipReason(
-  cwd: string | undefined,
-  storeArgs: string[],
-  storePath: string,
-): Promise<string | undefined> {
+async function getPackageManagerSkipReason(cwd: string | undefined): Promise<string | undefined> {
   const packageManager = await resolvePackageManager(cwd);
   if (packageManager?.name !== "pnpm" || typeof packageManager.version !== "string") {
     return "Vite+ did not resolve pnpm for this project.";
@@ -66,7 +61,14 @@ async function getPruneSkipReason(
   if (!isPruneSafePnpm(packageManager.version)) {
     return `pnpm ${packageManager.version} can remove copied or cloned packages that are still in use (fixed in pnpm 12.16.0).`;
   }
+  return undefined;
+}
 
+async function getStoreSkipReason(
+  cwd: string | undefined,
+  storeArgs: string[],
+  storePath: string,
+): Promise<string | undefined> {
   const resolved = await getExecOutput("vp", ["pm", "cache", "dir", ...storeArgs], {
     cwd,
     silent: true,
@@ -82,6 +84,18 @@ async function getPruneSkipReason(
     return `the install used the store "${installedStoreDir ?? "unknown"}", not the restored "${storePath}".`;
   }
   return undefined;
+}
+
+// Returns why the restored store must not be pruned, or undefined when pruning is safe.
+async function getPruneSkipReason(
+  cwd: string | undefined,
+  storeArgs: string[],
+  storePath: string,
+): Promise<string | undefined> {
+  return (
+    (await getPackageManagerSkipReason(cwd)) ??
+    (await getStoreSkipReason(cwd, storeArgs, storePath))
+  );
 }
 
 // `vp pm cache clean` runs `pnpm store prune`, which removes packages that no project
