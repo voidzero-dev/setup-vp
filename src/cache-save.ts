@@ -1,7 +1,9 @@
 import { saveCache as saveCacheAction } from "@actions/cache";
 import { getState, info, warning } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
-import { resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { LockFileType, State } from "./types.js";
 
 // Before 12.16.0, `pnpm store prune` also removed packages that pnpm copied or cloned
@@ -37,6 +39,20 @@ async function resolvePackageManager(
   return current?.package_manager;
 }
 
+// pnpm records the store an install used in node_modules/.modules.yaml (written as JSON).
+// An install with another store, for example `--store-dir` in `run-install.args`, leaves
+// the restored store unreferenced, and pruning it would empty the cache about to be saved.
+function getInstalledStoreDir(cwd: string | undefined): string | undefined {
+  try {
+    const modules = JSON.parse(
+      readFileSync(join(cwd ?? process.cwd(), "node_modules", ".modules.yaml"), "utf8"),
+    ) as { storeDir?: unknown } | null;
+    return typeof modules?.storeDir === "string" ? modules.storeDir : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // Returns why the restored store must not be pruned, or undefined when pruning is safe.
 async function getPruneSkipReason(
   cwd: string | undefined,
@@ -60,6 +76,11 @@ async function getPruneSkipReason(
   if (resolved.exitCode !== 0 || !resolvedPath || resolve(resolvedPath) !== resolve(storePath)) {
     return `the store resolved to "${resolvedPath}", not the restored "${storePath}".`;
   }
+
+  const installedStoreDir = getInstalledStoreDir(cwd);
+  if (!installedStoreDir || resolve(installedStoreDir) !== resolve(storePath)) {
+    return `the install used the store "${installedStoreDir ?? "unknown"}", not the restored "${storePath}".`;
+  }
   return undefined;
 }
 
@@ -75,10 +96,21 @@ async function prunePnpmStore(cwd: string | undefined, storePath: string): Promi
     }
 
     info("Cache was restored from a previous lock file. Pruning the pnpm store before saving.");
-    const exitCode = await exec("vp", ["pm", "cache", "clean", ...storeArgs], {
-      cwd,
-      ignoreReturnCode: true,
-    });
+    // pnpm 12.16.0+ also clears its metadata cache during prune. Point it at an empty
+    // directory so a metadata cache that self-hosted runners keep is left alone.
+    const metadataCacheDir = mkdtempSync(
+      join(process.env.RUNNER_TEMP || tmpdir(), "setup-vp-prune-"),
+    );
+    let exitCode: number;
+    try {
+      exitCode = await exec(
+        "vp",
+        ["pm", "cache", "clean", ...storeArgs, "--cache-dir", metadataCacheDir],
+        { cwd, ignoreReturnCode: true },
+      );
+    } finally {
+      rmSync(metadataCacheDir, { recursive: true, force: true });
+    }
     if (exitCode !== 0) {
       warning(`Failed to prune the pnpm store (exit code ${exitCode}). Saving it unpruned.`);
     }

@@ -521,7 +521,7 @@ When `cache-dependency-path` points to a lock file in a subdirectory, the action
 
 ### Prune the pnpm store
 
-Set `cache-prune: true` to run `pnpm store prune` on a store restored from an older lock file before saving it. The new cache then keeps only the packages that installs on the runner use. The action prunes only when Vite+ resolves pnpm 12.16.0 or later for the project, and only the restored store. Earlier pnpm versions can prune packages that were copied or cloned into `node_modules`.
+Set `cache-prune: true` to run `pnpm store prune` on a store restored from an older lock file before saving it. The new cache then keeps only the packages that installs on the runner use. The action prunes only when Vite+ resolves pnpm 12.16.0 or later for the project, and only the restored store, and only when the install in the lock file's directory used that store (for example, not after `--store-dir` in `run-install.args`). Earlier pnpm versions can prune packages that were copied or cloned into `node_modules`. pnpm also clears its package metadata cache during prune, so the action points the prune at an empty temporary metadata cache and leaves the runner's own cache alone.
 
 Enable it only in jobs that install every package in the lock file. After `run-install: false`, a `--prod` install, or a filtered install, pruning removes packages that the lock file still needs. Later jobs restore that store by its exact key and do not save it again, so they download the missing packages on every run.
 
