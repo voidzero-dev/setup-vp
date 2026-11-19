@@ -37,33 +37,40 @@ async function resolvePackageManager(
   return current?.package_manager;
 }
 
+// Returns why the restored store must not be pruned, or undefined when pruning is safe.
+async function getPruneSkipReason(
+  cwd: string | undefined,
+  storeArgs: string[],
+  storePath: string,
+): Promise<string | undefined> {
+  const packageManager = await resolvePackageManager(cwd);
+  if (packageManager?.name !== "pnpm" || typeof packageManager.version !== "string") {
+    return "Vite+ did not resolve pnpm for this project.";
+  }
+  if (!isPruneSafePnpm(packageManager.version)) {
+    return `pnpm ${packageManager.version} can remove copied or cloned packages that are still in use (fixed in pnpm 12.16.0).`;
+  }
+
+  const resolved = await getExecOutput("vp", ["pm", "cache", "dir", ...storeArgs], {
+    cwd,
+    silent: true,
+    ignoreReturnCode: true,
+  });
+  const resolvedPath = resolved.stdout.trim();
+  if (resolved.exitCode !== 0 || !resolvedPath || resolve(resolvedPath) !== resolve(storePath)) {
+    return `the store resolved to "${resolvedPath}", not the restored "${storePath}".`;
+  }
+  return undefined;
+}
+
 // `vp pm cache clean` runs `pnpm store prune`, which removes packages that no project
 // on this machine references. It runs only against the store recorded at restore.
 async function prunePnpmStore(cwd: string | undefined, storePath: string): Promise<void> {
   try {
-    const packageManager = await resolvePackageManager(cwd);
-    if (packageManager?.name !== "pnpm" || typeof packageManager.version !== "string") {
-      info("Skipping pnpm store prune: Vite+ did not resolve pnpm for this project.");
-      return;
-    }
-    if (!isPruneSafePnpm(packageManager.version)) {
-      info(
-        `Skipping pnpm store prune: pnpm ${packageManager.version} can remove copied or cloned packages that are still in use (fixed in pnpm 12.16.0).`,
-      );
-      return;
-    }
-
     const storeArgs = ["--", "--store-dir", storePath];
-    const resolved = await getExecOutput("vp", ["pm", "cache", "dir", ...storeArgs], {
-      cwd,
-      silent: true,
-      ignoreReturnCode: true,
-    });
-    const resolvedPath = resolved.stdout.trim();
-    if (resolved.exitCode !== 0 || !resolvedPath || resolve(resolvedPath) !== resolve(storePath)) {
-      info(
-        `Skipping pnpm store prune: the store resolved to "${resolvedPath}", not the restored "${storePath}".`,
-      );
+    const skipReason = await getPruneSkipReason(cwd, storeArgs, storePath);
+    if (skipReason) {
+      info(`Skipping pnpm store prune: ${skipReason}`);
       return;
     }
 

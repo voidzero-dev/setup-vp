@@ -69,6 +69,7 @@ switch (process.argv[2]) {
         INPUT_CACHE: "false",
         "INPUT_CACHE-TOOLCHAIN": "false",
         "INPUT_CACHE-SAVE": "false",
+        "INPUT_CACHE-PRUNE": "false",
         INPUT_SFW: "false",
       };
       for (const key of overrides) delete env[key];
