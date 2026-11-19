@@ -1,23 +1,8 @@
 import { saveCache as saveCacheAction } from "@actions/cache";
 import { getState, info, warning } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
+import { satisfiesComparator } from "verkit";
 import { LockFileType, State } from "./types.js";
-
-// Before 12.16.0, `pnpm store prune` also removed packages that pnpm copied or cloned
-// into node_modules, so the next install downloaded them again.
-// https://pnpm.io/blog/releases/12.16.0#store
-const MIN_PRUNE_SAFE_PNPM = [12, 16, 0];
-const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)/;
-
-function isPruneSafePnpm(version: string): boolean {
-  const match = VERSION_RE.exec(version);
-  if (!match) return false;
-  const parts = match.slice(1).map(Number);
-  for (let i = 0; i < MIN_PRUNE_SAFE_PNPM.length; i++) {
-    if (parts[i] !== MIN_PRUNE_SAFE_PNPM[i]) return parts[i]! > MIN_PRUNE_SAFE_PNPM[i]!;
-  }
-  return true;
-}
 
 async function getPnpmVersion(cwd: string | undefined): Promise<string | undefined> {
   const result = await getExecOutput("vp", ["env", "current", "--json"], {
@@ -40,7 +25,9 @@ async function getPnpmVersion(cwd: string | undefined): Promise<string | undefin
 async function prunePnpmStore(cwd: string | undefined): Promise<void> {
   try {
     const version = await getPnpmVersion(cwd);
-    if (!version || !isPruneSafePnpm(version)) {
+    // Before 12.16.0, `pnpm store prune` also removed packages that pnpm copied or cloned
+    // into node_modules. https://pnpm.io/blog/releases/12.16.0#store
+    if (!version || !satisfiesComparator(version, ">=12.16.0")) {
       info(
         `Skipping pnpm store prune: pnpm ${version ?? "(unknown)"} can remove copied or cloned packages that are still in use (fixed in pnpm 12.16.0).`,
       );

@@ -123,6 +123,15 @@ describe("saveCache", () => {
       expect(mockedWarning).not.toHaveBeenCalled();
     });
 
+    it("prunes with a pnpm prerelease after 12.16.0", async () => {
+      stubPackageManager({ name: "pnpm", version: "13.0.0-beta.1" });
+      mockedExec.mockResolvedValue(0);
+
+      await saveCache({ prune: true });
+
+      expect(mockedExec).toHaveBeenCalled();
+    });
+
     it("does not prune unless cache-prune is enabled", async () => {
       stubPackageManager();
 
