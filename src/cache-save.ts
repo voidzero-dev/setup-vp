@@ -2,7 +2,6 @@ import { saveCache as saveCacheAction } from "@actions/cache";
 import { getState, info, warning } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
 import { resolve } from "node:path";
-import { findIncompletePnpmInstall } from "./pnpm-install-check.js";
 import { LockFileType, State } from "./types.js";
 
 // Before 12.16.0, `pnpm store prune` also removed packages that pnpm copied or cloned
@@ -39,21 +38,9 @@ async function resolvePackageManager(
 }
 
 // `vp pm cache clean` runs `pnpm store prune`, which removes packages that no project
-// on this machine references. It runs only against the store recorded at restore, and
-// only after a complete install, because the pruned store is saved under the exact
-// lock file key that later jobs restore without saving again.
-async function prunePnpmStore(
-  cwd: string | undefined,
-  lockFilePath: string,
-  storePath: string,
-): Promise<void> {
+// on this machine references. It runs only against the store recorded at restore.
+async function prunePnpmStore(cwd: string | undefined, storePath: string): Promise<void> {
   try {
-    const incomplete = findIncompletePnpmInstall(lockFilePath, storePath);
-    if (incomplete) {
-      info(`Skipping pnpm store prune: ${incomplete}.`);
-      return;
-    }
-
     const packageManager = await resolvePackageManager(cwd);
     if (packageManager?.name !== "pnpm" || typeof packageManager.version !== "string") {
       info("Skipping pnpm store prune: Vite+ did not resolve pnpm for this project.");
@@ -93,7 +80,14 @@ async function prunePnpmStore(
   }
 }
 
-export async function saveCache(): Promise<void> {
+export interface SaveCacheOptions {
+  // Opt-in: after a partial install (no install, `--prod`, `--filter`), pruning drops
+  // packages the lock file still needs, and later jobs restore that store under the
+  // exact lock file key without saving again.
+  prune?: boolean;
+}
+
+export async function saveCache({ prune = false }: SaveCacheOptions = {}): Promise<void> {
   const primaryKey = getState(State.CachePrimaryKey);
   const matchedKey = getState(State.CacheMatchedKey);
   const cachePathsJson = getState(State.CachePaths);
@@ -123,14 +117,13 @@ export async function saveCache(): Promise<void> {
 
   // A restore-key match brings back the store of an older lock file. Without pruning,
   // each lock file change saves that store plus the new packages, so it grows forever.
-  const lockFilePath = getState(State.CacheLockFilePath);
   if (
+    prune &&
     matchedKey &&
-    lockFilePath &&
     cachePaths.length === 1 &&
     getState(State.CacheLockFileType) === LockFileType.Pnpm
   ) {
-    await prunePnpmStore(getState(State.CacheCwd) || undefined, lockFilePath, cachePaths[0]!);
+    await prunePnpmStore(getState(State.CacheCwd) || undefined, cachePaths[0]!);
   }
 
   try {

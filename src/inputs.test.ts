@@ -61,6 +61,7 @@ describe("getInputs", () => {
       cache: false,
       cacheToolchain: false,
       cacheSave: false,
+      cachePrune: false,
       cacheDependencyPath: undefined,
     });
   });
@@ -165,6 +166,13 @@ describe("getInputs", () => {
     const inputs = getInputs();
 
     expect(inputs.cacheSave).toBe(true);
+  });
+
+  it("parses cache-prune", () => {
+    vi.mocked(getInput).mockReturnValue("");
+    vi.mocked(getBooleanInput).mockImplementation((name) => name === "cache-prune");
+
+    expect(getInputs()).toMatchObject({ cachePrune: true, cacheSave: false });
   });
 
   it("should parse sfw input", () => {

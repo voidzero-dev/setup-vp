@@ -283,6 +283,12 @@ describe("runPost", () => {
     },
   );
 
+  it("passes cache-prune to the dependency cache save", async () => {
+    await runPost({ ...inputs(true, true), cachePrune: true });
+
+    expect(mockedSaveCache).toHaveBeenCalledExactlyOnceWith({ prune: true });
+  });
+
   it("saves toolchains with dependency caching disabled", async () => {
     await runPost({ ...inputs(false, true), cacheToolchain: true });
 
@@ -294,7 +300,7 @@ describe("runPost", () => {
   it("saves the cache when caching and cache saving are enabled", async () => {
     await runPost(inputs(true, true));
 
-    expect(mockedSaveCache).toHaveBeenCalledOnce();
+    expect(mockedSaveCache).toHaveBeenCalledExactlyOnceWith({ prune: false });
     expect(saveToolchainCache).not.toHaveBeenCalled();
     expect(savePackageManagerCache).not.toHaveBeenCalled();
     expect(mockedInfo).not.toHaveBeenCalled();

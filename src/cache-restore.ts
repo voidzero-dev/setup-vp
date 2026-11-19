@@ -38,7 +38,6 @@ export async function restoreCache(inputs: Inputs): Promise<void> {
   debug(`Cache paths: ${cachePaths.join(", ")}`);
   saveState(State.CachePaths, JSON.stringify(cachePaths));
   saveState(State.CacheLockFileType, lockFile.type);
-  saveState(State.CacheLockFilePath, lockFile.path);
   saveState(State.CacheCwd, cacheCwd);
 
   // Generate cache key: vite-plus-{platform}-{arch}-{lockfile-type}-{hash}
