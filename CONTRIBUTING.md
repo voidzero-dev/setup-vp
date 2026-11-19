@@ -122,7 +122,7 @@ The publisher reads the build record from GitHub and verifies its workflow, repo
 
 The PR's `rebuild-bundle.yml` must match the default branch before the publisher accepts the build. After changes to that workflow reach the default branch, update existing dependency branches and rerun the build before dispatching the publisher.
 
-Renovate opens a PR when SocketDev publishes a new `sfw-free` release. The custom manager in [`.github/renovate.json`](.github/renovate.json) updates the shared `SFW_VERSION` pin in `src/ci/install-sfw.ts` for all three integrations.
+Renovate opens a PR when SocketDev publishes a new `sfw-free` release. The custom manager in [`.github/renovate.json`](.github/renovate.json) updates the shared `SFW_VERSION` pin in `src/ci/install-sfw.ts` for all three integrations. Add the matching SHA-256 digests from the upstream release assets to `src/ci/sfw-release-digests.ts` in that PR. Remove the entry for the previous release.
 
 ## Releasing
 

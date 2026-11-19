@@ -1,6 +1,15 @@
+import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { installVitePlus } from "../ci/install-viteplus.js";
@@ -19,6 +28,10 @@ vi.mock("../ci/install-sfw.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ci/install-sfw.js")>();
   return { ...actual, setupSfw: vi.fn(actual.setupSfw) };
 });
+
+vi.mock("../ci/sfw-release-digests.js", () => ({
+  getSfwAssetDigest: () => createHash("sha256").update("sfw binary").digest("hex"),
+}));
 
 const directories: string[] = [];
 afterEach(() => {
@@ -45,7 +58,7 @@ function callOrder(mock: { calls: unknown[][]; invocationCallOrder: number[] }, 
 
 describe("GitLab setup parity", () => {
   function fixture() {
-    const root = mkdtempSync(path.join(tmpdir(), "setup-vp-gitlab-lifecycle-"));
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "setup-vp-gitlab-lifecycle-")));
     directories.push(root);
     vi.stubEnv("PATH", process.env.PATH);
     mkdirSync(path.join(root, "app"));
@@ -307,7 +320,7 @@ describe("GitLab setup parity", () => {
       // A reused runner can still have the path from a previous cached job.
       vi.stubEnv("SETUP_VP_SFW_CACHE_DIR", path.join(root, ".setup-vp-cache", "sfw"));
       const download = vi.fn(async (_url: string, file: string) => {
-        directories.push(path.dirname(path.dirname(file)));
+        directories.push(path.dirname(file));
         writeFileSync(file, "sfw binary");
       });
       vi.mocked(setupSfw).mockImplementationOnce(async (entries, options) => {
