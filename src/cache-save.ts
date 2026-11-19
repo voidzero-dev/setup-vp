@@ -1,9 +1,6 @@
 import { saveCache as saveCacheAction } from "@actions/cache";
 import { getState, info, warning } from "@actions/core";
 import { exec, getExecOutput } from "@actions/exec";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
 import { LockFileType, State } from "./types.js";
 
 // Before 12.16.0, `pnpm store prune` also removed packages that pnpm copied or cloned
@@ -22,11 +19,7 @@ function isPruneSafePnpm(version: string): boolean {
   return true;
 }
 
-// `package.json#packageManager` wins over the lock file, so ask Vite+ which package
-// manager its `vp pm` commands run instead of trusting the lock file name.
-async function resolvePackageManager(
-  cwd: string | undefined,
-): Promise<{ name?: unknown; version?: unknown } | undefined> {
+async function getPnpmVersion(cwd: string | undefined): Promise<string | undefined> {
   const result = await getExecOutput("vp", ["env", "current", "--json"], {
     cwd,
     silent: true,
@@ -36,95 +29,26 @@ async function resolvePackageManager(
   const current = JSON.parse(result.stdout) as {
     package_manager?: { name?: unknown; version?: unknown };
   } | null;
-  return current?.package_manager;
-}
-
-// pnpm records the store an install used in node_modules/.modules.yaml (written as JSON).
-// An install with another store, for example `--store-dir` in `run-install.args`, leaves
-// the restored store unreferenced, and pruning it would empty the cache about to be saved.
-function getInstalledStoreDir(cwd: string | undefined): string | undefined {
-  try {
-    const modules = JSON.parse(
-      readFileSync(join(cwd ?? process.cwd(), "node_modules", ".modules.yaml"), "utf8"),
-    ) as { storeDir?: unknown } | null;
-    return typeof modules?.storeDir === "string" ? modules.storeDir : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-async function getPackageManagerSkipReason(cwd: string | undefined): Promise<string | undefined> {
-  const packageManager = await resolvePackageManager(cwd);
-  if (packageManager?.name !== "pnpm" || typeof packageManager.version !== "string") {
-    return "Vite+ did not resolve pnpm for this project.";
-  }
-  if (!isPruneSafePnpm(packageManager.version)) {
-    return `pnpm ${packageManager.version} can remove copied or cloned packages that are still in use (fixed in pnpm 12.16.0).`;
-  }
-  return undefined;
-}
-
-async function getStoreSkipReason(
-  cwd: string | undefined,
-  storeArgs: string[],
-  storePath: string,
-): Promise<string | undefined> {
-  const resolved = await getExecOutput("vp", ["pm", "cache", "dir", ...storeArgs], {
-    cwd,
-    silent: true,
-    ignoreReturnCode: true,
-  });
-  const resolvedPath = resolved.stdout.trim();
-  if (resolved.exitCode !== 0 || !resolvedPath || resolve(resolvedPath) !== resolve(storePath)) {
-    return `the store resolved to "${resolvedPath}", not the restored "${storePath}".`;
-  }
-
-  const installedStoreDir = getInstalledStoreDir(cwd);
-  if (!installedStoreDir || resolve(installedStoreDir) !== resolve(storePath)) {
-    return `the install used the store "${installedStoreDir ?? "unknown"}", not the restored "${storePath}".`;
-  }
-  return undefined;
-}
-
-// Returns why the restored store must not be pruned, or undefined when pruning is safe.
-async function getPruneSkipReason(
-  cwd: string | undefined,
-  storeArgs: string[],
-  storePath: string,
-): Promise<string | undefined> {
-  return (
-    (await getPackageManagerSkipReason(cwd)) ??
-    (await getStoreSkipReason(cwd, storeArgs, storePath))
-  );
+  const packageManager = current?.package_manager;
+  return packageManager?.name === "pnpm" && typeof packageManager.version === "string"
+    ? packageManager.version
+    : undefined;
 }
 
 // `vp pm cache clean` runs `pnpm store prune`, which removes packages that no project
-// on this machine references. It runs only against the store recorded at restore.
-async function prunePnpmStore(cwd: string | undefined, storePath: string): Promise<void> {
+// on this machine references.
+async function prunePnpmStore(cwd: string | undefined): Promise<void> {
   try {
-    const storeArgs = ["--", "--store-dir", storePath];
-    const skipReason = await getPruneSkipReason(cwd, storeArgs, storePath);
-    if (skipReason) {
-      info(`Skipping pnpm store prune: ${skipReason}`);
+    const version = await getPnpmVersion(cwd);
+    if (!version || !isPruneSafePnpm(version)) {
+      info(
+        `Skipping pnpm store prune: pnpm ${version ?? "(unknown)"} can remove copied or cloned packages that are still in use (fixed in pnpm 12.16.0).`,
+      );
       return;
     }
 
     info("Cache was restored from a previous lock file. Pruning the pnpm store before saving.");
-    // pnpm 12.16.0+ also clears its metadata cache during prune. Point it at an empty
-    // directory so a metadata cache that self-hosted runners keep is left alone.
-    const metadataCacheDir = mkdtempSync(
-      join(process.env.RUNNER_TEMP || tmpdir(), "setup-vp-prune-"),
-    );
-    let exitCode: number;
-    try {
-      exitCode = await exec(
-        "vp",
-        ["pm", "cache", "clean", ...storeArgs, "--cache-dir", metadataCacheDir],
-        { cwd, ignoreReturnCode: true },
-      );
-    } finally {
-      rmSync(metadataCacheDir, { recursive: true, force: true });
-    }
+    const exitCode = await exec("vp", ["pm", "cache", "clean"], { cwd, ignoreReturnCode: true });
     if (exitCode !== 0) {
       warning(`Failed to prune the pnpm store (exit code ${exitCode}). Saving it unpruned.`);
     }
@@ -170,13 +94,8 @@ export async function saveCache({ prune = false }: SaveCacheOptions = {}): Promi
 
   // A restore-key match brings back the store of an older lock file. Without pruning,
   // each lock file change saves that store plus the new packages, so it grows forever.
-  if (
-    prune &&
-    matchedKey &&
-    cachePaths.length === 1 &&
-    getState(State.CacheLockFileType) === LockFileType.Pnpm
-  ) {
-    await prunePnpmStore(getState(State.CacheCwd) || undefined, cachePaths[0]!);
+  if (prune && matchedKey && getState(State.CacheLockFileType) === LockFileType.Pnpm) {
+    await prunePnpmStore(getState(State.CacheCwd) || undefined);
   }
 
   try {
