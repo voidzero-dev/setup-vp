@@ -7,6 +7,7 @@ vi.mock("@actions/cache", () => ({
 }));
 vi.mock("@actions/exec", () => ({
   exec: vi.fn(),
+  getExecOutput: vi.fn(),
 }));
 vi.mock("@actions/core", () => ({
   getState: vi.fn(),
@@ -16,7 +17,7 @@ vi.mock("@actions/core", () => ({
 
 import { saveCache as saveCacheAction } from "@actions/cache";
 import { getState, info, warning } from "@actions/core";
-import { exec } from "@actions/exec";
+import { exec, getExecOutput } from "@actions/exec";
 import { saveCache } from "./cache-save.js";
 import { State } from "./types.js";
 
@@ -25,6 +26,7 @@ const mockedGetState = vi.mocked(getState);
 const mockedInfo = vi.mocked(info);
 const mockedWarning = vi.mocked(warning);
 const mockedExec = vi.mocked(exec);
+const mockedGetExecOutput = vi.mocked(getExecOutput);
 
 // Drive getState to return values for the save path:
 // a primary key, distinct matched key (so we don't short-circuit on a hit),
@@ -89,15 +91,40 @@ describe("saveCache", () => {
 
   describe("after a restore-key match", () => {
     const previousKey = "vite-plus-Linux-x64-pnpm-old999";
+    const storePath = "/home/runner/.cache/pnpm";
+    const storeArgs = ["--", "--store-dir", storePath];
 
-    it("prunes the pnpm store before saving", async () => {
+    // Stub `vp env current --json` and `vp pm cache dir`, the probes run before pruning.
+    function stubProbes({
+      packageManager = { name: "pnpm", version: "12.18.0" } as unknown,
+      storeDir = storePath,
+    } = {}): void {
+      mockedGetExecOutput.mockImplementation(async (_command, args) => {
+        const stdout =
+          args?.[0] === "env"
+            ? JSON.stringify({ package_manager: packageManager })
+            : `${storeDir}\n`;
+        return { exitCode: 0, stdout, stderr: "" };
+      });
+    }
+
+    beforeEach(() => {
       stubSaveState({ matchedKey: previousKey });
-      mockedExec.mockResolvedValue(0);
       mockedSaveCacheAction.mockResolvedValue(42);
+    });
+
+    it("prunes the restored pnpm store before saving", async () => {
+      stubProbes();
+      mockedExec.mockResolvedValue(0);
 
       await saveCache();
 
-      expect(mockedExec).toHaveBeenCalledWith("vp", ["pm", "cache", "clean"], {
+      expect(mockedGetExecOutput).toHaveBeenCalledWith(
+        "vp",
+        ["pm", "cache", "dir", ...storeArgs],
+        expect.objectContaining({ cwd: "/home/runner/work/app" }),
+      );
+      expect(mockedExec).toHaveBeenCalledWith("vp", ["pm", "cache", "clean", ...storeArgs], {
         cwd: "/home/runner/work/app",
         ignoreReturnCode: true,
       });
@@ -107,10 +134,39 @@ describe("saveCache", () => {
       expect(mockedWarning).not.toHaveBeenCalled();
     });
 
+    it("does not prune when packageManager selects another package manager", async () => {
+      stubProbes({ packageManager: { name: "yarn", version: "4.18.1" } });
+
+      await saveCache();
+
+      expect(mockedExec).not.toHaveBeenCalled();
+      expect(mockedSaveCacheAction).toHaveBeenCalled();
+    });
+
+    it.each(["10.34.7", "12.15.2", "unknown"])(
+      "does not prune with pnpm %s, which can remove packages still in use",
+      async (version) => {
+        stubProbes({ packageManager: { name: "pnpm", version } });
+
+        await saveCache();
+
+        expect(mockedExec).not.toHaveBeenCalled();
+        expect(mockedSaveCacheAction).toHaveBeenCalled();
+      },
+    );
+
+    it("does not prune when the store resolves to another directory", async () => {
+      stubProbes({ storeDir: "/Users/runner/Library/pnpm/store/v11" });
+
+      await saveCache();
+
+      expect(mockedExec).not.toHaveBeenCalled();
+      expect(mockedSaveCacheAction).toHaveBeenCalled();
+    });
+
     it("still saves when pruning fails", async () => {
-      stubSaveState({ matchedKey: previousKey });
+      stubProbes();
       mockedExec.mockResolvedValue(1);
-      mockedSaveCacheAction.mockResolvedValue(42);
 
       await saveCache();
 
@@ -118,12 +174,22 @@ describe("saveCache", () => {
       expect(mockedSaveCacheAction).toHaveBeenCalled();
     });
 
-    it("does not prune caches of other package managers", async () => {
-      stubSaveState({ matchedKey: previousKey, lockFileType: "npm" });
-      mockedSaveCacheAction.mockResolvedValue(42);
+    it("still saves when a probe fails", async () => {
+      mockedGetExecOutput.mockRejectedValue(new Error("vp not found"));
 
       await saveCache();
 
+      expect(mockedExec).not.toHaveBeenCalled();
+      expect(mockedWarning).toHaveBeenCalledWith(expect.stringContaining("vp not found"));
+      expect(mockedSaveCacheAction).toHaveBeenCalled();
+    });
+
+    it("does not prune caches of other lock file types", async () => {
+      stubSaveState({ matchedKey: previousKey, lockFileType: "npm" });
+
+      await saveCache();
+
+      expect(mockedGetExecOutput).not.toHaveBeenCalled();
       expect(mockedExec).not.toHaveBeenCalled();
       expect(mockedSaveCacheAction).toHaveBeenCalled();
     });
@@ -135,6 +201,7 @@ describe("saveCache", () => {
 
     await saveCache();
 
+    expect(mockedGetExecOutput).not.toHaveBeenCalled();
     expect(mockedExec).not.toHaveBeenCalled();
   });
 });
