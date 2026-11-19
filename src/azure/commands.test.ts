@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
-import { escapeLoggingCommandData } from "./commands.js";
+import { describe, expect, it, vi } from "vite-plus/test";
+import { escapeLoggingCommandData, logError, logInfo } from "./commands.js";
 
 describe("escapeLoggingCommandData", () => {
   it("escapes characters that could terminate logging commands", () => {
@@ -33,6 +33,27 @@ describe("Azure logging commands", () => {
       );
     } finally {
       process.stdout.write = originalWrite;
+    }
+  });
+});
+
+describe("Azure plain diagnostics", () => {
+  it.each([
+    [logInfo, "log"],
+    [logError, "error"],
+  ] as const)("neutralizes command prefixes in %s", (log, method) => {
+    const output = vi.spyOn(console, method).mockImplementation(() => {});
+    try {
+      log("Resolved Node.js version '22.23.1' from package.json");
+      log("Inline ##vso[ marker\r\n##[ formatting marker");
+
+      expect(output).toHaveBeenNthCalledWith(
+        1,
+        "Resolved Node.js version '22.23.1' from package.json",
+      );
+      expect(output).toHaveBeenNthCalledWith(2, "Inline # #vso[ marker\r\n# #[ formatting marker");
+    } finally {
+      output.mockRestore();
     }
   });
 });
