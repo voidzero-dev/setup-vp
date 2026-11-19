@@ -1,6 +1,21 @@
 import { saveCache as saveCacheAction } from "@actions/cache";
 import { getState, info, warning } from "@actions/core";
-import { State } from "./types.js";
+import { exec } from "@actions/exec";
+import { LockFileType, State } from "./types.js";
+
+// `vp pm cache clean` runs `pnpm store prune`, which removes packages that no project
+// on this machine references.
+async function prunePnpmStore(cwd: string | undefined): Promise<void> {
+  info("Cache was restored from a previous lock file. Pruning the pnpm store before saving.");
+  try {
+    const exitCode = await exec("vp", ["pm", "cache", "clean"], { cwd, ignoreReturnCode: true });
+    if (exitCode !== 0) {
+      warning(`Failed to prune the pnpm store (exit code ${exitCode}). Saving it unpruned.`);
+    }
+  } catch (error) {
+    warning(`Failed to prune the pnpm store: ${String(error)}. Saving it unpruned.`);
+  }
+}
 
 export async function saveCache(): Promise<void> {
   const primaryKey = getState(State.CachePrimaryKey);
@@ -28,6 +43,12 @@ export async function saveCache(): Promise<void> {
   if (!cachePaths.length) {
     info("Empty cache paths. Skipping cache save.");
     return;
+  }
+
+  // A restore-key match brings back the store of an older lock file. Without pruning,
+  // each lock file change saves that store plus the new packages, so it grows forever.
+  if (matchedKey && getState(State.CacheLockFileType) === LockFileType.Pnpm) {
+    await prunePnpmStore(getState(State.CacheCwd) || undefined);
   }
 
   try {

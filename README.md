@@ -512,6 +512,8 @@ When `cache: true` is set, the action additionally caches project dependencies b
 
 The dependency cache key format is: `vite-plus-{OS}-{arch}-{pm}-{lockfile-hash}`
 
+On a lockfile hash miss, the action restores the newest cache for the same OS and architecture. For pnpm, it then runs `pnpm store prune` before saving, so the new cache keeps only the packages that this job's install references.
+
 When `working-directory` is set, lockfile auto-detection runs in that directory.
 
 When `cache-dependency-path` points to a lock file in a subdirectory, the action resolves the package-manager cache directory from that lock file's directory.
