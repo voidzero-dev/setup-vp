@@ -43,7 +43,6 @@ set -euo pipefail
 printf '%s\\n' "$*" >> "$MOCK_GH_CALLS"
 if [ "$MOCK_GH_FAILURE" = true ] || [[ -n "$MOCK_GH_FAILURE" && "$*" == *"$MOCK_GH_FAILURE"* ]]; then exit 1; fi
 case "$*" in
-  "api repos/upstream/setup-vp/collaborators/reviewer/permission --jq .permission") printf '%s\\n' "$MOCK_PERMISSION" ;;
   "api repos/upstream/setup-vp/pulls/123") printf '%s\\n' "$MOCK_PR" ;;
   *) exit 90 ;;
 esac
@@ -59,17 +58,12 @@ esac
       GITHUB_OUTPUT: output,
       GITHUB_REPOSITORY: "upstream/setup-vp",
       GITHUB_SHA: baseSha,
-      EVENT_NAME: "workflow_dispatch",
-      EVENT_ACTION: "",
-      EVENT_LABEL: "",
-      LABEL_ACTOR: "reviewer",
       PR_NUMBER: "",
       SETUP_REF: "",
       TEST_SUITE: "",
       VITE_PLUS_VERSION: "",
       MOCK_GH_CALLS: calls,
       MOCK_GH_FAILURE: "false",
-      MOCK_PERMISSION: "write",
       ...overrides,
     },
   });
@@ -87,28 +81,19 @@ esac
 }
 
 describe("GitLab E2E requests", () => {
-  it("limits label runs to same-repository PRs and manual runs to main", () => {
-    expect(Object.keys(workflow.on)).toEqual(["pull_request", "workflow_dispatch"]);
-    expect(workflow.on.pull_request).toEqual({ branches: ["main"], types: ["labeled"] });
+  it("runs only from main with a dedicated environment credential", () => {
+    expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
     expect(workflow.on.workflow_dispatch.inputs.pull_request).toEqual(
       expect.objectContaining({ required: false, default: "" }),
     );
     expect(Object.keys(workflow.jobs)).toEqual(["gitlab-e2e"]);
-    expect(workflow.jobs["gitlab-e2e"].if.replace(/\s+/g, " ")).toBe(
-      "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || " +
-        "(github.event_name == 'pull_request' && github.event.action == 'labeled' && " +
-        "github.event.label.name == 'run-e2e' && " +
-        "github.event.pull_request.head.repo.full_name == github.repository)",
-    );
+    expect(workflow.jobs["gitlab-e2e"].if).toBe("github.ref == 'refs/heads/main'");
+    expect(workflow.jobs["gitlab-e2e"].environment).toBe("gitlab-e2e");
     expect(workflow.permissions).toEqual({ contents: "read", "pull-requests": "read" });
     expect(steps.every((step) => !step.uses && !step.run.includes("${{"))).toBe(true);
     expect(parameters.env).toEqual({
-      EVENT_NAME: "${{ github.event_name }}",
-      EVENT_ACTION: "${{ github.event.action }}",
-      EVENT_LABEL: "${{ github.event.label.name }}",
-      LABEL_ACTOR: "${{ github.event.sender.login }}",
-      PR_NUMBER: "${{ github.event.pull_request.number || inputs.pull_request }}",
-      SETUP_REF: "${{ github.event.pull_request.head.sha || inputs.setup_ref }}",
+      PR_NUMBER: "${{ inputs.pull_request }}",
+      SETUP_REF: "${{ inputs.setup_ref }}",
       TEST_SUITE: "${{ inputs.suite }}",
       VITE_PLUS_VERSION: "${{ inputs.vite_plus_version }}",
       GH_TOKEN: "${{ github.token }}",
@@ -117,7 +102,7 @@ describe("GitLab E2E requests", () => {
       false,
     );
     const trigger = steps.find((step) => step.id === "trigger")!;
-    expect(trigger.env?.GITLAB_TRIGGER_TOKEN).toBe("${{ secrets.GITLAB_TRIGGER_TOKEN }}");
+    expect(trigger.env?.GITLAB_TRIGGER_TOKEN).toBe("${{ secrets.SETUP_VP_GITLAB_TRIGGER_TOKEN }}");
     expect(trigger.run).toContain("$GITHUB_STEP_SUMMARY");
     expect(steps.at(-1)!.run).toContain("GitLab pipeline finished with status");
   });
@@ -156,90 +141,6 @@ describe("GitLab E2E requests", () => {
     expect(result.status).toBe(1);
     expect(result.outputs).toEqual({});
     expect(result.calls).toBe("");
-  });
-});
-
-describe("GitLab E2E label approval", () => {
-  const approvedPr = {
-    state: "open",
-    head: { sha: headSha, repo: { full_name: "upstream/setup-vp" } },
-    base: { ref: "main", repo: { full_name: "upstream/setup-vp" } },
-    labels: [{ name: "run-e2e" }],
-  };
-  function resolveLabel(overrides: Record<string, string | undefined> = {}) {
-    return resolveParameters({
-      EVENT_NAME: "pull_request",
-      EVENT_ACTION: "labeled",
-      EVENT_LABEL: "run-e2e",
-      PR_NUMBER: "123",
-      SETUP_REF: headSha,
-      MOCK_PR: JSON.stringify(approvedPr),
-      ...overrides,
-    });
-  }
-
-  it.each(["write", "admin"])("accepts a labeler with %s access", (permission) => {
-    const result = resolveLabel({
-      MOCK_PERMISSION: permission,
-      TEST_SUITE: "required",
-      VITE_PLUS_VERSION: "0.3.1",
-      GITHUB_ACTOR: "rerunner",
-      GITHUB_TRIGGERING_ACTOR: "rerunner",
-    });
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.outputs).toEqual({
-      setup_vp_ref: headSha,
-      suite: "full",
-      vite_plus_version: "latest",
-    });
-    expect(result.calls).toBe(
-      "api repos/upstream/setup-vp/collaborators/reviewer/permission --jq .permission\n" +
-        "api repos/upstream/setup-vp/pulls/123\n",
-    );
-  });
-
-  it.each(["read", "triage", "none", ""])("rejects a labeler with %s access", (permission) => {
-    const result = resolveLabel({ MOCK_PERMISSION: permission });
-    expect(result.status).toBe(1);
-    expect(result.outputs).toEqual({});
-    expect(result.calls).not.toContain("/pulls/");
-  });
-
-  it.each([
-    { EVENT_NAME: "push" },
-    { EVENT_NAME: "pull_request_target" },
-    { EVENT_ACTION: "synchronize" },
-    { EVENT_ACTION: "unlabeled" },
-    { EVENT_LABEL: "bug" },
-    { PR_NUMBER: "" },
-    { PR_NUMBER: "123\n" },
-    { SETUP_REF: "" },
-    { SETUP_REF: "v1.20.0" },
-    { SETUP_REF: `${headSha}\nextra=true` },
-  ])("rejects an invalid label event %j before API access", (env) => {
-    const result = resolveLabel(env);
-    expect(result.status).toBe(1);
-    expect(result.outputs).toEqual({});
-    expect(result.calls).toBe("");
-  });
-
-  it.each([
-    ["new commit", { head: { ...approvedPr.head, sha: baseSha } }],
-    ["fork", { head: { ...approvedPr.head, repo: { full_name: "contributor/setup-vp" } } }],
-    ["deleted repository", { head: { ...approvedPr.head, repo: null } }],
-    ["base change", { base: { ...approvedPr.base, ref: "release" } }],
-    ["closed PR", { state: "closed" }],
-    ["removed label", { labels: [] }],
-  ])("rejects a label request after a %s", (_reason, changes) => {
-    const result = resolveLabel({ MOCK_PR: JSON.stringify({ ...approvedPr, ...changes }) });
-    expect(result.status).toBe(1);
-    expect(result.outputs).toEqual({});
-  });
-
-  it.each(["/permission", "/pulls/"])("fails closed if the %s API fails", (endpoint) => {
-    const result = resolveLabel({ MOCK_GH_FAILURE: endpoint });
-    expect(result.status).toBe(1);
-    expect(result.outputs).toEqual({});
   });
 });
 

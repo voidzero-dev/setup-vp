@@ -15,6 +15,7 @@ permissions: {}
 jobs:
   publish:
     if: github.ref == 'refs/heads/main'
+    environment: bundle-publish
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -175,8 +176,8 @@ jobs:
         if: steps.prepare.outputs.changed == 'true'
         id: app-token
         with:
-          client-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          client-id: ${{ vars.SETUP_VP_BUNDLE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SETUP_VP_BUNDLE_APP_PRIVATE_KEY }}
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
