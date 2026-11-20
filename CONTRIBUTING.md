@@ -128,7 +128,7 @@ GitHub triggers are not available yet, so start each run with Wrangler:
 ```bash
 cd .cloudflare/ci
 
-# A pull request: posts the checks and a new PR comment.
+# A pull request: posts the checks, and a PR comment if a check fails.
 npx wrangler@4.163.0 workflows trigger setup-vp-ci '{"mr":123}'
 
 # A commit (full SHA): posts or updates the checks, with no comment.
@@ -139,7 +139,7 @@ npx wrangler@4.163.0 workflows instances list setup-vp-ci
 npx wrangler@4.163.0 workflows instances describe setup-vp-ci <INSTANCE_ID>
 ```
 
-Each `mr` run posts a new PR comment. To run a PR again without another comment, start the run with the PR head SHA.
+An `mr` run posts a PR comment only when a check fails. Cloudflare CI cannot update a comment yet, so each failed run posts a new one. A second run on the same commit updates the same checks.
 
 ### Read Logs
 
@@ -173,11 +173,12 @@ Each `mr` run posts a new PR comment. To run a PR again without another comment,
 
 ### Runner Environment
 
-- The default runner image has Node.js 24, npm, and Corepack, but no `git`, `jq`, or `pnpm`. GitHub CI uses `lts/*` from `.node-version`.
-- The install uses `pnpm install --ignore-scripts`, because the root `prepare` script (`vp config`) fails without `git`. The repository allows no dependency build scripts, so the flag skips nothing else.
-- The `unit-tests` runner installs `jq` with `apt-get`, because `src/gitlab/workflow.test.ts` runs the GitLab E2E workflow script, which uses `jq`.
-- Runners cannot check out code from GitHub yet. The Worker serves each commit as a tarball through a signed URL, so runners have no Git history. `SOURCE_SECRET` signs the URLs. To replace it, run `openssl rand -hex 32 | npx wrangler@4.163.0 secret put SOURCE_SECRET` in `.cloudflare/ci/`.
-- `@cloudflare/workers-types` does not include `step.runner()`. [`runner.d.ts`](.cloudflare/ci/src/runner.d.ts) declares the result that the runtime returns, `logs: { data, truncated }`. The Cloudflare CI docs show `logs.stdout` and `logs.stderr` instead.
+- Every runner uses the managed `workflows/node` image. It has Node.js 24, Corepack (pnpm and yarn), `git`, `jq`, `curl`, and build-essential. GitHub CI uses `lts/*` from `.node-version`.
+- The `checkout` step fetches the commit from GitHub with `git fetch --depth 1`. The repository is public, so this needs no token, also for the head of a fork PR. The `build` job compares `dist/` with `git diff --exit-code`, the same as `test.yml`.
+- The `install` step gets only `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml`, and saves `node_modules` for the jobs. It uses the runner cache, so a run skips it while those files do not change. The cache keeps results for 7 days. `output.installCached` in the run result shows whether the install came from the cache.
+- The install uses `pnpm install --ignore-scripts`. The root `prepare` script (`vp config`) sets up Git hooks, and the install step has no repository to set them up in. The repository allows no dependency build scripts, so the flag skips nothing else.
+- If the checkout or the install fails, both checks fail with the error. These steps retry 2 times, because network errors can cause them.
+- `@cloudflare/workers-types` does not include `step.runner()`. [`runner.d.ts`](.cloudflare/ci/src/runner.d.ts) declares it with the result that the runtime returns, `logs: { data, truncated }`. The Cloudflare CI docs show `logs.stdout` and `logs.stderr` instead.
 
 ## Dependency Updates
 

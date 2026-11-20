@@ -1,6 +1,6 @@
 // Copied from the Cloudflare CI "Get started" guide.
 // Wrangler does not generate types for the scm binding yet.
-// Changes from the docs: RUN_URL_BASE in Env.
+// Changes from the docs: Env has RUN_URL_BASE and no source server variables.
 interface ScmRepository {
   checkout(target: { sha: string }): Promise<ScmCheckout & Disposable>;
   checkout(target: { mr: number }): Promise<ScmMergeRequestCheckout & Disposable>;
@@ -32,7 +32,5 @@ interface Env {
   REPO: ScmRepository;
   CI_WORKFLOW: Workflow;
   GITHUB_REPO: string;
-  SOURCE_ORIGIN: string;
-  SOURCE_SECRET: string;
   RUN_URL_BASE: string;
 }
