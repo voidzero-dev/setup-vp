@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { chmod, copyFile, lstat, mkdir, mkdtemp, realpath, rename, rm } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import type { get as httpGet } from "node:http";
 import { tmpdir } from "node:os";
@@ -208,14 +208,18 @@ async function downloadVerifiedBinary(
 }
 
 async function prepareCacheDirectory(directory: string): Promise<void> {
-  try {
-    if (path.relative(directory, await realpath(directory))) {
-      throw new Error("The sfw cache directory resolves through a filesystem link.");
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    await prepareCacheDirectory(path.dirname(directory));
-    await mkdir(directory, { recursive: true });
+  // Check ancestors before touching this entry. Windows short names may refer
+  // to ordinary directories even when their resolved spelling is different.
+  const parent = path.dirname(directory);
+  if (parent !== directory) await prepareCacheDirectory(parent);
+
+  const entry = await lstat(directory).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+    return undefined;
+  });
+  if (!entry) await mkdir(directory, { recursive: true });
+  if (!(entry ?? (await lstat(directory))).isDirectory()) {
+    throw new Error("The sfw cache path contains a link or a non-directory entry.");
   }
 }
 

@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -123,6 +131,19 @@ describe("portable sfw cache", () => {
     expect(download).toHaveBeenCalledTimes(2);
     expect(readFileSync(command.executable, "utf8")).toBe("binary");
     expect(readFileSync(bin, "utf8")).toBe("binary");
+  });
+
+  it("skips cache writes through a linked directory", async () => {
+    const { logWarning, options } = await fixture();
+    const target = path.join(path.dirname(options.cacheDirectory), "linked-directory-target");
+    mkdirSync(target);
+    symlinkSync(target, options.cacheDirectory, process.platform === "win32" ? "junction" : "dir");
+
+    const command = await setupSfw([{}], { ...options, env: {} });
+
+    expect(readFileSync(command.executable, "utf8")).toBe("binary");
+    expect(logWarning).toHaveBeenCalledWith(expect.stringContaining("cache path contains a link"));
+    expect(readdirSync(target)).toEqual([]);
   });
 
   it("rejects downloads that do not match the release digest", async () => {
