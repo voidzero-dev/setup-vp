@@ -33,6 +33,17 @@ export function logWarning(message: string): void {
   process.stdout.write(`##vso[task.logissue type=warning]${escapeLoggingCommandData(message)}\n`);
 }
 
+const LOGGING_COMMAND_PREFIX_RE = /##(?=vso\[|\[)/g;
+
+// The Azure agent scans the entire output line, including text after a log prefix.
+function escapePlainLog(message: string): string {
+  return message.replace(LOGGING_COMMAND_PREFIX_RE, "# #");
+}
+
 export function logInfo(message: string): void {
-  console.log(message);
+  console.log(escapePlainLog(message));
+}
+
+export function logError(message: string): void {
+  console.error(escapePlainLog(message));
 }

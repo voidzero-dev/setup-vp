@@ -15,7 +15,7 @@ import { getCommandOutput, run } from "../ci/process.js";
 import { parseRunInstall, runInstall } from "../ci/run-install.js";
 import { parseInstalledVpVersion } from "../ci/version.js";
 import { ENV_CURRENT_ARGS, readEnvCurrent } from "../ci/env-current.js";
-import { logInfo, logWarning, prependPath, setVariable } from "./commands.js";
+import { logError, logInfo, logWarning, prependPath, setVariable } from "./commands.js";
 import { installVitePlus } from "./install-viteplus.js";
 import { parseAzureInputs, resolveProjectDirFromInputs } from "./inputs.js";
 
@@ -56,7 +56,7 @@ const defaultPorts: AzurePorts = {
 };
 
 function fail(message: string): never {
-  console.error(`setup-vp: ${message}`);
+  logError(`setup-vp: ${message}`);
   process.exit(1);
 }
 
