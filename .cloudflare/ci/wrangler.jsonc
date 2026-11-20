@@ -1,0 +1,33 @@
+{
+  // Cloudflare CI pipeline for this repository. See CONTRIBUTING.md#cloudflare-ci.
+  "name": "setup-vp-ci",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  // The Worker serves no HTTP requests, so it needs no workers.dev URL.
+  "workers_dev": false,
+  "workflows": [{ "name": "setup-vp-ci", "binding": "CI_WORKFLOW", "class_name": "CI" }],
+  "vars": {
+    "GITHUB_REPO": "voidzero-dev/setup-vp",
+    // The dashboard URL of a run, without the instance ID. Checks link to it.
+    "RUN_URL_BASE": "https://dash.cloudflare.com/f8b59a295069bd81a0f256b7012f2c53/workers/workflows/setup-vp-ci/instance/",
+  },
+  "unsafe": {
+    "bindings": [
+      {
+        "type": "scm",
+        "name": "REPO",
+        "provider": "github",
+        "repo": "voidzero-dev/setup-vp",
+        "scopes": [
+          "contents:read",
+          "checks:write",
+          "comments:write",
+          "merge_requests:read",
+          // pullRequestHead() reads the PR head SHA through outbound().
+          "outbound:read",
+        ],
+      },
+    ],
+  },
+  "observability": { "enabled": true },
+}

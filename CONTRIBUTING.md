@@ -53,7 +53,7 @@ The action uses the exact `fallow` version in `package.json`. After `vp install`
 vp exec fallow audit --base origin/main
 ```
 
-[`.fallowrc.json`](.fallowrc.json) declares the three runtime entry points. Fallow excludes generated files under `dist/` by default. Results appear in annotations, CI logs, and the job summary. The workflow does not write PR comments.
+[`.fallowrc.json`](.fallowrc.json) declares the three runtime entry points and the [Cloudflare CI](#cloudflare-ci) pipeline entry point. Fallow skips hidden directories by default, so the configuration includes `.cloudflare/` explicitly. Fallow excludes generated files under `dist/` by default. Results appear in annotations, CI logs, and the job summary. The workflow does not write PR comments.
 
 ## Integration Design
 
@@ -107,6 +107,78 @@ Manual dispatch works for same-repository and fork PRs. The workflow rejects a r
 For a standalone run, omit `pull_request`. Set `setup_ref` to an exact commit SHA or release tag, or leave it empty to test the workflow commit. Select `suite` (`full` by default) and `vite_plus_version` (`latest` by default). Manual runs selected on branches other than `main` skip the job.
 
 Pushes, merge queue commits, merges, and release tags do not automatically start GitLab pipelines. Release PRs must pass the full suite on their current head commit before merging; follow the [release procedure](#releasing).
+
+## Cloudflare CI
+
+[`.cloudflare/ci/`](.cloudflare/ci/) contains a Cloudflare CI pipeline. Cloudflare CI is in preview. The pipeline runs two jobs from [`test.yml`](.github/workflows/test.yml) in Cloudflare runners and reports them as GitHub checks:
+
+- `cloudflare-ci/build`: `typecheck`, `check`, `build`, and a check that `dist/` is up to date.
+- `cloudflare-ci/unit-tests`: `build`, then `test`.
+
+The other jobs in `test.yml` run the action through `uses: ./`, so they stay on GitHub Actions. The Cloudflare CI checks are not required checks.
+
+The pipeline is a Workflow in the `setup-vp-ci` Worker of the `VoidZero-docs` Cloudflare account. The deployed version runs for every branch. A change under `.cloudflare/ci/` takes effect only after a deploy, so a PR that changes the pipeline still runs the deployed version.
+
+To use Wrangler, you need access to the `VoidZero-docs` account. Run `npx wrangler@4.163.0 login` first.
+
+### Start a Run
+
+GitHub triggers are not available yet, so start each run with Wrangler:
+
+```bash
+cd .cloudflare/ci
+
+# A pull request: posts the checks, and a PR comment if a check fails.
+npx wrangler@4.163.0 workflows trigger setup-vp-ci '{"mr":123}'
+
+# A commit (full SHA): posts or updates the checks, with no comment.
+npx wrangler@4.163.0 workflows trigger setup-vp-ci "{\"sha\":\"$(git rev-parse HEAD)\"}"
+
+# Follow runs.
+npx wrangler@4.163.0 workflows instances list setup-vp-ci
+npx wrangler@4.163.0 workflows instances describe setup-vp-ci <INSTANCE_ID>
+```
+
+An `mr` run posts a PR comment only when a check fails. Cloudflare CI cannot update a comment yet, so each failed run posts a new one. A second run on the same commit updates the same checks.
+
+### Read Logs
+
+- Each check summary shows the runner log, up to its last 16 KiB. The runner keeps no more than that.
+- In the PR comment, each check name links to its check page on the PR, which shows the log.
+- The **Details** link of each check and the last link in the PR comment open the run in the Cloudflare dashboard. Only members of the `VoidZero-docs` account can open it.
+- `describe` and `describe --json` cut each step output to about 1 KiB. Use them for the step status and the run error, not for logs.
+- Each job runs in `timeout 14m`. A job that hangs stops with exit code 124 and keeps its log. The 15-minute step timeout would lose the log.
+- To run a failed job again without the other steps before it, restart the run from that job's step. The restart also runs every later step, which includes the PR comment of an `mr` run:
+
+  ```bash
+  npx wrangler@4.163.0 workflows instances restart setup-vp-ci <INSTANCE_ID> --from-step-name "unit-tests"
+  ```
+
+### Change the Pipeline
+
+1. Edit the files in `.cloudflare/ci/src/`, and increase `PIPELINE_VERSION` in `index.ts`.
+2. Run `vp check`. It formats, lints, and type-checks the pipeline with [`.cloudflare/ci/tsconfig.json`](.cloudflare/ci/tsconfig.json) and `@cloudflare/workers-types`.
+3. After the change merges, deploy from `main`:
+
+   ```bash
+   cd .cloudflare/ci
+   npx wrangler@4.163.0 deploy
+   ```
+
+4. Read `output.version` in the result of the next run. A run that starts in the first minutes after a deploy can still use the previous version. The plain `describe` output does not include the return value, so use `--json`:
+
+   ```bash
+   npx wrangler@4.163.0 workflows instances describe setup-vp-ci <INSTANCE_ID> --json --step-output=false
+   ```
+
+### Runner Environment
+
+- Every runner uses the managed `workflows/node` image. It has Node.js 24, Corepack (pnpm and yarn), `git`, `jq`, `curl`, and build-essential. GitHub CI uses `lts/*` from `.node-version`.
+- The `checkout` step fetches the commit from GitHub with `git fetch --depth 1`. The repository is public, so this needs no token, also for the head of a fork PR. The `build` job compares `dist/` with `git diff --exit-code`, the same as `test.yml`.
+- The `install` step gets only `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml`, and saves `node_modules` for the jobs. It uses the runner cache, so a run skips it while those files do not change. The cache keeps results for 7 days. `output.installCached` in the run result shows whether the install came from the cache.
+- The install uses `pnpm install --ignore-scripts`. The root `prepare` script (`vp config`) sets up Git hooks, and the install step has no repository to set them up in. The repository allows no dependency build scripts, so the flag skips nothing else.
+- If the checkout or the install fails, both checks fail with the error. These steps retry 2 times, because network errors can cause them.
+- `@cloudflare/workers-types` does not include `step.runner()`. [`runner.d.ts`](.cloudflare/ci/src/runner.d.ts) declares it with the result that the runtime returns, `logs: { data, truncated }`. The Cloudflare CI docs show `logs.stdout` and `logs.stderr` instead.
 
 ## Dependency Updates
 
