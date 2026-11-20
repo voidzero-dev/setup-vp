@@ -1,4 +1,14 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -6,9 +16,13 @@ import { setupSfw, SFW_VERSION } from "./install-sfw.js";
 import { commandPath } from "./process.js";
 
 vi.mock("./process.js", () => ({ commandPath: vi.fn() }));
+vi.mock("./sfw-release-digests.js", () => ({
+  getSfwAssetDigest: () => createHash("sha256").update("binary").digest("hex"),
+}));
 const directories: string[] = [];
 afterEach(() => {
   vi.resetAllMocks();
+  vi.unstubAllEnvs();
   for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -67,28 +81,79 @@ describe("portable sfw preview handling", () => {
 });
 
 describe("portable sfw cache", () => {
-  it("reuses a complete versioned asset without a second download", async () => {
-    const cacheDirectory = mkdtempSync(path.join(tmpdir(), "setup-vp-sfw-cache-"));
-    directories.push(cacheDirectory);
-    const download = vi.fn(async (_url: string, file: string) => {
-      writeFileSync(file, "binary");
-    });
-    const options = {
-      sfwEnabled: true,
-      platform: "linux" as const,
-      arch: "x64",
-      isMusl: false,
-      cacheDirectory,
+  async function fixture() {
+    const root = await realpath(mkdtempSync(path.join(tmpdir(), "setup-vp-sfw-cache-")));
+    directories.push(root);
+    // Keep private staging and the cache separate and clean both after each test.
+    vi.stubEnv(process.platform === "win32" ? "TEMP" : "TMPDIR", root);
+    const cacheDirectory = path.join(root, "cache");
+    const bin = path.join(cacheDirectory, SFW_VERSION, "sfw-free-linux-x86_64", "sfw");
+    const download = vi.fn(async (_url: string, file: string) => writeFileSync(file, "binary"));
+    const logWarning = vi.fn();
+    return {
+      bin,
       download,
+      logWarning,
+      options: {
+        sfwEnabled: true,
+        platform: "linux" as const,
+        arch: "x64",
+        isMusl: false,
+        cacheDirectory,
+        download,
+        logWarning,
+      },
     };
+  }
+
+  it("uses a verified private copy of a cached binary", async () => {
+    const { bin, download, options } = await fixture();
     await setupSfw([{}], { ...options, env: {} });
     const env = { PATH: "/bin" };
-    await setupSfw([{}], { ...options, env });
+    const command = await setupSfw([{}], { ...options, env });
     expect(download).toHaveBeenCalledTimes(1);
-    const bin = path.join(cacheDirectory, SFW_VERSION, "sfw-free-linux-x86_64", "sfw");
-    expect(readFileSync(bin, "utf8")).toBe("binary");
-    expect(env.PATH).toBe(path.dirname(bin) + ":/bin");
+    expect(command.sfw).toBe(true);
+    expect(command.executable).not.toBe(bin);
+    expect(readFileSync(command.executable, "utf8")).toBe("binary");
+    expect(env.PATH).toBe(path.dirname(command.executable) + ":/bin");
     await setupSfw([{}], { ...options, isMusl: true, env: {} });
     expect(download).toHaveBeenCalledTimes(2);
+  });
+
+  it("replaces a cache entry with a different digest", async () => {
+    const { bin, download, logWarning, options } = await fixture();
+    await setupSfw([{}], { ...options, env: {} });
+    writeFileSync(bin, "outdated binary");
+
+    const command = await setupSfw([{}], { ...options, env: {} });
+
+    expect(logWarning).toHaveBeenCalledWith(expect.stringContaining("invalid cached sfw"));
+    expect(download).toHaveBeenCalledTimes(2);
+    expect(readFileSync(command.executable, "utf8")).toBe("binary");
+    expect(readFileSync(bin, "utf8")).toBe("binary");
+  });
+
+  it("skips cache writes through a linked directory", async () => {
+    const { logWarning, options } = await fixture();
+    const target = path.join(path.dirname(options.cacheDirectory), "linked-directory-target");
+    mkdirSync(target);
+    symlinkSync(target, options.cacheDirectory, process.platform === "win32" ? "junction" : "dir");
+
+    const command = await setupSfw([{}], { ...options, env: {} });
+
+    expect(readFileSync(command.executable, "utf8")).toBe("binary");
+    expect(logWarning).toHaveBeenCalledWith(expect.stringContaining("cache path contains a link"));
+    expect(readdirSync(target)).toEqual([]);
+  });
+
+  it("rejects downloads that do not match the release digest", async () => {
+    const { bin, download, options } = await fixture();
+    download.mockImplementation(async (_url, file) => writeFileSync(file, "incomplete download"));
+    const env = { PATH: "/bin" };
+
+    await expect(setupSfw([{}], { ...options, env })).rejects.toThrow("SHA-256 mismatch");
+    expect(download).toHaveBeenCalledTimes(2);
+    expect(env.PATH).toBe("/bin");
+    expect(() => readFileSync(bin)).toThrow();
   });
 });

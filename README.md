@@ -689,7 +689,7 @@ test:
 
 GitLab caching and outputs require `v1.21.0` or newer. Use the same version for the remote template and `setup-ref`.
 
-Extend `.setup-vp-cached` to restore and save dependency data and the pinned `sfw` binary through GitLab's native cache. The runtime copies restored data from `.setup-vp-cache/` into the directory reported by `vp pm cache dir`. It saves a snapshot after setup and again in `after_script`, so packages added by later job scripts are included.
+Extend `.setup-vp-cached` to restore and save dependency data and the pinned `sfw` binary through GitLab's native cache. The runtime checks the SFW binary against its pinned SHA-256 digest and runs it from a private temporary directory. It replaces an invalid cached binary with a verified download. The runtime copies restored data from `.setup-vp-cache/` into the directory reported by `vp pm cache dir`. It saves a snapshot after setup and again in `after_script`, so packages added by later job scripts are included.
 
 Set the include input `cache-policy: pull` to restore without uploading a cache. GitLab restores before setup, so this policy must be set in YAML, not changed during a script. Cache snapshots separate OS, architecture, and package manager; the exact lock-file hash determines `SETUP_VP_CACHE_HIT`. A compatible snapshot from an older lock file can still supply packages on a miss.
 
@@ -808,7 +808,7 @@ Without `registryUrl`, the runtime preserves existing project `.npmrc` auth entr
 
 - The template supports Microsoft-hosted Linux, macOS, and Windows agents.
 - `Cache@2` restores before `vp install` and saves automatically in a post-job step. It has no supported restore-only input, so Azure does not expose GitHub's `cache-save` control. [Azure pipeline caching](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops)
-- When `sfw` is enabled for an install, a separate native cache reuses its version/platform-specific binary. Both portable runtimes support full YAML install entries and retry the known `sfw` command-lookup failure once.
+- When `sfw` is enabled for an install, a separate native cache reuses its version/platform-specific binary after a SHA-256 check. Both portable runtimes support full YAML install entries and retry the known `sfw` command-lookup failure once.
 - Missing lock files or cache paths degrade to a warning and `SETUP_VP_CACHE_READY=false` instead of failing setup.
 - For Azure Artifacts feeds, compose with Azure's `npmAuthenticate` task and/or pass `registryUrl` plus `NODE_AUTH_TOKEN`.
 

@@ -1,12 +1,15 @@
-import { createWriteStream, existsSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { chmod, copyFile, lstat, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import type { get as httpGet } from "node:http";
 import { tmpdir } from "node:os";
+import { setTimeout as sleep } from "node:timers/promises";
 import path from "node:path";
 import { isWindows } from "./platform.js";
 import { commandPath } from "./process.js";
 import { resolveSfwEnabled } from "./sfw.js";
+import { getSfwAssetDigest, type SfwAsset } from "./sfw-release-digests.js";
 import type { ExportVariable, InstallCommand, LogFn, RunInstallEntry } from "./types.js";
 
 // All integrations use this version pin. Renovate updates it through
@@ -31,7 +34,11 @@ export function isMuslLinux(): boolean {
   return existsSync("/etc/alpine-release");
 }
 
-export function getSfwAssetName(platform: NodeJS.Platform, arch: string, isMusl: boolean): string {
+export function getSfwAssetName(
+  platform: NodeJS.Platform,
+  arch: string,
+  isMusl: boolean,
+): SfwAsset {
   if (platform === "darwin") {
     if (arch === "arm64") return "sfw-free-macos-arm64";
     if (arch === "x64") return "sfw-free-macos-x86_64";
@@ -148,6 +155,118 @@ export function downloadFile(
   });
 }
 
+async function hasDigest(file: string, expected: string): Promise<boolean> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) hash.update(chunk);
+  return hash.digest("hex") === expected;
+}
+
+async function restoreCachedBinary(
+  cachedFile: string,
+  executable: string,
+  digest: string,
+  warn: LogFn,
+): Promise<boolean> {
+  try {
+    if ((await lstat(cachedFile)).isFile()) {
+      await copyFile(cachedFile, executable);
+      if (await hasDigest(executable, digest)) {
+        console.log(`setup-vp: using verified cached sfw ${SFW_VERSION}`);
+        return true;
+      }
+    }
+    warn(`setup-vp: ignoring invalid cached sfw ${SFW_VERSION}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      warn(`setup-vp: could not use cached sfw ${SFW_VERSION}: ${String(error)}`);
+    }
+  }
+  return false;
+}
+
+async function downloadVerifiedBinary(
+  download: typeof downloadFile,
+  asset: SfwAsset,
+  executable: string,
+  digest: string,
+): Promise<void> {
+  const url = `${SFW_RELEASE_BASE}/${asset}`;
+  for (let round = 1; ; round += 1) {
+    try {
+      await rm(executable, { force: true });
+      console.log(`setup-vp: installing sfw ${SFW_VERSION} from ${url}`);
+      await download(url, executable);
+      if (!(await hasDigest(executable, digest))) {
+        throw new Error(`SHA-256 mismatch for sfw ${SFW_VERSION} ${asset}`);
+      }
+      return;
+    } catch (error) {
+      if (round === 2) throw error;
+      await sleep(2000);
+    }
+  }
+}
+
+async function prepareCacheDirectory(directory: string): Promise<void> {
+  // Check ancestors before touching this entry. Windows short names may refer
+  // to ordinary directories even when their resolved spelling is different.
+  const parent = path.dirname(directory);
+  if (parent !== directory) await prepareCacheDirectory(parent);
+
+  const entry = await lstat(directory).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+    return undefined;
+  });
+  if (!entry) await mkdir(directory, { recursive: true });
+  if (!(entry ?? (await lstat(directory))).isDirectory()) {
+    throw new Error("The sfw cache path contains a link or a non-directory entry.");
+  }
+}
+
+async function saveCachedBinary(file: string, directory: string): Promise<void> {
+  await prepareCacheDirectory(directory);
+  const staging = await mkdtemp(path.join(directory, ".setup-vp-"));
+  try {
+    const stagedFile = path.join(staging, path.basename(file));
+    await copyFile(file, stagedFile);
+    await rename(stagedFile, path.join(directory, path.basename(file)));
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
+}
+
+async function prepareVerifiedSfw(
+  asset: SfwAsset,
+  name: string,
+  cacheDirectory: string | undefined,
+  download: typeof downloadFile,
+  warn: LogFn,
+): Promise<string> {
+  const digest = getSfwAssetDigest(SFW_VERSION, asset);
+  if (!digest) throw new Error(`Missing SHA-256 digest for sfw ${SFW_VERSION} ${asset}`);
+  const cache = cacheDirectory && path.resolve(cacheDirectory, SFW_VERSION, asset);
+  // Execute only a verified copy in private staging. The cache can live in the checkout.
+  const sfwDir = await mkdtemp(path.resolve(tmpdir(), "setup-vp-sfw-"));
+  const sfwBin = path.join(sfwDir, name);
+
+  try {
+    const hit = cache && (await restoreCachedBinary(path.join(cache, name), sfwBin, digest, warn));
+    if (!hit) {
+      await downloadVerifiedBinary(download, asset, sfwBin, digest);
+      if (cache) {
+        await saveCachedBinary(sfwBin, cache).catch((error: unknown) => {
+          warn(`setup-vp: could not save verified sfw ${SFW_VERSION}: ${String(error)}`);
+        });
+      }
+    }
+    await chmod(sfwBin, 0o755);
+    return sfwBin;
+  } catch (error) {
+    await rm(sfwDir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
 export async function setupSfw(
   runInstallEntries: RunInstallEntry[],
   options: {
@@ -169,12 +288,9 @@ export async function setupSfw(
   const arch = options.arch ?? process.arch;
   const isMusl = options.isMusl ?? isMuslLinux();
   const download = options.download ?? downloadFile;
+  const warn = options.logWarning ?? console.warn;
 
-  const effectiveSfw = resolveSfwEnabled(
-    sfwEnabled,
-    options.vitePlusVersion ?? "",
-    options.logWarning ?? console.warn,
-  );
+  const effectiveSfw = resolveSfwEnabled(sfwEnabled, options.vitePlusVersion ?? "", warn);
   if (!effectiveSfw) return { executable: "vp", sfw: false };
 
   if (runInstallEntries.length === 0) {
@@ -190,7 +306,7 @@ export async function setupSfw(
     return { executable: existing, sfw: true };
   }
 
-  let asset: string;
+  let asset: SfwAsset;
   try {
     asset = getSfwAssetName(platform, arch, isMusl);
   } catch {
@@ -200,46 +316,15 @@ export async function setupSfw(
     return { executable: "vp", sfw: false };
   }
 
-  const cacheDirectory = options.cacheDirectory || env.SETUP_VP_SFW_CACHE_DIR;
-  const sfwDir = cacheDirectory
-    ? path.resolve(cacheDirectory, SFW_VERSION, asset)
-    : await mkdtemp(path.resolve(tmpdir(), "setup-vp-sfw-"));
-  await mkdir(sfwDir, { recursive: true });
-  const sfwBin = path.join(sfwDir, isWindows(platform) ? "sfw.exe" : "sfw");
-  const sfwUrl = `${SFW_RELEASE_BASE}/${asset}`;
-  function activate(): InstallCommand {
-    const pathSeparator = isWindows(platform) ? ";" : ":";
-    env.PATH = `${sfwDir}${pathSeparator}${env.PATH || ""}`;
-    options.exportVariable?.("PATH", env.PATH);
-    return { executable: sfwBin, sfw: true };
-  }
-  if (
-    await stat(sfwBin).then(
-      (file) => file.isFile() && file.size > 0,
-      () => false,
-    )
-  ) {
-    console.log(`setup-vp: using cached sfw ${SFW_VERSION}: ${sfwBin}`);
-    return activate();
-  }
-
-  for (let round = 1; round <= 2; round += 1) {
-    const downloadDir = await mkdtemp(path.join(sfwDir, ".download-"));
-    const downloadPath = path.join(downloadDir, "sfw");
-    try {
-      console.log(`setup-vp: installing sfw ${SFW_VERSION} from ${sfwUrl}`);
-      await download(sfwUrl, downloadPath);
-      if ((await stat(downloadPath)).size === 0) throw new Error("Downloaded sfw binary is empty");
-      await chmod(downloadPath, 0o755);
-      await rename(downloadPath, sfwBin);
-      return activate();
-    } catch (error) {
-      if (round === 2) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    } finally {
-      await rm(downloadDir, { recursive: true, force: true });
-    }
-  }
-
-  throw new Error("failed to install sfw after retrying");
+  const sfwBin = await prepareVerifiedSfw(
+    asset,
+    isWindows(platform) ? "sfw.exe" : "sfw",
+    options.cacheDirectory || env.SETUP_VP_SFW_CACHE_DIR,
+    download,
+    warn,
+  );
+  const pathSeparator = isWindows(platform) ? ";" : ":";
+  env.PATH = `${path.dirname(sfwBin)}${pathSeparator}${env.PATH || ""}`;
+  options.exportVariable?.("PATH", env.PATH);
+  return { executable: sfwBin, sfw: true };
 }

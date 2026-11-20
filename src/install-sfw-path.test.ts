@@ -2,12 +2,14 @@ import { restoreCache, saveCache } from "@actions/cache";
 import { addPath, setFailed } from "@actions/core";
 import { exec } from "@actions/exec";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -37,6 +39,16 @@ vi.mock("@actions/exec", async (importOriginal) => ({
   exec: vi.fn(),
 }));
 
+const fixtureScript = vi.hoisted(
+  () => '#!/bin/sh\nprintf "%s\\n" "$0" "$@" > "$SETUP_VP_EXECUTION_MARKER"\n',
+);
+vi.mock("./ci/sfw-release-digests.js", () => ({
+  getSfwAssetDigest: () => {
+    const binary = process.platform === "win32" ? readFileSync(process.execPath) : fixtureScript;
+    return createHash("sha256").update(binary).digest("hex");
+  },
+}));
+
 const directories: string[] = [];
 
 function createFixture(prefix: string): {
@@ -45,7 +57,7 @@ function createFixture(prefix: string): {
   trustedBin: string;
   filename: string;
 } {
-  const root = mkdtempSync(path.join(tmpdir(), prefix));
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), prefix)));
   directories.push(root);
   const workspace = path.join(root, "workspace");
   const trustedBin = path.join(root, "trusted bin");
@@ -65,7 +77,7 @@ function writeExecutable(file: string): void {
   if (isWindows()) {
     copyFileSync(process.execPath, file);
   } else {
-    writeFileSync(file, '#!/bin/sh\nprintf "%s\\n" "$0" "$@" > "$SETUP_VP_EXECUTION_MARKER"\n', {
+    writeFileSync(file, fixtureScript, {
       mode: 0o755,
     });
   }
@@ -94,6 +106,8 @@ describe.each(["portable", "GitHub Actions"] as const)("%s sfw execution", (adap
       mkdirSync(installDir);
       vi.stubEnv("SETUP_VP_EXECUTION_MARKER", marker);
       vi.stubEnv("RUNNER_TEMP", root);
+      vi.stubEnv("TEMP", root);
+      vi.stubEnv("TMPDIR", root);
       vi.stubEnv("SETUP_VP_SFW_CACHE_DIR", undefined);
       vi.stubEnv("NoDefaultCurrentDirectoryInExePath", undefined);
 
